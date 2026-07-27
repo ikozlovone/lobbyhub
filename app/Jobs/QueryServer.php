@@ -110,7 +110,7 @@ class QueryServer implements ShouldQueue
 
         if ($result->ipAddress !== null) {
             $attributes['ip_address'] = $result->ipAddress;
-            $attributes += $this->resolveCountry($result->ipAddress, $geo);
+            $attributes += $this->resolveLocation($result->ipAddress, $geo);
         }
 
         // Fill first, then pick the tier: it reads the player count we just got.
@@ -138,26 +138,42 @@ class QueryServer implements ShouldQueue
     }
 
     /**
-     * Only look up servers that have no country yet — the IP rarely moves, and
-     * this keeps the reader off the hot path for the whole catalog.
+     * Only look up servers that are missing a location — the IP rarely moves,
+     * and this keeps the reader off the hot path for the whole catalog.
      *
-     * @return array<string, int>
+     * A server placed with the Country database has no city; once the City
+     * database is in place it gets picked up on the next lookup, because the
+     * gate below is "no country OR no city".
+     *
+     * @return array<string, mixed>
      */
-    private function resolveCountry(string $ip, GeoResolver $geo): array
+    private function resolveLocation(string $ip, GeoResolver $geo): array
     {
-        if ($this->server->country_id !== null) {
+        if ($this->server->country_id !== null && $this->server->city !== null) {
             return [];
         }
 
-        $code = $geo->countryCode($ip);
+        $location = $geo->locate($ip);
 
-        if ($code === null) {
+        if ($location === null || $location->isEmpty()) {
             return [];
         }
 
-        $countryId = Country::query()->where('code', $code)->value('id');
+        $attributes = [];
 
-        return $countryId === null ? [] : ['country_id' => $countryId];
+        if ($this->server->country_id === null && $location->countryCode !== null) {
+            $countryId = Country::query()->where('code', $location->countryCode)->value('id');
+
+            if ($countryId !== null) {
+                $attributes['country_id'] = $countryId;
+            }
+        }
+
+        if ($location->city !== null) {
+            $attributes['city'] = $location->city;
+        }
+
+        return $attributes;
     }
 
     private function recordSample(Carbon $at, bool $online, ?QueryResult $result = null): void

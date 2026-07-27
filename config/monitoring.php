@@ -82,11 +82,17 @@ return [
 
     'geoip' => [
         /**
-         * MaxMind GeoLite2 Country database. Download requires a free licence key:
-         * https://www.maxmind.com/en/accounts/current/geoip/downloads
-         * Without the file present, geo resolution silently no-ops.
+         * MaxMind GeoLite2 databases, tried in order. City also carries country
+         * data, so it alone is enough; Country is the fallback when only that
+         * one has been downloaded. Without either, geo resolution no-ops and
+         * monitoring carries on.
+         *
+         * Free licence key: https://www.maxmind.com/en/accounts/current/geoip/downloads
          */
-        'database' => env('GEOLITE2_COUNTRY_DB', storage_path('app/geoip/GeoLite2-Country.mmdb')),
+        'databases' => array_values(array_filter([
+            env('GEOLITE2_CITY_DB', storage_path('app/geoip/GeoLite2-City.mmdb')),
+            env('GEOLITE2_COUNTRY_DB', storage_path('app/geoip/GeoLite2-Country.mmdb')),
+        ])),
     ],
 
 ];

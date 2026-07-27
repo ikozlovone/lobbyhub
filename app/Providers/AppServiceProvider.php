@@ -17,13 +17,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Geo lookups degrade to a no-op until the GeoLite2 file is in place.
+        // Geo lookups degrade to a no-op until a GeoLite2 file is in place.
+        // City is preferred and also carries country data; Country is the fallback.
         $this->app->singleton(GeoResolver::class, function () {
-            $path = config('monitoring.geoip.database');
+            foreach ((array) config('monitoring.geoip.databases', []) as $path) {
+                if (is_string($path) && is_file($path)) {
+                    return new MaxMindGeoResolver($path);
+                }
+            }
 
-            return is_string($path) && is_file($path)
-                ? new MaxMindGeoResolver($path)
-                : new NullGeoResolver;
+            return new NullGeoResolver;
         });
     }
 

@@ -34,7 +34,10 @@ export function ServerRow({ server, rank }: { server: Server; rank: number }) {
         <span className="mt-0.5 flex items-center gap-2 text-xs text-subtle">
           <span className="tabular truncate">{server.address}</span>
           {server.country && (
-            <span className="shrink-0 uppercase" title={server.country.name}>
+            <span
+              className="shrink-0 uppercase"
+              title={server.city ? `${server.country.name} — ${server.city}` : server.country.name}
+            >
               {server.country.code}
             </span>
           )}

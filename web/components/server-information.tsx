@@ -27,12 +27,16 @@ export function ServerInformation({ server }: { server: ServerDetail }) {
   push(
     'Location',
     server.country ? (
-      <Link
-        href={`/games/${server.game.slug}/country/${server.country.slug}`}
-        className="cursor-pointer hover:text-brand"
-      >
-        {server.country.name}
-      </Link>
+      <>
+        <Link
+          href={`/games/${server.game.slug}/country/${server.country.slug}`}
+          className="cursor-pointer hover:text-brand"
+        >
+          {server.country.name}
+        </Link>
+        {/* City only appears once the GeoLite2 City database is in place. */}
+        {server.city && <span className="text-subtle"> → {server.city}</span>}
+      </>
     ) : null,
   )
   push('Map', server.map)

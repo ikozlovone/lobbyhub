@@ -64,6 +64,7 @@ export type Server = {
   map: string | null
   version: string | null
   country?: Country | null
+  city?: string | null
   banner: string | null
   icon: string | null
   votes: number

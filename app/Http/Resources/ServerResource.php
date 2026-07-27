@@ -28,6 +28,7 @@ class ServerResource extends JsonResource
                 'name' => $this->country?->name,
                 'slug' => $this->country?->slug,
             ]),
+            'city' => $this->city,
             'banner' => $this->banner_path,
             'icon' => $this->icon_path,
             'votes' => $this->votes_count,

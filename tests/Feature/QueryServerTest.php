@@ -8,6 +8,7 @@ use App\Models\Country;
 use App\Models\Game;
 use App\Models\Server;
 use App\Models\ServerStat;
+use App\Services\Geo\GeoLocation;
 use App\Services\Geo\GeoResolver;
 use App\Services\Geo\NullGeoResolver;
 use App\Services\Monitoring\Contracts\ServerQueryDriver;
@@ -180,15 +181,7 @@ class QueryServerTest extends TestCase
     {
         $server = $this->minecraftServer(['country_id' => null]);
 
-        $geo = new class implements GeoResolver
-        {
-            public function countryCode(string $ip): ?string
-            {
-                return 'DE';
-            }
-        };
-
-        $this->runJob($server, new QueryResult(ipAddress: '5.6.7.8'), $geo);
+        $this->runJob($server, new QueryResult(ipAddress: '5.6.7.8'), $this->geo('DE'));
 
         $this->assertSame(
             Country::where('code', 'DE')->value('id'),
@@ -196,20 +189,50 @@ class QueryServerTest extends TestCase
         );
     }
 
+    public function test_it_stores_the_city_when_the_city_database_is_in_use(): void
+    {
+        $server = $this->minecraftServer(['country_id' => null, 'city' => null]);
+
+        $this->runJob($server, new QueryResult(ipAddress: '5.6.7.8'), $this->geo('DE', 'Frankfurt'));
+
+        $this->assertSame('Frankfurt', $server->refresh()->city);
+    }
+
+    /**
+     * A server placed by the Country database has no city. Dropping the City
+     * database in later has to fill it without any backfill step.
+     */
+    public function test_a_server_with_a_country_but_no_city_is_looked_up_again(): void
+    {
+        $server = $this->minecraftServer([
+            'country_id' => Country::where('code', 'DE')->value('id'),
+            'city' => null,
+        ]);
+
+        $this->runJob($server, new QueryResult(ipAddress: '5.6.7.8'), $this->geo('DE', 'Berlin'));
+
+        $this->assertSame('Berlin', $server->refresh()->city);
+    }
+
+    private function geo(?string $country, ?string $city = null): GeoResolver
+    {
+        return new class($country, $city) implements GeoResolver
+        {
+            public function __construct(private ?string $country, private ?string $city) {}
+
+            public function locate(string $ip): ?GeoLocation
+            {
+                return new GeoLocation($this->country, $this->city);
+            }
+        };
+    }
+
     public function test_it_leaves_an_existing_country_alone(): void
     {
         $france = Country::where('code', 'FR')->value('id');
-        $server = $this->minecraftServer(['country_id' => $france]);
+        $server = $this->minecraftServer(['country_id' => $france, 'city' => 'Paris']);
 
-        $geo = new class implements GeoResolver
-        {
-            public function countryCode(string $ip): ?string
-            {
-                return 'DE';
-            }
-        };
-
-        $this->runJob($server, new QueryResult(ipAddress: '5.6.7.8'), $geo);
+        $this->runJob($server, new QueryResult(ipAddress: '5.6.7.8'), $this->geo('DE', 'Berlin'));
 
         $this->assertSame($france, $server->refresh()->country_id);
     }
