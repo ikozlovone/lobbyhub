@@ -167,6 +167,51 @@ class GameSeeder extends Seeder
             $this->source('v-rising', 'V Rising', 1604030, 9876, 9877, 170, '#8B2B3B', [
                 ['pve', 'PvE'], ['pvp', 'PvP'], ['duo', 'Duo'], ['trio', 'Trio'],
             ]),
+
+            // --- Source and GoldSrc engine: A2S is native to them ---
+
+            $this->source('left-4-dead-2', 'Left 4 Dead 2', 550, 27015, null, 180, '#8B3B1B', [
+                ['campaign', 'Campaign'], ['versus', 'Versus'], ['survival', 'Survival'], ['modded', 'Modded'],
+            ], ['l4d2']),
+
+            $this->source('counter-strike', 'Counter-Strike 1.6', 10, 27015, null, 190, '#C88A2B', [
+                ['classic', 'Classic'], ['deathmatch', 'Deathmatch'], ['zombie', 'Zombie'],
+                ['jailbreak', 'Jailbreak'], ['surf', 'Surf'],
+            ], ['cs 1.6', 'кс 1.6', 'кс']),
+
+            $this->source('counter-strike-condition-zero', 'Counter-Strike: Condition Zero', 80, 27015, null, 200, '#B87A2B', [
+                ['classic', 'Classic'], ['deathmatch', 'Deathmatch'], ['zombie', 'Zombie'],
+            ], ['czero', 'cs cz']),
+
+            $this->source('sven-co-op', 'Sven Co-op', 225840, 27015, null, 210, '#3B8B6B', [
+                ['coop', 'Co-op'], ['custom-maps', 'Custom Maps'],
+            ]),
+
+            $this->source('no-more-room-in-hell', 'No More Room in Hell', 224260, 27015, null, 220, '#6B3B3B', [
+                ['objective', 'Objective'], ['survival', 'Survival'],
+            ], ['nmrih']),
+
+            // --- Survival and sandbox titles that answer A2S ---
+
+            $this->source('scum', 'SCUM', 513710, 7042, null, 230, '#7A6B3B', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['roleplay', 'Roleplay'], ['modded', 'Modded'],
+            ]),
+
+            $this->source('enshrouded', 'Enshrouded', 1203620, 15636, 15637, 240, '#5B4A8B', [
+                ['pve', 'PvE'], ['coop', 'Co-op'], ['modded', 'Modded'],
+            ]),
+
+            $this->source('icarus', 'Icarus', 1149460, 17777, null, 250, '#3B6B8B', [
+                ['open-world', 'Open World'], ['missions', 'Missions'], ['pve', 'PvE'],
+            ]),
+
+            $this->source('soulmask', 'Soulmask', 2646460, 8777, null, 260, '#8B6B3B', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['roleplay', 'Roleplay'],
+            ]),
+
+            $this->source('space-engineers', 'Space Engineers', 244850, 27016, null, 270, '#4A6B8B', [
+                ['survival', 'Survival'], ['creative', 'Creative'], ['pvp', 'PvP'], ['modded', 'Modded'],
+            ], ['se']),
         ];
     }
 
