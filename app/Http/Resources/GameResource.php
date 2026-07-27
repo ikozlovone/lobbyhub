@@ -17,8 +17,10 @@ class GameResource extends JsonResource
             'name' => $this->name,
             'short_name' => $this->short_name,
             'accent_color' => $this->accent_color,
-            'icon' => $this->icon_path,
-            'cover' => $this->cover_path,
+            // Absolute: the frontend runs on its own origin and cannot resolve
+            // a path relative to the API.
+            'icon' => $this->icon_path ? asset($this->icon_path) : null,
+            'cover' => $this->cover_path ? asset($this->cover_path) : null,
             'has_versions' => $this->has_versions,
             'counters' => [
                 'servers' => $this->servers_count,

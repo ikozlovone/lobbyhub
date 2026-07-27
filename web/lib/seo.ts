@@ -8,8 +8,15 @@ import type { Metadata } from 'next'
  */
 export const INDEX_THRESHOLD = 3
 
-export function robotsFor(serversCount: number): Metadata['robots'] {
-  return serversCount >= INDEX_THRESHOLD ? undefined : { index: false, follow: true }
+/**
+ * A game landing page is a curated entity, not one of thousands of generated
+ * filter combinations, so a single server is enough to justify it. Zero servers
+ * is still nothing to index.
+ */
+export const GAME_INDEX_THRESHOLD = 1
+
+export function robotsFor(serversCount: number, threshold = INDEX_THRESHOLD): Metadata['robots'] {
+  return serversCount >= threshold ? undefined : { index: false, follow: true }
 }
 
 export function canonical(path: string): Metadata['alternates'] {

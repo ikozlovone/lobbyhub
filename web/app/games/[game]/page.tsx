@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { cacheLife } from 'next/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame, getGames } from '@/lib/data'
-import { canonical } from '@/lib/seo'
+import { canonical, GAME_INDEX_THRESHOLD, robotsFor } from '@/lib/seo'
 
 type Props = { params: Promise<{ game: string }> }
 
@@ -21,6 +21,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: game.seo.title ?? `${game.name} servers`,
     description: game.seo.description ?? undefined,
+    // A game we list but do not yet have servers for is the same thin page a
+    // near-empty facet is. It stays browsable; it just should not be indexed.
+    robots: robotsFor(game.counters.servers, GAME_INDEX_THRESHOLD),
     ...canonical(`/games/${game.slug}`),
   }
 }

@@ -32,3 +32,6 @@ Thumbs.db
 
 # Personal Claude Code permissions, not shared with the team
 .claude/settings.local.json
+
+# Game artwork is fetched from Steam by `php artisan games:artwork`
+/public/images/games

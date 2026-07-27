@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 import { getGame, getGames } from '@/lib/data'
-import { INDEX_THRESHOLD } from '@/lib/seo'
+import { GAME_INDEX_THRESHOLD, INDEX_THRESHOLD } from '@/lib/seo'
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
@@ -21,6 +21,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]
 
   for (const game of games) {
+    // A listed game with no servers yet is a thin page, exactly like an empty
+    // facet — browsable, but not something to invite a crawler to.
+    if (game.counters.servers < GAME_INDEX_THRESHOLD) continue
+
     entries.push({
       url: `${SITE}/games/${game.slug}`,
       changeFrequency: 'hourly',

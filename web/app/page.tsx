@@ -60,24 +60,40 @@ function GameCard({ game }: { game: Game }) {
   return (
     <Link
       href={`/games/${game.slug}`}
-      className="group cursor-pointer rounded-lg border border-line bg-surface p-4 transition-colors hover:border-line-strong hover:bg-surface-2"
+      className="group cursor-pointer overflow-hidden rounded-lg border border-line bg-surface transition-colors hover:border-line-strong"
     >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden
-          className="size-9 rounded-md"
-          style={{ backgroundColor: game.accent_color ?? 'var(--color-line-strong)' }}
-        />
-        <div>
-          <h3 className="font-display font-bold transition-colors group-hover:text-brand">
+      {/* Steam header art is 460x215; the aspect ratio is reserved either way so
+          a missing cover does not shift the grid. */}
+      <div
+        className="relative aspect-[460/215] overflow-hidden"
+        style={{ backgroundColor: game.accent_color ?? 'var(--color-surface-2)' }}
+      >
+        {game.cover ? (
+          <img
+            src={game.cover}
+            alt=""
+            width={460}
+            height={215}
+            loading="lazy"
+            className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          />
+        ) : (
+          <span className="font-display absolute inset-0 flex items-center justify-center text-lg font-black text-white/90">
             {game.name}
-          </h3>
-          <p className="tabular text-xs text-subtle">
-            {game.counters.servers.toLocaleString('en-US')} servers
-          </p>
-        </div>
+          </span>
+        )}
       </div>
-      <p className="tabular mt-3 text-sm">
+
+      <div className="flex items-baseline justify-between gap-2 p-3">
+        <h3 className="font-display truncate font-bold transition-colors group-hover:text-brand">
+          {game.name}
+        </h3>
+        <p className="tabular shrink-0 text-xs text-subtle">
+          {game.counters.servers.toLocaleString('en-US')}{' '}
+          {game.counters.servers === 1 ? 'server' : 'servers'}
+        </p>
+      </div>
+      <p className="tabular px-3 pb-3 text-sm">
         {game.counters.players_online.toLocaleString('en-US')}{' '}
         <span className="text-subtle">players online</span>
       </p>
