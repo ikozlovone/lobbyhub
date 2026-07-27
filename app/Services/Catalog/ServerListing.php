@@ -34,6 +34,7 @@ class ServerListing
     {
         $query = Server::query()
             ->active()
+            ->verified()
             ->where('game_id', $game->id)
             ->with(['country:id,code,name,slug', 'version:id,slug,name']);
 

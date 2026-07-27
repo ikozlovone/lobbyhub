@@ -35,4 +35,21 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Steam Web API
+    |--------------------------------------------------------------------------
+    |
+    | Used for server discovery: IGameServersService/GetServerList returns every
+    | registered server for a Steam app id, with its metadata, in one request.
+    | The legacy UDP master server it replaced no longer resolves.
+    |
+    | Free key, tied to a Steam account: https://steamcommunity.com/dev/apikey
+    |
+    */
+
+    'steam' => [
+        'key' => env('STEAM_API_KEY'),
+    ],
+
 ];

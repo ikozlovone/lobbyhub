@@ -89,6 +89,18 @@ class Server extends Model
         $query->where($query->qualifyColumn('status'), ServerStatus::Online);
     }
 
+    /**
+     * Servers we have reached ourselves at least once.
+     *
+     * Discovery imports candidates from second-hand sources with status
+     * `unknown`; they enter the catalog only after our own monitor confirms
+     * they exist.
+     */
+    public function scopeVerified(Builder $query): void
+    {
+        $query->where($query->qualifyColumn('status'), '!=', ServerStatus::Unknown);
+    }
+
     public function scopePromoted(Builder $query): void
     {
         $query->where('promoted_until', '>', now());

@@ -55,6 +55,7 @@ class SearchController extends Controller
     {
         return Server::query()
             ->active()
+            ->verified()
             ->where(fn ($query) => $query
                 ->where('name', 'like', "%{$term}%")
                 ->orWhere('host', 'like', "%{$term}%"))

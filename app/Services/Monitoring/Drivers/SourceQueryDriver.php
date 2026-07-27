@@ -8,7 +8,7 @@ use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\QueryResult;
 use App\Services\Monitoring\Support\ByteReader;
 use App\Services\Monitoring\Support\ResolvesHost;
-use Illuminate\Support\Carbon;
+use App\Services\Monitoring\Support\SourceTags;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -118,7 +118,7 @@ class SourceQueryDriver implements ServerQueryDriver
 
         $version = $reader->string();
         $extra = $this->readExtraData($reader);
-        $tags = $this->parseTags($extra['keywords']);
+        $tags = SourceTags::parse($extra['keywords']);
 
         return new QueryResult(
             playersOnline: $tags['players'] ?? $players,
@@ -168,51 +168,6 @@ class SourceQueryDriver implements ServerQueryDriver
         }
 
         return ['keywords' => $keywords, 'game_port' => $gamePort];
-    }
-
-    /**
-     * Rust publishes real values in the tag list, which is the only place some of
-     * them exist at all:
-     *
-     *   cp/mp — current and max players. A2S gives each a single byte, so a
-     *           300-slot server literally cannot describe itself there.
-     *   qp    — players waiting in the join queue.
-     *   born  — unix time the server last started, in practice the last wipe.
-     *
-     * Other A2S games send different tags; the patterns below are narrow enough
-     * not to match them, so everything stays null and the byte fields win.
-     *
-     * @return array{players: ?int, max_players: ?int, queued: ?int, wiped_at: ?Carbon}
-     */
-    private function parseTags(?string $keywords): array
-    {
-        $parsed = ['players' => null, 'max_players' => null, 'queued' => null, 'wiped_at' => null];
-
-        if ($keywords === null) {
-            return $parsed;
-        }
-
-        foreach (explode(',', $keywords) as $tag) {
-            match (true) {
-                (bool) preg_match('/^cp(\d+)$/', $tag, $m) => $parsed['players'] = (int) $m[1],
-                (bool) preg_match('/^mp(\d+)$/', $tag, $m) => $parsed['max_players'] = (int) $m[1],
-                (bool) preg_match('/^qp(\d+)$/', $tag, $m) => $parsed['queued'] = min((int) $m[1], 65535),
-                (bool) preg_match('/^born(\d+)$/', $tag, $m) => $parsed['wiped_at'] = $this->timestamp((int) $m[1]),
-                default => null,
-            };
-        }
-
-        return $parsed;
-    }
-
-    /** Reject nonsense timestamps rather than storing them. */
-    private function timestamp(int $unix): ?Carbon
-    {
-        if ($unix < 1_400_000_000 || $unix > now()->addDay()->timestamp) {
-            return null;
-        }
-
-        return Carbon::createFromTimestamp($unix);
     }
 
     /**
