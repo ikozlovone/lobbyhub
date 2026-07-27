@@ -1,0 +1,86 @@
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Polling cadence
+    |--------------------------------------------------------------------------
+    |
+    | A healthy server is re-queried every `interval` seconds. Every consecutive
+    | failure doubles that wait, capped at `max_interval`, so dead listings stop
+    | eating the queue without being dropped from the catalog.
+    |
+    */
+
+    'interval' => (int) env('MONITORING_INTERVAL', 300),
+
+    'max_interval' => (int) env('MONITORING_MAX_INTERVAL', 21600),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cadence tiers
+    |--------------------------------------------------------------------------
+    |
+    | Most of any catalog sits empty, and querying a dead-quiet server as often
+    | as a full one is pure waste — it buys nothing and multiplies both the queue
+    | and the history table. Tiers are matched top-down on the player count from
+    | the query that just finished; the first match wins.
+    |
+    */
+
+    'tiers' => [
+        ['min_players' => 100, 'interval' => 120],
+        ['min_players' => 10, 'interval' => 300],
+        ['min_players' => 1, 'interval' => 900],
+        ['min_players' => 0, 'interval' => 3600],
+    ],
+
+    /** Paid placements stay fresh no matter how quiet they are. */
+    'promoted_interval' => (int) env('MONITORING_PROMOTED_INTERVAL', 120),
+
+    /** Servers dispatched per run of `servers:query`. */
+    'batch_size' => (int) env('MONITORING_BATCH_SIZE', 500),
+
+    /**
+     * One provider often holds hundreds of servers behind a single IP. Querying
+     * them all in one batch looks like a port scan, so a batch takes at most
+     * this many per host and the rest wait for the next run.
+     */
+    'max_per_host' => (int) env('MONITORING_MAX_PER_HOST', 10),
+
+    /** Socket connect + read timeout, in seconds. */
+    'timeout' => (float) env('MONITORING_TIMEOUT', 5),
+
+    'queue' => env('MONITORING_QUEUE', 'monitoring'),
+
+    'minecraft' => [
+        /** Protocol version sent in the handshake; 767 = 1.21. Servers answer status regardless. */
+        'protocol_version' => (int) env('MONITORING_MC_PROTOCOL', 767),
+
+        /** Resolve _minecraft._tcp SRV records, the way the vanilla client does. */
+        'resolve_srv' => (bool) env('MONITORING_MC_SRV', true),
+    ],
+
+    'source' => [
+        /** A2S servers answer with a challenge that must be echoed back; some do it twice. */
+        'challenge_retries' => (int) env('MONITORING_A2S_CHALLENGE_RETRIES', 2),
+
+        /**
+         * Challenges are reusable across sockets and minutes, so caching one per
+         * address saves a round trip per query. A stale entry costs nothing —
+         * the server simply issues a new challenge and the retry loop uses it.
+         */
+        'challenge_ttl' => (int) env('MONITORING_A2S_CHALLENGE_TTL', 3600),
+    ],
+
+    'geoip' => [
+        /**
+         * MaxMind GeoLite2 Country database. Download requires a free licence key:
+         * https://www.maxmind.com/en/accounts/current/geoip/downloads
+         * Without the file present, geo resolution silently no-ops.
+         */
+        'database' => env('GEOLITE2_COUNTRY_DB', storage_path('app/geoip/GeoLite2-Country.mmdb')),
+    ],
+
+];

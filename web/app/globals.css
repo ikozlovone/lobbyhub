@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ *
+ * Dark is primary: this is a gaming catalog, read at night, often on a second
+ * monitor. Background is off-black (#0B1220) rather than #000 so OLED panels do
+ * not smear while scrolling long listings.
+ */
+@theme {
+  --color-bg: #0b1220;
+  --color-surface: #0f1a2b;
+  --color-surface-2: #16243a;
+  --color-line: #1f3350;
+  --color-line-strong: #2b476e;
+
+  --color-fg: #f1f5f9;
+  --color-muted: #94a3b8;
+  --color-subtle: #6b7f9a;
+
+  --color-brand: #16a34a;
+  --color-brand-strong: #15803d;
+  --color-accent: #f59e0b;
+
+  --color-online: #22c55e;
+  --color-offline: #64748b;
+
+  --font-display: var(--font-orbitron), system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-mono-code), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Live counters rewrite themselves every couple of minutes. Tabular figures
+ * keep the digits from shifting sideways when the value changes.
+ */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus must stay visible: this catalog is navigated by keyboard a lot. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

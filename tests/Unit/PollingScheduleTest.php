@@ -1,0 +1,97 @@
+<?php
+
+namespace Tests\Unit;
+
+use App\Models\Server;
+use App\Services\Monitoring\PollingSchedule;
+use Tests\TestCase;
+
+class PollingScheduleTest extends TestCase
+{
+    private PollingSchedule $schedule;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->schedule = new PollingSchedule;
+    }
+
+    /**
+     * Tier boundaries, using the shipped config: 100+ → 120s, 10+ → 300s,
+     * 1+ → 900s, empty → 3600s.
+     */
+    public function test_the_interval_follows_how_busy_the_server_is(): void
+    {
+        $this->assertSame(120, $this->intervalFor(500));
+        $this->assertSame(120, $this->intervalFor(100)); // boundary, inclusive
+        $this->assertSame(300, $this->intervalFor(99));
+        $this->assertSame(300, $this->intervalFor(10));
+        $this->assertSame(900, $this->intervalFor(9));
+        $this->assertSame(900, $this->intervalFor(1));
+        $this->assertSame(3600, $this->intervalFor(0));
+    }
+
+    public function test_an_empty_server_is_polled_far_less_often_than_a_busy_one(): void
+    {
+        // This ratio is the whole point of tiering — it is what cuts the load.
+        $this->assertSame(30, intdiv($this->intervalFor(0), $this->intervalFor(500)));
+    }
+
+    public function test_a_promoted_server_stays_hot_even_when_empty(): void
+    {
+        $server = Server::make(['players_online' => 0, 'promoted_until' => now()->addWeek()]);
+
+        $this->assertSame(
+            (int) config('monitoring.promoted_interval'),
+            $this->schedule->intervalFor($server),
+        );
+    }
+
+    public function test_an_expired_promotion_gets_no_special_treatment(): void
+    {
+        $server = Server::make(['players_online' => 0, 'promoted_until' => now()->subDay()]);
+
+        $this->assertSame(3600, $this->schedule->intervalFor($server));
+    }
+
+    public function test_backoff_doubles_with_every_failure(): void
+    {
+        $interval = (int) config('monitoring.interval');
+
+        $this->assertSame($interval * 2, $this->schedule->backoffFor(1));
+        $this->assertSame($interval * 4, $this->schedule->backoffFor(2));
+        $this->assertSame($interval * 8, $this->schedule->backoffFor(3));
+    }
+
+    public function test_backoff_stops_at_the_ceiling(): void
+    {
+        $max = (int) config('monitoring.max_interval');
+
+        $this->assertSame($max, $this->schedule->backoffFor(20));
+        $this->assertSame($max, $this->schedule->backoffFor(65535));
+    }
+
+    /**
+     * A failing server reports zero players; if backoff used the tier it would
+     * treat every outage as "quiet" and skip the fast early retries.
+     */
+    public function test_backoff_ignores_the_tiers(): void
+    {
+        $this->assertSame(
+            (int) config('monitoring.interval') * 2,
+            $this->schedule->backoffFor(1),
+        );
+    }
+
+    public function test_expected_hourly_queries_matches_the_tier(): void
+    {
+        $this->assertSame(30.0, $this->schedule->expectedHourlyQueries(Server::make(['players_online' => 500])));
+        $this->assertSame(1.0, $this->schedule->expectedHourlyQueries(Server::make(['players_online' => 0])));
+    }
+
+    private function intervalFor(int $players): int
+    {
+        return $this->schedule->intervalFor(Server::make(['players_online' => $players]));
+    }
+}
