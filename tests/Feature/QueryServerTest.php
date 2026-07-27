@@ -231,14 +231,22 @@ class QueryServerTest extends TestCase
         );
     }
 
+    /**
+     * Every protocol currently has a driver, so this path can only be reached by
+     * a protocol added ahead of its driver. It still has to hold: those servers
+     * must be skipped with a warning rather than failed on every cycle.
+     */
     public function test_the_dispatcher_skips_games_without_a_driver(): void
     {
-        // FiveM speaks plain HTTP; that driver is not written yet.
         $fivem = Game::where('slug', 'fivem')->firstOrFail();
         Server::factory()->create([
             'game_id' => $fivem->id,
             'next_query_at' => now()->subMinute(),
         ]);
+
+        $manager = \Mockery::mock(ServerQueryManager::class);
+        $manager->shouldReceive('supports')->andReturn(false);
+        $this->instance(ServerQueryManager::class, $manager);
 
         \Illuminate\Support\Facades\Queue::fake();
 
@@ -247,6 +255,24 @@ class QueryServerTest extends TestCase
             ->assertSuccessful();
 
         \Illuminate\Support\Facades\Queue::assertNothingPushed();
+    }
+
+    public function test_the_dispatcher_queries_fivem_servers_now_that_a_driver_exists(): void
+    {
+        $fivem = Game::where('slug', 'fivem')->firstOrFail();
+        $server = Server::factory()->create([
+            'game_id' => $fivem->id,
+            'next_query_at' => now()->subMinute(),
+        ]);
+
+        \Illuminate\Support\Facades\Queue::fake();
+
+        $this->artisan('servers:query')->assertSuccessful();
+
+        \Illuminate\Support\Facades\Queue::assertPushed(
+            QueryServer::class,
+            fn (QueryServer $job) => $job->server->is($server),
+        );
     }
 
     public function test_the_dispatcher_queries_rust_servers_now_that_source_is_supported(): void
