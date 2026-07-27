@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Queue worker for monitoring jobs.
+
+  --tries=1 on purpose: a failed query is a legitimate result that the job
+  already recorded as downtime, so retrying it would only distort the history.
+  --max-time recycles the process hourly so a leak cannot accumulate.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>gg.lobbyhub.worker</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/ServBay/script/alias/php</string>
+        <string>/Users/ivankozlov/code/lobbyhub/artisan</string>
+        <string>queue:work</string>
+        <string>--queue=monitoring</string>
+        <string>--tries=1</string>
+        <string>--sleep=1</string>
+        <string>--max-time=3600</string>
+    </array>
+    <key>WorkingDirectory</key><string>/Users/ivankozlov/code/lobbyhub</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>/Users/ivankozlov/code/lobbyhub/storage/logs/worker.log</string>
+    <key>StandardErrorPath</key><string>/Users/ivankozlov/code/lobbyhub/storage/logs/worker.log</string>
+</dict>
+</plist>

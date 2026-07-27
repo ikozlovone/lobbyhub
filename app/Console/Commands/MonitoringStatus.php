@@ -7,6 +7,7 @@ use App\Models\Server;
 use App\Models\ServerStat;
 use App\Services\Monitoring\PollingSchedule;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class MonitoringStatus extends Command
@@ -48,10 +49,27 @@ class MonitoringStatus extends Command
                 }
             });
 
-        $actual = ServerStat::where('recorded_at', '>=', now()->subHour())->count();
+        $since = now()->subHour();
+        $actual = ServerStat::where('recorded_at', '>=', $since)->count();
+
+        /*
+         * Scale the expectation to the window we actually have data for.
+         *
+         * Comparing an hour's worth of expected queries against a monitor that
+         * started two minutes ago reports 4% and looks like a failure — which is
+         * exactly when someone runs this command.
+         */
+        $firstSample = ServerStat::where('recorded_at', '>=', $since)->min('recorded_at');
+        $covered = $firstSample
+            ? max(60, now()->diffInSeconds(Carbon::parse($firstSample), absolute: true))
+            : 3600;
+        $expected *= min($covered, 3600) / 3600;
 
         $this->line('');
-        $this->components->twoColumnDetail('<fg=gray>throughput (last hour)</>', '');
+        $this->components->twoColumnDetail(
+            '<fg=gray>throughput</>',
+            '<fg=gray>'.($covered < 3500 ? 'last '.round($covered / 60).' min' : 'last hour').'</>',
+        );
         $this->components->twoColumnDetail('  queries expected', (string) round($expected));
         $this->components->twoColumnDetail('  queries actual', (string) $actual);
 

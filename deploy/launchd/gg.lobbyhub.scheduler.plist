@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Laravel's scheduler.
+
+  `schedule:work` is a long-running process that fires due tasks every minute,
+  which is simpler to reason about than a crontab entry and keeps the whole
+  setup inside launchd. KeepAlive restarts it if it dies or after a reboot.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>gg.lobbyhub.scheduler</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/ServBay/script/alias/php</string>
+        <string>/Users/ivankozlov/code/lobbyhub/artisan</string>
+        <string>schedule:work</string>
+    </array>
+    <key>WorkingDirectory</key><string>/Users/ivankozlov/code/lobbyhub</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>/Users/ivankozlov/code/lobbyhub/storage/logs/scheduler.log</string>
+    <key>StandardErrorPath</key><string>/Users/ivankozlov/code/lobbyhub/storage/logs/scheduler.log</string>
+</dict>
+</plist>
