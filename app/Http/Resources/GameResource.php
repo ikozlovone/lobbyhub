@@ -16,6 +16,9 @@ class GameResource extends JsonResource
             'slug' => $this->slug,
             'name' => $this->name,
             'short_name' => $this->short_name,
+            // Exposed so the frontend can match them without a round trip:
+            // "mc" and "майнкрафт" both have to find Minecraft.
+            'aliases' => $this->aliases ?? [],
             'accent_color' => $this->accent_color,
             // Absolute: the frontend runs on its own origin and cannot resolve
             // a path relative to the API.

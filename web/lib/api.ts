@@ -32,6 +32,7 @@ export type Game = {
   slug: string
   name: string
   short_name: string | null
+  aliases: string[]
   accent_color: string | null
   icon: string | null
   cover: string | null

@@ -1,6 +1,6 @@
-import Link from 'next/link'
 import { cacheLife } from 'next/cache'
-import type { Game } from '@/lib/api'
+import { GameGrid } from '@/components/game-grid'
+import { LiveStats } from '@/components/live-stats'
 import { getGames } from '@/lib/data'
 
 export default async function HomePage() {
@@ -8,95 +8,36 @@ export default async function HomePage() {
   cacheLife('minutes')
 
   const games = await getGames()
-  const totals = games.reduce(
-    (sum, game) => ({
-      servers: sum.servers + game.counters.servers,
-      players: sum.players + game.counters.players_online,
-    }),
-    { servers: 0, players: 0 },
+
+  // Games with servers first: the grid is the navigation, and 24 empty cards
+  // ahead of the three that have anything would bury them.
+  const ordered = [...games].sort(
+    (a, b) =>
+      Number(b.counters.servers > 0) - Number(a.counters.servers > 0) ||
+      b.counters.players_online - a.counters.players_online ||
+      b.counters.servers - a.counters.servers,
   )
 
   return (
-    <div className="space-y-10">
-      <section className="space-y-3">
-        <h1 className="font-display text-3xl font-black tracking-tight sm:text-4xl">
-          Every server, <span className="text-brand">actually online</span>
-        </h1>
-        <p className="max-w-2xl text-muted">
-          We query each server ourselves every few minutes — player counts, uptime and history come
-          from our own checks, not from what an owner typed into a form.
-        </p>
-        <dl className="flex gap-8 pt-2">
-          <Stat label="Servers tracked" value={totals.servers} />
-          <Stat label="Players right now" value={totals.players} />
-          <Stat label="Games" value={games.length} />
-        </dl>
+    <div className="space-y-8">
+      <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,36rem)]">
+        <div>
+          <h1 className="font-display text-3xl leading-tight font-black tracking-tight uppercase sm:text-4xl">
+            Monitoring and management of{' '}
+            <span className="text-brand">game servers</span>
+          </h1>
+          <p className="mt-3 max-w-xl text-muted">
+            We query every server ourselves, every few minutes. Player counts, uptime and history
+            come from our own checks — not from what an owner typed into a form.
+          </p>
+        </div>
+
+        <LiveStats games={games} />
       </section>
 
       <section>
-        <h2 className="mb-4 font-display text-sm font-bold tracking-wide text-muted uppercase">
-          Browse by game
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {games.map((game) => (
-            <GameCard key={game.slug} game={game} />
-          ))}
-        </div>
+        <GameGrid games={ordered} />
       </section>
     </div>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <dd className="tabular text-2xl font-medium">{value.toLocaleString('en-US')}</dd>
-      <dt className="text-xs text-subtle">{label}</dt>
-    </div>
-  )
-}
-
-function GameCard({ game }: { game: Game }) {
-  return (
-    <Link
-      href={`/games/${game.slug}`}
-      className="group cursor-pointer overflow-hidden rounded-lg border border-line bg-surface transition-colors hover:border-line-strong"
-    >
-      {/* Steam header art is 460x215; the aspect ratio is reserved either way so
-          a missing cover does not shift the grid. */}
-      <div
-        className="relative aspect-[460/215] overflow-hidden"
-        style={{ backgroundColor: game.accent_color ?? 'var(--color-surface-2)' }}
-      >
-        {game.cover ? (
-          <img
-            src={game.cover}
-            alt=""
-            width={460}
-            height={215}
-            loading="lazy"
-            className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <span className="font-display absolute inset-0 flex items-center justify-center text-lg font-black text-white/90">
-            {game.name}
-          </span>
-        )}
-      </div>
-
-      <div className="flex items-baseline justify-between gap-2 p-3">
-        <h3 className="font-display truncate font-bold transition-colors group-hover:text-brand">
-          {game.name}
-        </h3>
-        <p className="tabular shrink-0 text-xs text-subtle">
-          {game.counters.servers.toLocaleString('en-US')}{' '}
-          {game.counters.servers === 1 ? 'server' : 'servers'}
-        </p>
-      </div>
-      <p className="tabular px-3 pb-3 text-sm">
-        {game.counters.players_online.toLocaleString('en-US')}{' '}
-        <span className="text-subtle">players online</span>
-      </p>
-    </Link>
   )
 }
