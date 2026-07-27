@@ -87,6 +87,13 @@ export type ServerInfo = {
   connect_hostname?: string
 }
 
+export type Standing = {
+  position: number
+  total: number
+  points: number
+  leader_points: number
+}
+
 export type ServerMedia = {
   banner?: string
   logo?: string
@@ -104,6 +111,7 @@ export type ServerDetail = Server & {
   steam_id: string | null
   info: ServerInfo
   media: ServerMedia
+  standing: Standing
   details_synced_at: string | null
   latency_ms: number | null
   game: Game

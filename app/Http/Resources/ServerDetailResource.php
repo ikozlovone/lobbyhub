@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Services\Catalog\ServerInfo;
+use App\Services\Catalog\ServerRanking;
 use Illuminate\Http\Request;
 
 /**
@@ -26,6 +27,7 @@ class ServerDetailResource extends ServerResource
             'connect_hostname' => $info->for($this->resource)['connect_hostname'] ?? null,
             'steam_id' => $this->steam_id,
             'info' => $info->for($this->resource),
+            'standing' => app(ServerRanking::class)->standing($this->resource),
             'media' => $info->media($this->resource),
             'details_synced_at' => $this->details_synced_at?->toIso8601String(),
             'latency_ms' => $this->latestLatency(),

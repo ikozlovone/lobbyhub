@@ -13,6 +13,12 @@ Schedule::command('servers:query')
     ->everyMinute()
     ->withoutOverlapping();
 
+// Votes and measured activity both move constantly; the ranking they feed
+// does not need to be more current than this.
+Schedule::command('ranking:recompute')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();
+
 // Catalog facets read these; a few minutes of staleness is invisible.
 Schedule::command('counters:refresh')
     ->everyFiveMinutes()

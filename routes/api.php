@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServerController;
 use App\Http\Controllers\Api\ServerHistoryController;
+use App\Http\Controllers\Api\VoteController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -26,6 +27,12 @@ Route::name('api.')->group(function () {
     Route::get('servers/live', [ServerController::class, 'live'])->name('servers.live');
     Route::get('servers/{server}', [ServerController::class, 'show'])->name('servers.show');
     Route::get('servers/{server}/history', [ServerHistoryController::class, 'show'])->name('servers.history');
+
+    Route::get('servers/{server}/vote', [VoteController::class, 'status'])->name('servers.vote.status');
+    Route::post('servers/{server}/vote', [VoteController::class, 'store'])
+        ->middleware('throttle:votes')
+        ->name('servers.vote');
+    Route::post('servers/{server}/votes/claim', [VoteController::class, 'claim'])->name('servers.votes.claim');
 
     Route::get('search', SearchController::class)->name('search');
 });

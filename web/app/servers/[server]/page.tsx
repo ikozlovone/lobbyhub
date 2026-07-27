@@ -6,6 +6,7 @@ import { LiveProvider } from '@/components/live-provider'
 import { PlayersChart } from '@/components/players-chart'
 import { ServerConnection } from '@/components/server-connection'
 import { ServerInformation } from '@/components/server-information'
+import { VotePanel } from '@/components/vote-panel'
 import { getHistory, getServer } from '@/lib/data'
 import { canonical } from '@/lib/seo'
 
@@ -125,6 +126,8 @@ export default async function ServerPage({ params }: Props) {
         </div>
 
         <aside className="space-y-6">
+          <VotePanel slug={server.slug} standing={server.standing} apiUrl={API_URL} />
+
           <ServerInformation server={server} />
 
           {/* Facepunch renders a map image for every Rust world — the competitor

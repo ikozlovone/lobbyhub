@@ -39,5 +39,10 @@ class AppServiceProvider extends ServiceProvider
         // from turning the listing endpoints into a load test.
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)
             ->by($request->user()?->id ?: $request->ip()));
+
+        // Votes are the one public write, so they get their own, much tighter
+        // budget: the daily unique index stops repeat votes for one server, this
+        // stops a script walking the whole catalog.
+        RateLimiter::for('votes', fn (Request $request) => Limit::perHour(30)->by($request->ip()));
     }
 }

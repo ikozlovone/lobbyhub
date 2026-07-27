@@ -68,6 +68,11 @@ class Server extends Model
         return $this->belongsToMany(GameMode::class);
     }
 
+    public function votes(): HasMany
+    {
+        return $this->hasMany(Vote::class);
+    }
+
     /** Raw monitoring samples (short retention). */
     public function stats(): HasMany
     {
