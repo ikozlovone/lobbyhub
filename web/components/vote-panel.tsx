@@ -1,24 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { Standing } from '@/lib/api'
 
 /**
- * Voting and standing.
+ * The vote form.
  *
  * Whether this visitor may vote depends on their address, so it can never come
  * from the cached page shell — it is fetched after hydration, like the live
  * player counts.
  */
-export function VotePanel({
-  slug,
-  standing,
-  apiUrl,
-}: {
-  slug: string
-  standing: Standing
-  apiUrl: string
-}) {
+export function VotePanel({ slug, apiUrl }: { slug: string; apiUrl: string }) {
   const [votes, setVotes] = useState<number | null>(null)
   const [canVote, setCanVote] = useState<boolean | null>(null)
   const [nextVoteAt, setNextVoteAt] = useState<string | null>(null)
@@ -71,33 +62,11 @@ export function VotePanel({
     }
   }
 
-  const share = standing.leader_points > 0 ? standing.points / standing.leader_points : 0
-
   return (
     <section className="space-y-4 rounded-lg border border-line bg-surface p-4">
-      <div>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-display text-sm font-bold tracking-wide uppercase">Ranking</h2>
-          <p className="text-xs text-subtle">
-            <span className="tabular text-fg">#{standing.position}</span> of {standing.total}
-          </p>
-        </div>
-        <p className="tabular mt-1 text-sm">
-          {standing.points.toLocaleString('en-US')}
-          <span className="text-subtle"> / {standing.leader_points.toLocaleString('en-US')} points</span>
-        </p>
-        <span
-          aria-hidden
-          className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-line"
-        >
-          <span
-            className="block h-full rounded-full bg-brand"
-            style={{ width: `${Math.max(Math.round(share * 100), 2)}%` }}
-          />
-        </span>
-      </div>
+      <h2 className="font-display text-sm font-bold tracking-wide uppercase">Vote</h2>
 
-      <div className="border-t border-line pt-4">
+      <div>
         <label htmlFor="vote-nickname" className="block text-xs text-subtle">
           In-game name <span className="text-subtle/70">(optional — lets the server reward you)</span>
         </label>
