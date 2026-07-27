@@ -49,6 +49,12 @@ return [
      */
     'max_per_host' => (int) env('MONITORING_MAX_PER_HOST', 10),
 
+    /**
+     * How often to re-fetch the slow-moving details a server publishes about
+     * itself (map, description, images). A day is plenty — these change on wipe.
+     */
+    'details_interval' => (int) env('MONITORING_DETAILS_INTERVAL', 86400),
+
     /** Socket connect + read timeout, in seconds. */
     'timeout' => (float) env('MONITORING_TIMEOUT', 5),
 

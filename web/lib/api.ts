@@ -18,6 +18,9 @@ export type Live = {
   checked_at: string | null
 }
 
+/** The card carries uptime too; the polling endpoint deliberately does not. */
+export type ServerLive = Live & { uptime: number | null }
+
 export type GameCounters = {
   servers: number
   servers_online: number
@@ -67,13 +70,41 @@ export type Server = {
   rating: number | null
   promoted: boolean
   wiped_at: string | null
-  live: Live
+  live: ServerLive
+}
+
+export type ServerInfo = {
+  mode?: string
+  map_size?: number
+  map_seed?: number
+  entities?: number
+  fps?: number
+  fps_average?: number
+  pve?: boolean
+  build?: string
+  uptime_seconds?: number
+  connect_hostname?: string
+}
+
+export type ServerMedia = {
+  banner?: string
+  logo?: string
+  map_image?: string
+  map_file?: string
 }
 
 export type ServerDetail = Server & {
   description: string | null
   host: string
   port: number
+  connect_address: string
+  query_address: string
+  connect_hostname: string | null
+  steam_id: string | null
+  info: ServerInfo
+  media: ServerMedia
+  details_synced_at: string | null
+  latency_ms: number | null
   game: Game
   modes?: { slug: string; name: string }[]
   game_version?: { slug: string; name: string } | null

@@ -26,6 +26,8 @@ class Server extends Model
             'uptime_percent' => 'decimal:2',
             'rating_avg' => 'decimal:2',
             'is_active' => 'boolean',
+            'details' => 'array',
+            'details_synced_at' => 'datetime',
             'wiped_at' => 'datetime',
             'last_queried_at' => 'datetime',
             'last_online_at' => 'datetime',
@@ -130,6 +132,12 @@ class Server extends Model
     }
 
     /** Address a player connects to — not necessarily the one we query. */
+    /** Round trip of the most recent successful check, for the server card. */
+    public function latestLatency(): ?int
+    {
+        return $this->stats()->whereNotNull('latency_ms')->latest('recorded_at')->value('latency_ms');
+    }
+
     public function address(): string
     {
         return $this->host.':'.($this->game_port ?? $this->port);

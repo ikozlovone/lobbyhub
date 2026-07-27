@@ -23,6 +23,8 @@ final readonly class QueryResult
         public ?string $ipAddress = null,
         /** Port players connect to, when the server reports one. */
         public ?int $gamePort = null,
+        /** Steam's own id for the server, as a string: it overflows a JS number. */
+        public ?string $steamId = null,
         /** Rust: last server start, in practice the last wipe. */
         public ?Carbon $wipedAt = null,
         /** Rust: players waiting in the join queue. */

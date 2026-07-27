@@ -7,6 +7,8 @@ use App\Models\Country;
 use App\Models\Server;
 use App\Models\ServerStat;
 use App\Services\Geo\GeoResolver;
+use App\Services\Monitoring\Contracts\ProvidesServerDetails;
+use App\Services\Monitoring\Contracts\ServerQueryDriver;
 use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\PollingSchedule;
 use App\Services\Monitoring\QueryResult;
@@ -32,8 +34,10 @@ class QueryServer implements ShouldQueue
 
     public function handle(ServerQueryManager $manager, GeoResolver $geo, PollingSchedule $schedule): void
     {
+        $driver = $manager->for($this->server);
+
         try {
-            $result = $manager->for($this->server)->query($this->server);
+            $result = $driver->query($this->server);
         } catch (QueryFailed) {
             $this->recordOffline($schedule);
 
@@ -41,6 +45,38 @@ class QueryServer implements ShouldQueue
         }
 
         $this->recordOnline($result, $geo, $schedule);
+        $this->refreshDetails($driver);
+    }
+
+    /**
+     * Map, description, images and tuning values barely change, and asking for
+     * them costs a second exchange — so they are refreshed on their own slow
+     * cadence rather than on every poll. A failure here is not downtime: the
+     * server already answered.
+     */
+    private function refreshDetails(ServerQueryDriver $driver): void
+    {
+        if (! $driver instanceof ProvidesServerDetails) {
+            return;
+        }
+
+        $interval = (int) config('monitoring.details_interval', 86400);
+        $syncedAt = $this->server->details_synced_at;
+
+        if ($syncedAt !== null && $syncedAt->addSeconds($interval)->isFuture()) {
+            return;
+        }
+
+        try {
+            $details = $driver->details($this->server);
+        } catch (QueryFailed) {
+            return;
+        }
+
+        $this->server->forceFill([
+            'details' => $details === [] ? null : $details,
+            'details_synced_at' => now(),
+        ])->save();
     }
 
     private function recordOnline(QueryResult $result, GeoResolver $geo, PollingSchedule $schedule): void
@@ -63,6 +99,7 @@ class QueryServer implements ShouldQueue
         foreach ([
             'map' => $result->map,
             'game_port' => $result->gamePort,
+            'steam_id' => $result->steamId,
             'wiped_at' => $result->wipedAt,
             'players_queued' => $result->playersQueued,
         ] as $column => $value) {

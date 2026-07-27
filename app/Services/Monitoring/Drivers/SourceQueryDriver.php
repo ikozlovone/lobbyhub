@@ -3,11 +3,13 @@
 namespace App\Services\Monitoring\Drivers;
 
 use App\Models\Server;
+use App\Services\Monitoring\Contracts\ProvidesServerDetails;
 use App\Services\Monitoring\Contracts\ServerQueryDriver;
 use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\QueryResult;
 use App\Services\Monitoring\Support\ByteReader;
 use App\Services\Monitoring\Support\ResolvesHost;
+use App\Services\Monitoring\Support\RulesPayload;
 use App\Services\Monitoring\Support\SourceTags;
 use Illuminate\Support\Facades\Cache;
 
@@ -17,7 +19,7 @@ use Illuminate\Support\Facades\Cache;
  * Since late 2020 servers answer the first request with a challenge that has to
  * be echoed back, so a full query is two round trips.
  */
-class SourceQueryDriver implements ServerQueryDriver
+class SourceQueryDriver implements ProvidesServerDetails, ServerQueryDriver
 {
     use ResolvesHost;
 
@@ -26,6 +28,8 @@ class SourceQueryDriver implements ServerQueryDriver
     private const HEADER_MULTI = "\xFF\xFF\xFF\xFE";
 
     private const A2S_INFO = 'T';
+
+    private const A2S_RULES = 'V';
 
     private const RESPONSE_INFO = 'I';
 
@@ -131,23 +135,118 @@ class SourceQueryDriver implements ServerQueryDriver
             latencyMs: $latencyMs === null ? null : min($latencyMs, 65535),
             ipAddress: $ip,
             gamePort: $extra['game_port'],
+            steamId: $extra['steam_id'],
             wipedAt: $tags['wiped_at'],
             playersQueued: $tags['queued'],
         );
     }
 
     /**
-     * @return array{keywords: ?string, game_port: ?int}
+     * A2S_RULES: everything the server publishes about itself beyond its status.
+     *
+     * A second, heavier exchange than A2S_INFO — a Rust server answers with
+     * dozens of rules — so it runs on its own slow cadence, not every poll.
+     *
+     * @return array<string, string>
+     */
+    public function details(Server $server): array
+    {
+        $ip = $this->resolveIp($server->host);
+        $port = $server->queryPort();
+        $address = "{$ip}:{$port}";
+
+        $timeout = (float) config('monitoring.timeout');
+        $socket = @stream_socket_client("udp://{$address}", $errno, $errstr, $timeout);
+
+        if ($socket === false) {
+            throw QueryFailed::unreachable($address, $errstr !== '' ? $errstr : "errno {$errno}");
+        }
+
+        try {
+            stream_set_timeout($socket, (int) $timeout, (int) (fmod($timeout, 1) * 1_000_000));
+
+            $datagram = $this->rulesExchange($socket, $address, "\xFF\xFF\xFF\xFF");
+
+            if ($this->isChallenge($datagram)) {
+                $datagram = $this->rulesExchange($socket, $address, $this->challengeFrom($datagram));
+            }
+
+            $payload = RulesPayload::collect(
+                $datagram,
+                fn () => (string) @fread($socket, self::MAX_DATAGRAM),
+            );
+        } finally {
+            fclose($socket);
+        }
+
+        return $this->normalizeRules(RulesPayload::parse($payload));
+    }
+
+    /**
+     * @param  resource  $socket
+     */
+    private function rulesExchange($socket, string $address, string $challenge): string
+    {
+        if (@fwrite($socket, self::HEADER_SIMPLE.self::A2S_RULES.$challenge) === false) {
+            throw QueryFailed::unreachable($address, 'write failed');
+        }
+
+        $datagram = (string) @fread($socket, self::MAX_DATAGRAM);
+
+        if ($datagram === '') {
+            if (stream_get_meta_data($socket)['timed_out'] ?? false) {
+                throw QueryFailed::timedOut($address);
+            }
+
+            throw QueryFailed::unreachable($address, 'no datagram (port closed or filtered)');
+        }
+
+        return $datagram;
+    }
+
+    /**
+     * Rust splits a long description across description_00…description_15, so the
+     * pieces are joined back into one value and the numbered keys dropped.
+     *
+     * @param  array<string, string>  $rules
+     * @return array<string, string>
+     */
+    private function normalizeRules(array $rules): array
+    {
+        $chunks = [];
+
+        foreach ($rules as $key => $value) {
+            if (preg_match('/^description_(\d+)$/', $key, $matches)) {
+                $chunks[(int) $matches[1]] = $value;
+                unset($rules[$key]);
+            }
+        }
+
+        if ($chunks !== []) {
+            ksort($chunks);
+            $description = trim(str_replace('\n', "\n", implode('', $chunks)));
+
+            if ($description !== '') {
+                $rules['description'] = mb_substr($description, 0, 4000);
+            }
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @return array{keywords: ?string, game_port: ?int, steam_id: ?string}
      */
     private function readExtraData(ByteReader $reader): array
     {
         if ($reader->remaining() < 1) {
-            return ['keywords' => null, 'game_port' => null];
+            return ['keywords' => null, 'game_port' => null, 'steam_id' => null];
         }
 
         $flags = $reader->byte();
         $keywords = null;
         $gamePort = null;
+        $steamId = null;
 
         if ($flags & 0x80) {
             // The port players connect to, which often differs from the one we query.
@@ -155,7 +254,10 @@ class SourceQueryDriver implements ServerQueryDriver
         }
 
         if ($flags & 0x10) {
-            $reader->skip(8);           // server steam id
+            // 64-bit little-endian; kept as a string because it overflows a
+            // JavaScript number and PHP int semantics vary by platform.
+            $parts = unpack('Vlow/Vhigh', $reader->raw(8));
+            $steamId = (string) ($parts['high'] * 4294967296 + $parts['low']);
         }
 
         if ($flags & 0x40) {
@@ -167,7 +269,7 @@ class SourceQueryDriver implements ServerQueryDriver
             $keywords = $reader->string();
         }
 
-        return ['keywords' => $keywords, 'game_port' => $gamePort];
+        return ['keywords' => $keywords, 'game_port' => $gamePort, 'steam_id' => $steamId];
     }
 
     /**
