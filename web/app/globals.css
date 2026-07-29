@@ -25,6 +25,10 @@
   --color-online: #22c55e;
   --color-offline: #64748b;
 
+  /* Failure, as a surface rather than as text: the only place this red is used
+     is a toast the visitor is meant to read before it goes away. */
+  --color-danger: #dc2626;
+
   --font-display: var(--font-orbitron), system-ui, sans-serif;
   --font-sans: var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-mono-code), ui-monospace, monospace;
@@ -50,11 +54,76 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Focus must stay visible: this catalog is navigated by keyboard a lot. */
+/*
+ * Focus must stay visible: this catalog is navigated by keyboard a lot.
+ *
+ * The outline follows whatever radius the element already has — setting one
+ * here would square off every rounded button and field the moment it took
+ * focus, which is the opposite of a focus ring doing its job.
+ */
 :focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
-  border-radius: 2px;
+}
+
+/*
+ * Fields get a quieter treatment than buttons and links: the border does the
+ * pointing, and a ring at a tenth of the brand colour backs it up.
+ *
+ * A solid 2px outline standing 2px clear of a rounded field reads as a glow
+ * around it rather than as focus. Ten percent is enough to see and not enough
+ * to shout — and because it is one rule here rather than a utility repeated on
+ * every input, every field in the app answers to it.
+ */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-brand) 10%, transparent);
+}
+
+/* A field that is being corrected keeps saying so while it has focus. */
+input[aria-invalid='true']:focus,
+textarea[aria-invalid='true']:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+/*
+ * The toast viewport lives in the top layer, as a popover.
+ *
+ * Not a z-index decision: the sign-in dialog is a real <dialog>, and nothing
+ * outside the top layer can ever paint above one — a plain fixed container
+ * would put every error raised inside that dialog behind it. The UA sheet
+ * centres popovers and gives them a border and a background, all of which the
+ * toasts style themselves.
+ *
+ * Position lives here rather than in utility classes: unlayered rules like this
+ * one beat everything in Tailwind's layers, so `top-16 right-4` on the element
+ * would lose to the `inset` reset below and the stack would land top left.
+ */
+[popover] {
+  position: fixed;
+  inset: auto;
+  top: 4.5rem;
+  right: 1rem;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+
+.toast-enter {
+  animation: toast-in 160ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {

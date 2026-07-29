@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { cacheLife } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { Icon } from '@/components/icons'
 import { LiveProvider } from '@/components/live-provider'
 import { PlayersChart } from '@/components/players-chart'
@@ -37,9 +37,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ServerPage({ params }: Props) {
   'use cache'
-  cacheLife('hours')
+  // The rendered page is its own cache entry: leaving this at `hours` would
+  // hold the old markup however fresh `getServer` underneath it became.
+  cacheLife('minutes')
 
   const { server: slug } = await params
+  cacheTag(`server:${slug}`)
   const [server, history] = await Promise.all([getServer(slug), getHistory(slug, '24h')])
 
   if (!server) notFound()
@@ -111,7 +114,7 @@ export default async function ServerPage({ params }: Props) {
               come to copy, and they read better in a narrow column. */}
           <div className="space-y-4">
             <ServerConnection server={server} />
-            <ServerInformation server={server} />
+            <ServerInformation server={server} apiUrl={API_URL} />
             <ShareBlock url={`${SITE_URL}/servers/${server.slug}`} name={server.name} />
           </div>
 

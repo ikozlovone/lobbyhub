@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { cacheLife } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame, getGames } from '@/lib/data'
 import { canonical, GAME_INDEX_THRESHOLD, robotsFor } from '@/lib/seo'
@@ -30,20 +30,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function GamePage({ params }: Props) {
   'use cache'
-  // The shell — names, facets, descriptions — changes rarely. Player counts on
-  // it are refreshed client-side by the live layer.
-  cacheLife('hours')
+  /*
+   * Names, facets and descriptions change rarely, and the live layer refreshes
+   * the player counts client-side — but *which servers are on the page* is part
+   * of this markup, and a server added a minute ago has to be findable. The
+   * rendered page is its own cache entry, so this window is the one that
+   * decides, not the shorter one on getServers underneath it.
+   */
+  cacheLife('minutes')
 
   const { game: slug } = await params
+  // Tagged on the page itself, not only inside getGame: this rendered markup is
+  // its own cache entry, and it is the one a visitor is served.
+  cacheTag('games', `game:${slug}`)
   const game = await getGame(slug)
 
   if (!game) notFound()
 
-  return (
-    <GameListing
-      gameSlug={slug}
-      heading={`${game.name} servers`}
-      intro={game.description ?? undefined}
-    />
-  )
+  return <GameListing gameSlug={slug} heading={`${game.name} server list`} />
 }

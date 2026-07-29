@@ -77,7 +77,7 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
         onFocus={() => results && setOpen(true)}
         placeholder="Search games and servers"
         autoComplete="off"
-        className="w-full rounded-lg border border-line bg-surface py-2 pr-3 pl-9 text-sm outline-none transition-colors placeholder:text-subtle focus:border-brand"
+        className="w-full rounded-lg border border-line bg-surface py-2 pr-3 pl-9 text-sm outline-none transition-colors placeholder:text-subtle"
       />
 
       {open && results && (

@@ -1,144 +1,82 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { ServerFilters } from '@/lib/api'
-import { getGame, getServers } from '@/lib/data'
-import { LiveProvider } from './live-provider'
-import { ServerRow } from './server-row'
+import { getGame, getRecentVotes, getServers } from '@/lib/data'
+import { GameHero } from './game-hero'
+import { RecentVotes } from './recent-votes'
+import { ServerBrowser } from './server-browser'
 
 /**
  * The listing body shared by the game page and every facet page under it
- * (/games/minecraft, /survival, /version/1-21, /country/germany). One component
- * so a facet page is never a thinner copy of the main one.
+ * (/games/rust, /pvp, /version/2631, /country/germany). One component so a
+ * facet page is never a thinner copy of the main one.
+ *
+ * The first page of servers is fetched here, on the server, and handed to the
+ * browser as its starting state: the list is in the HTML that ships, and the
+ * interactive layer takes over from there without refetching what it was given.
  */
+
+/** Must match ServerBrowser's own page size, or Load more would skip rows. */
+const PER_PAGE = 25
+
 export async function GameListing({
   gameSlug,
   filters = {},
   heading,
-  intro,
+  crumb = 'Servers',
+  facetLabel,
 }: {
   gameSlug: string
+  /** Fixed by the route. Everything else the visitor picks in the browser. */
   filters?: ServerFilters
   heading: string
-  intro?: string
+  crumb?: string
+  /** What the locked facet is called, for the pill that clears it. */
+  facetLabel?: string
 }) {
-  const [game, listing] = await Promise.all([
+  const [game, listing, votes] = await Promise.all([
     getGame(gameSlug),
-    getServers(gameSlug, filters),
+    getServers(gameSlug, { ...filters, sort: 'rank', per_page: PER_PAGE }),
+    getRecentVotes(gameSlug),
   ])
 
   if (!game || !listing) notFound()
 
-  const servers = listing.data
-  const slugs = servers.map((server) => server.slug)
-
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <nav aria-label="Breadcrumb" className="text-xs text-subtle">
-          <Link href="/" className="hover:text-fg">
-            Home
-          </Link>
-          <span className="mx-1.5">/</span>
-          <Link href={`/games/${game.slug}`} className="hover:text-fg">
-            {game.name}
-          </Link>
-        </nav>
-        <h1 className="font-display text-2xl font-black tracking-tight sm:text-3xl">{heading}</h1>
-        {intro && <p className="max-w-3xl text-sm text-muted">{intro}</p>}
-        <p className="tabular text-sm text-subtle">
-          {game.counters.servers.toLocaleString('en-US')} servers ·{' '}
-          {game.counters.players_online.toLocaleString('en-US')} players online
-        </p>
-      </header>
+      <GameHero game={game} heading={heading} crumb={crumb} />
 
-      <div className="grid gap-6 lg:grid-cols-[15rem_1fr]">
-        <aside className="space-y-6">
-          <FacetGroup
-            title="Modes"
-            items={game.facets.modes.map((mode) => ({
-              href: `/games/${game.slug}/${mode.slug}`,
-              label: mode.name,
-              count: mode.servers_count,
-              active: filters.mode === mode.slug,
-            }))}
+      {/* The rail follows the listing until there is genuinely room beside it:
+          squeezed onto a 1280px screen it would cost the table two columns. */}
+      <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="min-w-0 space-y-8">
+          <ServerBrowser
+            game={game}
+            initial={listing}
+            lockedMode={filters.mode}
+            lockedVersion={filters.version}
+            lockedCountry={filters.country}
+            lockedLabel={facetLabel}
           />
-          {game.has_versions && (
-            <FacetGroup
-              title="Versions"
-              items={game.facets.versions.map((version) => ({
-                href: `/games/${game.slug}/version/${version.slug}`,
-                label: version.name,
-                count: version.servers_count,
-                active: filters.version === version.slug,
-              }))}
-            />
+
+          {/* Only on the game's own page: the same paragraphs repeated under
+              every facet URL is duplicate content, and each facet page already
+              says what it is in its title and heading. */}
+          {!facetLabel && game.description && (
+            <section className="rounded-2xl border border-line bg-surface p-5 sm:p-6">
+              <h2 className="font-display text-lg font-bold tracking-tight">
+                About {game.name}
+              </h2>
+              <p className="mt-3 max-w-3xl leading-relaxed text-muted">{game.description}</p>
+            </section>
           )}
-          <FacetGroup
-            title="Countries"
-            items={game.facets.countries.map((country) => ({
-              href: `/games/${game.slug}/country/${country.slug}`,
-              label: country.name,
-              count: country.servers_count,
-              active: filters.country === country.slug,
-            }))}
-          />
-        </aside>
+        </div>
 
-        <section className="rounded-lg border border-line bg-surface">
-          <div className="hidden grid-cols-[2.5rem_1fr_7rem_10rem] gap-4 border-b border-line px-3 py-2 text-xs tracking-wide text-subtle uppercase sm:grid">
-            <span>#</span>
-            <span>Server</span>
-            <span>Status</span>
-            <span className="text-right">Players</span>
+        <aside className="min-w-0">
+          <div className="2xl:sticky 2xl:top-20">
+            <RecentVotes votes={votes} />
           </div>
-
-          {servers.length === 0 ? (
-            <p className="px-4 py-12 text-center text-sm text-subtle">
-              No servers here yet.
-            </p>
-          ) : (
-            <LiveProvider slugs={slugs}>
-              {servers.map((server, index) => (
-                <ServerRow key={server.slug} server={server} rank={index + 1} />
-              ))}
-            </LiveProvider>
-          )}
-        </section>
+        </aside>
       </div>
-    </div>
-  )
-}
-
-function FacetGroup({
-  title,
-  items,
-}: {
-  title: string
-  items: { href: string; label: string; count: number; active: boolean }[]
-}) {
-  if (items.length === 0) return null
-
-  return (
-    <div>
-      <h2 className="mb-2 font-display text-xs font-bold tracking-wide text-muted uppercase">
-        {title}
-      </h2>
-      <ul className="space-y-0.5">
-        {items.map((item) => (
-          <li key={item.href}>
-            <Link
-              href={item.href}
-              aria-current={item.active ? 'page' : undefined}
-              className={`flex cursor-pointer items-center justify-between rounded px-2 py-1.5 text-sm transition-colors ${
-                item.active ? 'bg-surface-2 text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg'
-              }`}
-            >
-              <span className="truncate">{item.label}</span>
-              <span className="tabular ml-2 shrink-0 text-xs text-subtle">{item.count}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }

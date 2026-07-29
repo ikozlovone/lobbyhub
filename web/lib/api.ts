@@ -28,6 +28,13 @@ export type GameCounters = {
   synced_at: string | null
 }
 
+export type Monitoring = {
+  protocol: 'minecraft' | 'source' | 'fivem'
+  protocol_label: string
+  default_port: number
+  default_query_port: number | null
+}
+
 export type Game = {
   slug: string
   name: string
@@ -38,6 +45,7 @@ export type Game = {
   cover: string | null
   has_versions: boolean
   counters: GameCounters
+  monitoring: Monitoring
   seo: { title: string | null; description: string | null }
   description?: string | null
 }
@@ -52,7 +60,15 @@ export type Facet = {
 export type CountryFacet = Facet & { code: string }
 
 export type GameDetail = Game & {
-  facets: { modes: Facet[]; versions: Facet[]; countries: CountryFacet[] }
+  facets: {
+    /** Availability and capacity buckets — see ServerListing::STATUSES. */
+    statuses: Facet[]
+    modes: Facet[]
+    versions: Facet[]
+    countries: CountryFacet[]
+    /** `slug` is the map name verbatim: free text is what the filter takes. */
+    maps: Facet[]
+  }
 }
 
 export type Country = { code: string; name: string; slug: string }
@@ -72,6 +88,7 @@ export type Server = {
   rating: number | null
   promoted: boolean
   wiped_at: string | null
+  added_at: string | null
   live: ServerLive
 }
 
@@ -110,6 +127,11 @@ export type ServerDetail = Server & {
   query_address: string
   connect_hostname: string | null
   steam_id: string | null
+  /** Source only; null where the protocol has no such notion. */
+  bots: number | null
+  vac: boolean | null
+  /** Inferred from what the owner wrote, not reported by any protocol. */
+  language: { code: string; name: string } | null
   info: ServerInfo
   media: ServerMedia
   standing: Standing
@@ -122,6 +144,7 @@ export type ServerDetail = Server & {
   claimed: boolean
   first_seen_at: string | null
   last_online_at: string | null
+  last_offline_at: string | null
 }
 
 export type HistoryPoint = {
@@ -187,17 +210,32 @@ export async function fetchGame(slug: string) {
   return response?.data ?? null
 }
 
+/** The status chips, and the only values the API will accept for `status`. */
+export type StatusFilter = 'online' | 'players' | 'full' | 'empty' | 'offline'
+
+export type ServerSort = 'players' | 'rank' | 'votes' | 'uptime' | 'wiped' | 'name' | 'newest'
+
 export type ServerFilters = {
   mode?: string
   version?: string
   country?: string
-  status?: 'online'
-  sort?: 'players' | 'rank' | 'votes' | 'uptime' | 'wiped' | 'name'
+  status?: StatusFilter
+  map?: string
+  q?: string
+  sort?: ServerSort
   page?: number
   per_page?: number
 }
 
-export async function fetchServers(game: string, filters: ServerFilters = {}) {
+/**
+ * A page of a game's listing.
+ *
+ * Called from two places with opposite needs: page shells read it inside a
+ * `use cache` scope, and the browser re-reads it whenever a filter changes —
+ * hence `init`, which the client passes `{ cache: 'no-store' }` through so the
+ * Refresh button actually refreshes.
+ */
+export async function fetchServers(game: string, filters: ServerFilters = {}, init?: RequestInit) {
   const query = new URLSearchParams(
     Object.entries(filters)
       .filter(([, value]) => value !== undefined && value !== '')
@@ -205,7 +243,22 @@ export async function fetchServers(game: string, filters: ServerFilters = {}) {
   )
 
   const suffix = query.toString() ? `?${query}` : ''
-  return get<Paginated<Server>>(`/games/${game}/servers${suffix}`)
+  return get<Paginated<Server>>(`/games/${game}/servers${suffix}`, init)
+}
+
+/**
+ * A vote, as much of it as is public: the nickname the voter published so an
+ * owner can reward them, and nothing that links two votes to one person.
+ */
+export type RecentVote = {
+  nickname: string | null
+  at: string | null
+  server: { slug: string; name: string }
+}
+
+export async function fetchRecentVotes(game: string) {
+  const response = await getOrNull<{ data: RecentVote[] }>(`/games/${game}/votes`)
+  return response?.data ?? []
 }
 
 export async function fetchServer(slug: string) {
@@ -213,9 +266,103 @@ export async function fetchServer(slug: string) {
   return response?.data ?? null
 }
 
+/**
+ * Ask for this server to be queried again, now.
+ *
+ * The API answers with the whole detail payload either way — if it queried, the
+ * numbers are seconds old; if the server was checked too recently to be worth
+ * disturbing again, they are the ones already on file. `refreshed` says which,
+ * so the panel can tell the visitor what actually happened.
+ */
+export async function refreshServer(
+  apiUrl: string,
+  slug: string,
+): Promise<{ server: ServerDetail; refreshed: boolean } | null> {
+  try {
+    const response = await fetch(`${apiUrl}/servers/${slug}/refresh`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    })
+
+    if (!response.ok) return null
+
+    const payload = await response.json()
+
+    return { server: payload.data, refreshed: payload.refreshed === true }
+  } catch {
+    return null
+  }
+}
+
 export async function fetchHistory(slug: string, range: string) {
   const response = await getOrNull<{ data: History }>(`/servers/${slug}/history?range=${range}`)
   return response?.data ?? null
+}
+
+/**
+ * What came of a submission.
+ *
+ * Three outcomes, not two. "Already in the catalog" is not a failure — the
+ * address is valid, the server is real, and the thing the submitter wanted is
+ * already true. Folding it in with genuine errors is what made the form shout
+ * in red at someone whose only mistake was not knowing we had it.
+ */
+export type Submission =
+  | { status: 'created'; server: Server; message: string }
+  | { status: 'listed'; server: { slug: string; name: string }; message: string }
+  | { status: 'error'; error: string }
+
+/**
+ * Add a server. Called from the browser: verification queries the address the
+ * visitor typed, so this is the one endpoint that must never be prefetched or
+ * replayed from a cache.
+ *
+ * Failures are values, not exceptions — "we could not reach your server" is the
+ * form's most common outcome and belongs next to the field, not in an error
+ * boundary.
+ */
+export async function submitServer(
+  apiUrl: string,
+  game: string,
+  form: { address: string; query_port: number | null },
+): Promise<Submission> {
+  let response: Response
+
+  try {
+    response = await fetch(`${apiUrl}/games/${game}/servers`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(form),
+    })
+  } catch {
+    return { status: 'error', error: 'Could not reach LobbyHub. Check your connection and try again.' }
+  }
+
+  const payload = await response.json().catch(() => null)
+
+  if (response.status === 201 && payload?.data) {
+    return { status: 'created', server: payload.data, message: payload.message ?? '' }
+  }
+
+  if (response.status === 409 && payload?.data) {
+    return {
+      status: 'listed',
+      server: payload.data,
+      message: payload.message ?? 'This server is already in the catalog.',
+    }
+  }
+
+  return {
+    status: 'error',
+    // Laravel puts the useful sentence under the field; `message` repeats it for
+    // everything else, including the rate limiter.
+    error:
+      payload?.errors?.address?.[0] ??
+      payload?.message ??
+      'Could not add the server. Try again in a moment.',
+  }
 }
 
 /**

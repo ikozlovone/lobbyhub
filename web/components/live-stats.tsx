@@ -81,8 +81,11 @@ function Tile({ label, value }: { label: string; value: number }) {
  * Counts from the previous value to the new one. Purely cosmetic, so it is
  * skipped entirely for anyone who asked for less motion, and on first paint —
  * animating up from zero on load would just be noise.
+ *
+ * Exported for the game hero, which shows the same kind of number and should
+ * behave the same way when it moves.
  */
-function Rolling({ value }: { value: number }) {
+export function Rolling({ value }: { value: number }) {
   const [shown, setShown] = useState(value)
   const previous = useRef(value)
 

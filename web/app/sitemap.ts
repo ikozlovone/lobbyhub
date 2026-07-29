@@ -18,6 +18,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const entries: MetadataRoute.Sitemap = [
     { url: SITE, changeFrequency: 'hourly', priority: 1 },
+    // The submission funnel: this page carries every per-game form under it.
+    { url: `${SITE}/add-server`, changeFrequency: 'weekly', priority: 0.8 },
   ]
 
   for (const game of games) {

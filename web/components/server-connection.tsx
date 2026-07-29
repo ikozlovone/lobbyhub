@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { ServerDetail } from '@/lib/api'
 import { Icon } from './icons'
+import { useToast } from './toast'
 import { useLive } from './live-provider'
 
 /**
@@ -26,7 +27,11 @@ export function ServerConnection({ server }: { server: ServerDetail }) {
       </h2>
 
       <div className="space-y-2 p-3">
-        <Address label="Players address" value={connect} game={server.game.slug} />
+        <Address
+          label="Players address"
+          value={connect}
+          steam={server.game.monitoring.protocol === 'source'}
+        />
         <Address label="Monitoring address" value={server.query_address} muted />
       </div>
 
@@ -53,19 +58,22 @@ function Address({
   label,
   value,
   muted,
-  game,
+  steam,
 }: {
   label: string
   value: string
   muted?: boolean
-  game?: string
+  /** Whether this game's client can be launched into a server by Steam. */
+  steam?: boolean
 }) {
   const [copied, setCopied] = useState(false)
+  const toast = useToast()
 
   async function copy() {
     await navigator.clipboard.writeText(value)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    toast.success('Copied!', 'Content has been successfully copied to the clipboard.')
   }
 
   return (
@@ -87,9 +95,10 @@ function Address({
         <Icon.copy />
       </button>
 
-      {/* Rust registers a steam:// handler that joins a server directly. Only
-          offered where the client actually supports it. */}
-      {game === 'rust' && (
+      {/* Steam registers a steam:// handler that joins a server directly, so
+          this works for anything we reach over the Source query protocol —
+          and for nothing else, which is why it is not always offered. */}
+      {steam && (
         <a
           href={`steam://connect/${value}`}
           aria-label="Connect through Steam"

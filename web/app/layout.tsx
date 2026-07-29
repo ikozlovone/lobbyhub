@@ -2,8 +2,13 @@ import type { Metadata } from 'next'
 import { Inter, JetBrains_Mono, Orbitron } from 'next/font/google'
 import Link from 'next/link'
 import { Suspense } from 'react'
+import { AuthProvider } from '@/components/auth/auth-provider'
+import { UserMenu } from '@/components/auth/user-menu'
+import { Icon } from '@/components/icons'
 import { SearchBox } from '@/components/search-box'
 import { Sidebar } from '@/components/sidebar'
+import { ToastProvider } from '@/components/toast'
+import { getAuthProviders } from '@/lib/data'
 import './globals.css'
 
 /*
@@ -29,43 +34,67 @@ export const metadata: Metadata = {
     'Live player counts, uptime history and rankings for Minecraft, Rust, FiveM and more.',
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Which sign-in buttons exist is deployment configuration, so it is read on
+  // the server and shipped with the shell instead of fetched on every visit.
+  //
+  // Caught out here, not inside the cached read: an API that is down should cost
+  // this render its provider buttons, not cache the absence of them for an hour.
+  const providers = await getAuthProviders().catch(() => [])
+
   return (
     <html lang="en" className={`${orbitron.variable} ${inter.variable} ${mono.variable} h-full`}>
       <body className="flex min-h-full flex-col">
-        <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur">
-          <div className="mx-auto flex h-14 w-full max-w-[100rem] items-center gap-4 px-4">
-            <Link
-              href="/"
-              className="font-display shrink-0 text-lg font-black tracking-tight transition-colors hover:text-brand"
-            >
-              LOBBY<span className="text-brand">HUB</span>
-            </Link>
-            <div className="flex flex-1 justify-center">
-              <SearchBox apiUrl={API_URL} />
+        {/* Outermost: the sign-in dialog inside AuthProvider raises toasts too. */}
+        <ToastProvider>
+          <AuthProvider apiUrl={API_URL} providers={providers}>
+            <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur">
+              <div className="mx-auto flex h-14 w-full max-w-[100rem] items-center gap-3 px-4">
+                <Link
+                  href="/"
+                  className="font-display shrink-0 text-lg font-black tracking-tight transition-colors hover:text-brand"
+                >
+                  LOBBY<span className="text-brand">HUB</span>
+                </Link>
+                <div className="flex flex-1 justify-center">
+                  <SearchBox apiUrl={API_URL} />
+                </div>
+
+                {/* The one thing a server owner comes here to do, reachable from
+                    every page rather than only from the home grid. */}
+                <Link
+                  href="/add-server"
+                  className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
+                >
+                  <Icon.plus />
+                  <span className="hidden sm:inline">Add server</span>
+                </Link>
+
+                <UserMenu />
+              </div>
+            </header>
+
+            <div className="mx-auto flex w-full max-w-[100rem] flex-1 gap-6 px-4 py-6">
+              {/* Below lg the games list would push the page down before any of its
+                  content; it is reachable from the home page there instead. */}
+              <aside className="hidden w-56 shrink-0 lg:block">
+                <div className="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1">
+                  <Suspense fallback={<div className="h-64 animate-pulse rounded bg-surface" />}>
+                    <Sidebar />
+                  </Suspense>
+                </div>
+              </aside>
+
+              <main className="min-w-0 flex-1">{children}</main>
             </div>
-          </div>
-        </header>
 
-        <div className="mx-auto flex w-full max-w-[100rem] flex-1 gap-6 px-4 py-6">
-          {/* Below lg the games list would push the page down before any of its
-              content; it is reachable from the home page there instead. */}
-          <aside className="hidden w-56 shrink-0 lg:block">
-            <div className="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1">
-              <Suspense fallback={<div className="h-64 animate-pulse rounded bg-surface" />}>
-                <Sidebar />
-              </Suspense>
-            </div>
-          </aside>
-
-          <main className="min-w-0 flex-1">{children}</main>
-        </div>
-
-        <footer className="border-t border-line py-6 text-sm text-subtle">
-          <div className="mx-auto w-full max-w-[100rem] px-4">
-            Player counts refresh every few minutes. Uptime is measured from our own checks.
-          </div>
-        </footer>
+            <footer className="border-t border-line py-6 text-sm text-subtle">
+              <div className="mx-auto w-full max-w-[100rem] px-4">
+                Player counts refresh every few minutes. Uptime is measured from our own checks.
+              </div>
+            </footer>
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   )

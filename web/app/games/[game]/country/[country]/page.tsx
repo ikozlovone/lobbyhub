@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { cacheLife } from 'next/cache'
+import { cacheLife, cacheTag } from 'next/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame } from '@/lib/data'
 import { canonical, robotsFor } from '@/lib/seo'
@@ -43,9 +43,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function CountryPage({ params }: Props) {
   'use cache'
-  cacheLife('hours')
+  // Minutes, like the game page: a newly added server has to appear here too.
+  cacheLife('minutes')
 
   const { game: gameSlug, country: countrySlug } = await params
+  cacheTag('games', `game:${gameSlug}`)
   const found = await findCountry(gameSlug, countrySlug)
 
   if (!found) notFound()
@@ -55,6 +57,8 @@ export default async function CountryPage({ params }: Props) {
       gameSlug={gameSlug}
       filters={{ country: countrySlug }}
       heading={`${found.game.name} servers in ${found.country.name}`}
+      crumb={found.country.name}
+      facetLabel={found.country.name}
     />
   )
 }

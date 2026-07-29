@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { fetchLive, type Live } from '@/lib/api'
 
 /**
@@ -15,6 +15,20 @@ import { fetchLive, type Live } from '@/lib/api'
 type LiveMap = Record<string, Live>
 
 const LiveContext = createContext<LiveMap>({})
+
+/**
+ * A way in, for measurements that did not come from the interval.
+ *
+ * The refresh button on the information panel produces a genuinely newer
+ * reading than the poller's last one. Without somewhere to put it, the page
+ * would show two different player counts side by side — the fresh one in the
+ * panel that asked for it, the older one everywhere else.
+ */
+const PublishContext = createContext<(slug: string, live: Live) => void>(() => {})
+
+export function useLivePublish() {
+  return useContext(PublishContext)
+}
 
 /** Matches the monitoring cadence for busy servers; polling faster buys nothing. */
 const REFRESH_MS = 120_000
@@ -51,7 +65,15 @@ export function LiveProvider({ slugs, children }: { slugs: string[]; children: R
     }
   }, [key])
 
-  return <LiveContext.Provider value={live}>{children}</LiveContext.Provider>
+  const publish = useCallback((slug: string, reading: Live) => {
+    setLive((current) => ({ ...current, [slug]: reading }))
+  }, [])
+
+  return (
+    <PublishContext.Provider value={publish}>
+      <LiveContext.Provider value={live}>{children}</LiveContext.Provider>
+    </PublishContext.Provider>
+  )
 }
 
 /** Falls back to the server-rendered value until a refresh lands. */

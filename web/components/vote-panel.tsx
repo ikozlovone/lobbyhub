@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useToast } from './toast'
 
 /**
  * The vote form.
@@ -15,7 +16,7 @@ export function VotePanel({ slug, apiUrl }: { slug: string; apiUrl: string }) {
   const [nextVoteAt, setNextVoteAt] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const toast = useToast()
 
   useEffect(() => {
     let cancelled = false
@@ -37,7 +38,6 @@ export function VotePanel({ slug, apiUrl }: { slug: string; apiUrl: string }) {
 
   async function vote() {
     setBusy(true)
-    setError(null)
 
     try {
       const response = await fetch(`${apiUrl}/servers/${slug}/vote`, {
@@ -51,12 +51,13 @@ export function VotePanel({ slug, apiUrl }: { slug: string; apiUrl: string }) {
         setCanVote(false)
         setNextVoteAt(payload.data.next_vote_at)
         setVotes(payload.data.votes_total)
+        toast.success('Vote counted', 'Thanks — you can vote for this server again tomorrow.')
       } else {
-        setError(payload.message ?? 'Could not record the vote.')
+        toast.error('Error', payload.message ?? 'Could not record the vote.')
         if (response.status === 429) setCanVote(false)
       }
     } catch {
-      setError('Could not reach the server.')
+      toast.error('Error', 'Could not reach the server.')
     } finally {
       setBusy(false)
     }
@@ -76,7 +77,7 @@ export function VotePanel({ slug, apiUrl }: { slug: string; apiUrl: string }) {
           onChange={(event) => setNickname(event.target.value)}
           maxLength={64}
           placeholder="Your nickname"
-          className="mt-1 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-brand"
+          className="mt-1 w-full rounded-md border border-line bg-bg px-3 py-2 text-sm outline-none"
         />
 
         <button
@@ -89,15 +90,14 @@ export function VotePanel({ slug, apiUrl }: { slug: string; apiUrl: string }) {
         </button>
 
         <p className="mt-2 text-xs text-subtle" aria-live="polite">
-          {error ??
-            (canVote === false && nextVoteAt
-              ? `You can vote again after ${new Date(nextVoteAt).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                })}.`
-              : votes !== null
-                ? `${votes.toLocaleString('en-US')} vote${votes === 1 ? '' : 's'} all time · one per day`
-                : 'One vote per day.')}
+          {canVote === false && nextVoteAt
+            ? `You can vote again after ${new Date(nextVoteAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+              })}.`
+            : votes !== null
+              ? `${votes.toLocaleString('en-US')} vote${votes === 1 ? '' : 's'} all time · one per day`
+              : 'One vote per day.'}
         </p>
       </div>
     </section>
