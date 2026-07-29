@@ -2,6 +2,7 @@
 
 namespace App\Services\Catalog;
 
+use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -19,7 +20,31 @@ class ServerListing
         'uptime' => ['uptime_percent', 'desc'],
         'wiped' => ['wiped_at', 'desc'],
         'name' => ['name', 'asc'],
+        // Insertion order, by primary key rather than created_at: the same
+        // ordering, on an index that already exists.
+        'newest' => ['id', 'desc'],
     ];
+
+    /**
+     * The buckets the listing chips filter by, in the order they are offered.
+     *
+     * Not the same thing as the `status` column, which is why they live here
+     * rather than in the enum: "empty" and "full" are questions about players
+     * against capacity, and both are only meaningful of a server we can see.
+     */
+    private const STATUSES = [
+        'online' => 'Online',
+        'players' => 'Has players',
+        'full' => 'Full',
+        'empty' => 'Empty',
+        'offline' => 'Offline',
+    ];
+
+    /**
+     * Maps are free text reported by the server, and a busy game invents new
+     * ones daily. The chip offers the ones worth browsing, not all of them.
+     */
+    private const MAX_MAP_FACETS = 40;
 
     public function paginate(Game $game, array $filters): LengthAwarePaginator
     {
@@ -42,7 +67,17 @@ class ServerListing
         $query->orderByRaw('case when promoted_until > ? then 0 else 1 end', [now()]);
 
         [$column, $direction] = self::SORTS[$filters['sort'] ?? 'players'] ?? self::SORTS['players'];
-        $query->orderBy($column, $direction)->orderBy('id');
+        $query->orderBy($column, $direction);
+
+        // A rank of zero is the normal state for a server nobody has voted for
+        // and that we have not watched for a full week yet. Without a tiebreak,
+        // the ranked listing of a young catalog is ordered by insertion — which
+        // is to say, not ordered at all.
+        if ($column === 'rank_score') {
+            $query->orderBy('players_online', 'desc');
+        }
+
+        $query->orderBy('id');
 
         return $this->applyFilters($query, $game, $filters);
     }
@@ -61,17 +96,49 @@ class ServerListing
             $query->whereHas('country', fn (Builder $q) => $q->where('countries.slug', $country));
         }
 
-        if (($filters['status'] ?? null) === 'online') {
-            $query->online();
+        if ($status = $filters['status'] ?? null) {
+            $this->applyStatus($query, $status);
+        }
+
+        // The literal string the server reported, because that is what the map
+        // facet lists — these names have no canonical form to slug towards.
+        if ($map = $filters['map'] ?? null) {
+            $query->where('map', $map);
         }
 
         if ($search = trim((string) ($filters['q'] ?? ''))) {
-            $query->where(function (Builder $q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")->orWhere('host', 'like', "%{$search}%");
+            // Folded on both sides rather than left to LIKE: Postgres compares
+            // it case-sensitively, so a search for "atlas" would walk straight
+            // past every server that spells itself Atlas.
+            $needle = '%'.mb_strtolower($search).'%';
+
+            $query->where(function (Builder $q) use ($needle) {
+                $q->whereRaw('lower(name) like ?', [$needle])
+                    ->orWhereRaw('lower(host) like ?', [$needle]);
             });
         }
 
         return $query;
+    }
+
+    /**
+     * Empty and full are asked only of servers we can currently see: an offline
+     * server holds no players by definition and would swamp the empty bucket
+     * with machines nobody can join.
+     */
+    private function applyStatus(Builder $query, string $status): void
+    {
+        match ($status) {
+            'online' => $query->online(),
+            'offline' => $query->where($query->qualifyColumn('status'), ServerStatus::Offline),
+            'empty' => $query->online()->where('players_online', 0),
+            'players' => $query->online()->where('players_online', '>', 0),
+            // Servers that report no capacity would otherwise all count as full.
+            'full' => $query->online()
+                ->where('players_max', '>', 0)
+                ->whereColumn('players_online', '>=', 'players_max'),
+            default => null,
+        };
     }
 
     /**
@@ -84,10 +151,82 @@ class ServerListing
     public function facets(Game $game): array
     {
         return [
+            'statuses' => $this->statusFacets($game),
             'modes' => $this->facetRows($game->modes()->active()),
             'versions' => $this->facetRows($game->versions()->active()),
             'countries' => $this->countryFacets($game),
+            'maps' => $this->mapFacets($game),
         ];
+    }
+
+    /**
+     * How many servers sit in each status chip.
+     *
+     * Counted across the whole game rather than through whatever filters are
+     * currently applied: a number that shrinks as you narrow tells you what is
+     * left, and these chips are there to say what the game looks like.
+     *
+     * One aggregate rather than five round trips, written as case-sums rather
+     * than FILTER so the same SQL runs under sqlite in the test suite.
+     *
+     * @return array<int, array{slug: string, name: string, servers_count: int}>
+     */
+    private function statusFacets(Game $game): array
+    {
+        $online = ServerStatus::Online->value;
+
+        $row = Server::query()
+            ->active()
+            ->verified()
+            ->where('game_id', $game->id)
+            ->selectRaw(<<<'SQL'
+                sum(case when status = ? then 1 else 0 end) as online_count,
+                sum(case when status = ? then 1 else 0 end) as offline_count,
+                sum(case when status = ? and players_online = 0 then 1 else 0 end) as empty_count,
+                sum(case when status = ? and players_online > 0 then 1 else 0 end) as players_count,
+                sum(case when status = ? and players_max > 0 and players_online >= players_max
+                    then 1 else 0 end) as full_count
+            SQL, [$online, ServerStatus::Offline->value, $online, $online, $online])
+            ->first();
+
+        return collect(self::STATUSES)
+            ->map(fn (string $name, string $slug) => [
+                'slug' => $slug,
+                'name' => $name,
+                'servers_count' => (int) ($row?->{"{$slug}_count"} ?? 0),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The maps worth offering as a filter.
+     *
+     * `slug` carries the map name verbatim because that is also the filter
+     * value — see applyFilters. Slugging it would need a reverse lookup for
+     * every query against a column that is only ever free text.
+     *
+     * @return array<int, array{slug: string, name: string, servers_count: int}>
+     */
+    private function mapFacets(Game $game): array
+    {
+        return Server::query()
+            ->active()
+            ->verified()
+            ->where('game_id', $game->id)
+            ->whereNotNull('map')
+            ->where('map', '!=', '')
+            ->groupBy('map')
+            ->orderByRaw('count(*) desc')
+            ->orderBy('map')
+            ->limit(self::MAX_MAP_FACETS)
+            ->get(['map', DB::raw('count(*) as servers_count')])
+            ->map(fn ($row) => [
+                'slug' => $row->map,
+                'name' => $row->map,
+                'servers_count' => (int) $row->servers_count,
+            ])
+            ->all();
     }
 
     /**
@@ -139,5 +278,11 @@ class ServerListing
     public static function sorts(): array
     {
         return array_keys(self::SORTS);
+    }
+
+    /** @return list<string> */
+    public static function statuses(): array
+    {
+        return array_keys(self::STATUSES);
     }
 }

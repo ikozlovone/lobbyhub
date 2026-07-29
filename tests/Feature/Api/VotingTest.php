@@ -9,6 +9,7 @@ use App\Models\Vote;
 use App\Services\Catalog\ServerRanking;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -41,6 +42,27 @@ class VotingTest extends TestCase
         $this->assertSame(1, Vote::count());
     }
 
+    public function test_recent_votes_are_listed_per_game_without_identifying_the_voter(): void
+    {
+        $this->postJson('/api/servers/test-server/vote', ['nickname' => 'ivan'])->assertCreated();
+
+        // A vote on another game must not show up in Rust's rail.
+        $elsewhere = Server::factory()->create([
+            'game_id' => Game::where('slug', 'minecraft')->value('id'),
+            'slug' => 'other-game',
+            'status' => ServerStatus::Online,
+        ]);
+        $this->postJson("/api/servers/{$elsewhere->slug}/vote")->assertCreated();
+
+        $response = $this->getJson('/api/games/rust/votes')->assertOk();
+
+        $this->assertCount(1, $response->json('data'));
+        $this->assertSame('ivan', $response->json('data.0.nickname'));
+        $this->assertSame('test-server', $response->json('data.0.server.slug'));
+        // The address hash backs the one-a-day rule; it is not public.
+        $this->assertSame(['nickname', 'at', 'server'], array_keys($response->json('data.0')));
+    }
+
     public function test_the_second_vote_of_the_day_is_refused(): void
     {
         $this->postJson('/api/servers/test-server/vote')->assertCreated();
@@ -68,7 +90,7 @@ class VotingTest extends TestCase
 
         Vote::insert([$row]);
 
-        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+        $this->expectException(UniqueConstraintViolationException::class);
         Vote::insert([$row]);
     }
 

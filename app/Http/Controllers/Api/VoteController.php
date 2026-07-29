@@ -3,14 +3,50 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Game;
 use App\Models\Server;
 use App\Models\Vote;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class VoteController extends Controller
 {
+    /** Enough to fill the rail beside a listing, and no more. */
+    private const RECENT_LIMIT = 12;
+
+    /**
+     * The votes cast on one game's servers, newest first.
+     *
+     * The only public trace a vote leaves, and deliberately a thin one: the
+     * nickname a voter chose to publish so a server owner can reward them, and
+     * nothing that would tie two votes to the same person. Votes cast without a
+     * nickname are anonymous here as well.
+     */
+    public function recent(Game $game): JsonResponse
+    {
+        abort_unless($game->is_active, 404);
+
+        $votes = Vote::query()
+            ->whereHas('server', fn (Builder $query) => $query->active()->where('game_id', $game->id))
+            ->with('server:id,slug,name')
+            ->latest('id')
+            ->limit(self::RECENT_LIMIT)
+            ->get();
+
+        return response()->json([
+            'data' => $votes->map(fn (Vote $vote) => [
+                'nickname' => $vote->nickname,
+                'at' => $vote->created_at?->toIso8601String(),
+                'server' => [
+                    'slug' => $vote->server->slug,
+                    'name' => $vote->server->name,
+                ],
+            ])->all(),
+        ]);
+    }
+
     /**
      * Cast a vote.
      *

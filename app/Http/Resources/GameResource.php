@@ -2,11 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Game;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * @mixin \App\Models\Game
+ * @mixin Game
  */
 class GameResource extends JsonResource
 {
@@ -25,6 +26,14 @@ class GameResource extends JsonResource
             'icon' => $this->icon_path ? asset($this->icon_path) : null,
             'cover' => $this->cover_path ? asset($this->cover_path) : null,
             'has_versions' => $this->has_versions,
+            // What the submission form needs to tell an owner what we are about
+            // to do to their server, and which port to expect us on.
+            'monitoring' => [
+                'protocol' => $this->query_protocol->value,
+                'protocol_label' => $this->query_protocol->label(),
+                'default_port' => $this->default_port,
+                'default_query_port' => $this->default_query_port,
+            ],
             'counters' => [
                 'servers' => $this->servers_count,
                 'servers_online' => $this->online_servers_count,

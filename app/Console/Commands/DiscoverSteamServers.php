@@ -8,7 +8,6 @@ use App\Models\Server;
 use App\Services\Discovery\DiscoveredServer;
 use App\Services\Discovery\SteamServerDiscovery;
 use Illuminate\Console\Command;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 class DiscoverSteamServers extends Command
@@ -133,7 +132,7 @@ class DiscoverSteamServers extends Command
             'query_port' => $found->queryPort,
             'ip_address' => $found->ip,
             'game_port' => $found->gamePort,
-            'slug' => $this->slug($found),
+            'slug' => Server::slugFor($found->name, $found->ip, $found->gamePort),
             'name' => $found->name,
             'motd' => $found->name,
             'map' => $found->map,
@@ -148,17 +147,5 @@ class DiscoverSteamServers extends Command
         ]);
 
         return true;
-    }
-
-    /**
-     * Server names are wild — emoji, unicode, decoration — so the address is
-     * always appended to keep the slug unique and never empty.
-     */
-    private function slug(DiscoveredServer $found): string
-    {
-        $base = Str::limit(Str::slug($found->name), 60, '');
-        $suffix = str_replace('.', '-', $found->ip).'-'.$found->gamePort;
-
-        return $base === '' ? $suffix : "{$base}-{$suffix}";
     }
 }

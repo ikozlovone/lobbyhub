@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ServerDetailResource;
 use App\Http\Resources\ServerResource;
+use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
 use App\Services\Catalog\ServerListing;
+use App\Services\Monitoring\ServerQueryManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -21,6 +23,15 @@ class ServerController extends Controller
      */
     private const MAX_PAGE = 100;
 
+    /**
+     * How often a manual refresh may actually re-query one server.
+     *
+     * Half the hottest polling tier, so at worst a server somebody is watching
+     * gets checked twice as often as our own schedule already checks it — a
+     * bounded amount of extra traffic aimed at a machine we do not own.
+     */
+    private const REFRESH_COOLDOWN = 60;
+
     public function index(Request $request, Game $game, ServerListing $listing): JsonResponse
     {
         abort_unless($game->is_active, 404);
@@ -29,7 +40,10 @@ class ServerController extends Controller
             'mode' => ['sometimes', 'string', 'max:64'],
             'version' => ['sometimes', 'string', 'max:64'],
             'country' => ['sometimes', 'string', 'max:64'],
-            'status' => ['sometimes', Rule::in(['online'])],
+            'status' => ['sometimes', Rule::in(ServerListing::statuses())],
+            // The map name as the server reports it, which is what the facet
+            // hands back — there is no slug to match against.
+            'map' => ['sometimes', 'string', 'max:120'],
             'q' => ['sometimes', 'string', 'max:100'],
             'sort' => ['sometimes', Rule::in(ServerListing::sorts())],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
@@ -48,6 +62,41 @@ class ServerController extends Controller
         $server->load(['game', 'country', 'version', 'modes']);
 
         return (new ServerDetailResource($server))->response();
+    }
+
+    /**
+     * Query this server again, now, because somebody asked.
+     *
+     * Run inline rather than queued: the caller is a person looking at the panel
+     * waiting for it to change, and handing them a job id to poll for would be a
+     * worse version of waiting. One query is a socket and a five-second timeout.
+     *
+     * Two guards, doing different jobs. The IP limiter on the route stops one
+     * client walking the catalog. The cooldown here is per *server*, so no
+     * number of clients can make us knock on one address more often than this —
+     * that is the guard that matters, because the address belongs to someone
+     * else. Inside the cooldown the request is still answered, with the current
+     * snapshot and `refreshed: false`: the panel updates either way, and "we
+     * checked forty seconds ago" is a better answer than an error.
+     */
+    public function refresh(Server $server, ServerQueryManager $manager): JsonResponse
+    {
+        abort_unless($server->is_active, 404);
+
+        $server->load(['game', 'country', 'version', 'modes']);
+
+        $due = $server->last_queried_at === null
+            || $server->last_queried_at->addSeconds(self::REFRESH_COOLDOWN)->isPast();
+
+        if ($due && $manager->supports($server->game->query_protocol)) {
+            QueryServer::dispatchSync($server);
+
+            $server->refresh()->load(['game', 'country', 'version', 'modes']);
+        }
+
+        return (new ServerDetailResource($server))
+            ->additional(['refreshed' => $due])
+            ->response();
     }
 
     /**

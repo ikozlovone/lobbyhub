@@ -2,12 +2,14 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Server;
 use App\Services\Catalog\ServerInfo;
+use App\Services\Catalog\ServerLanguage;
 use App\Services\Catalog\ServerRanking;
 use Illuminate\Http\Request;
 
 /**
- * @mixin \App\Models\Server
+ * @mixin Server
  */
 class ServerDetailResource extends ServerResource
 {
@@ -26,6 +28,10 @@ class ServerDetailResource extends ServerResource
             'query_address' => $this->host.':'.$this->queryPort(),
             'connect_hostname' => $info->for($this->resource)['connect_hostname'] ?? null,
             'steam_id' => $this->steam_id,
+            'bots' => $this->bots,
+            'vac' => $this->vac_enabled === null ? null : (bool) $this->vac_enabled,
+            // Inferred, not reported — see ServerLanguage for what from.
+            'language' => app(ServerLanguage::class)->for($this->resource),
             'info' => $info->for($this->resource),
             'standing' => app(ServerRanking::class)->standing($this->resource),
             'media' => $info->media($this->resource),
@@ -47,6 +53,7 @@ class ServerDetailResource extends ServerResource
             'claimed' => $this->isClaimed(),
             'first_seen_at' => $this->created_at?->toIso8601String(),
             'last_online_at' => $this->last_online_at?->toIso8601String(),
+            'last_offline_at' => $this->last_offline_at?->toIso8601String(),
         ];
     }
 }
