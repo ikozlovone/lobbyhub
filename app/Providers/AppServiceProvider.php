@@ -55,6 +55,11 @@ class AppServiceProvider extends ServiceProvider
         // stops a script walking the whole catalog.
         RateLimiter::for('votes', fn (Request $request) => Limit::perHour(30)->by($request->ip()));
 
+        // Every submission makes us query an address the submitter chose, so
+        // the budget is small enough that the form can never be used to point
+        // our monitor at somebody else's network in bulk.
+        RateLimiter::for('submissions', fn (Request $request) => Limit::perHour(10)->by($request->ip()));
+
         // The refresh button. Also makes us query a real machine, but a listed
         // one rather than an address a stranger typed, and there is a per-server
         // cooldown behind it — this only stops one client walking the catalog.

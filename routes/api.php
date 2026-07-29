@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServerController;
 use App\Http\Controllers\Api\ServerHistoryController;
+use App\Http\Controllers\Api\ServerSubmissionController;
 use App\Http\Controllers\Api\VoteController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +27,12 @@ Route::name('api.')->group(function () {
     Route::get('games/{game}', [GameController::class, 'show'])->name('games.show');
     Route::get('games/{game}/servers', [ServerController::class, 'index'])->name('games.servers');
     Route::get('games/{game}/votes', [VoteController::class, 'recent'])->name('games.votes');
+
+    // Verification talks to the submitted address over the network, so this one
+    // is throttled far below the read budget.
+    Route::post('games/{game}/servers', [ServerSubmissionController::class, 'store'])
+        ->middleware('throttle:submissions')
+        ->name('games.servers.store');
 
     // Must precede servers/{server}, or "live" would be read as a slug.
     Route::get('servers/live', [ServerController::class, 'live'])->name('servers.live');
