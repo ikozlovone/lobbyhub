@@ -109,7 +109,11 @@ export default async function ServerPage({ params }: Props) {
           </div>
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-[21rem_1fr]">
+        {/* minmax(0,…) on both tracks, not 1fr and not auto: a track sized to
+            its content lets anything that scrolls sideways — the share rail, a
+            long address — widen the column instead of scrolling inside it, and
+            the page ends up scrolling sideways with it. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[21rem_minmax(0,1fr)]">
           {/* Facts on the left, content on the right: the facts are what people
               come to copy, and they read better in a narrow column. */}
           <div className="space-y-4">

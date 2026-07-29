@@ -35,3 +35,6 @@ Thumbs.db
 
 # Game artwork is fetched from Steam by `php artisan games:artwork`
 /public/images/games
+
+# Snapshots and logs left behind by browser automation
+.playwright-cli/

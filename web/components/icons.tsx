@@ -199,6 +199,24 @@ export const Icon = {
       <path d="M11 4h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7" />
     </Svg>
   ),
+  share: (p: Props) => (
+    <Svg {...p}>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.6 10.6 6.8-4.2M8.6 13.4l6.8 4.2" />
+    </Svg>
+  ),
+  chevronLeft: (p: Props) => (
+    <Svg {...p}>
+      <path d="m14 6-6 6 6 6" />
+    </Svg>
+  ),
+  chevronRight: (p: Props) => (
+    <Svg {...p}>
+      <path d="m10 6 6 6-6 6" />
+    </Svg>
+  ),
   /*
    * Brand marks below, not part of the line-drawn set above.
    *
