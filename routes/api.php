@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Api\Auth\EmailCodeController;
+use App\Http\Controllers\Api\Auth\SessionController;
+use App\Http\Controllers\Api\Auth\SocialAuthController;
 use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServerController;
@@ -42,6 +45,41 @@ Route::name('api.')->group(function () {
     Route::post('servers/{server}/votes/claim', [VoteController::class, 'claim'])->name('servers.votes.claim');
 
     Route::get('search', SearchController::class)->name('search');
+
+    /*
+    |----------------------------------------------------------------------
+    | Accounts
+    |----------------------------------------------------------------------
+    |
+    | Signing in and signing up are one act: prove you hold a mailbox or a
+    | provider account. There is no registration endpoint because there is no
+    | registration step.
+    |
+    */
+
+    Route::prefix('auth')->name('auth.')->group(function () {
+        Route::post('email', [EmailCodeController::class, 'store'])
+            ->middleware('throttle:auth-codes')
+            ->name('email');
+
+        Route::post('email/verify', [EmailCodeController::class, 'verify'])
+            ->middleware('throttle:auth-verify')
+            ->name('email.verify');
+
+        Route::get('providers', [SessionController::class, 'providers'])->name('providers');
+
+        // Browser navigations, not fetches: the visitor leaves and comes back.
+        Route::get('{provider}/redirect', [SocialAuthController::class, 'redirect'])
+            ->middleware('throttle:auth-verify')
+            ->name('social.redirect');
+        Route::get('{provider}/callback', [SocialAuthController::class, 'callback'])
+            ->name('social.callback');
+
+        Route::middleware('auth:sanctum')->group(function () {
+            Route::get('me', [SessionController::class, 'show'])->name('me');
+            Route::post('logout', [SessionController::class, 'destroy'])->name('logout');
+        });
+    });
 });
 
 Route::get('/user', function (Request $request) {

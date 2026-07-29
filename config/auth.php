@@ -114,4 +114,45 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Email sign-in codes
+    |--------------------------------------------------------------------------
+    |
+    | Signing in and signing up are the same act here: prove you hold the
+    | mailbox. Nobody sets a password, so these numbers are the entire security
+    | budget of that door.
+    |
+    | `ttl` is short because a code sits in an inbox, where it outlives the
+    | session that asked for it. `attempts` closes the only other way in:
+    | six digits is a million combinations, and five tries against a code that
+    | dies in ten minutes is not a search anyone finishes.
+    |
+    | `cooldown` is the resend limit shown in the dialog. The per-IP throttle in
+    | AppServiceProvider is the one that stops abuse; this one stops a visitor
+    | double-clicking their way to three emails.
+    |
+    */
+
+    'codes' => [
+        'length' => 6,
+        'ttl' => (int) env('AUTH_CODE_TTL', 600),
+        'attempts' => (int) env('AUTH_CODE_ATTEMPTS', 5),
+        'cooldown' => (int) env('AUTH_CODE_COOLDOWN', 60),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Token lifetime
+    |--------------------------------------------------------------------------
+    |
+    | The frontend runs on its own origin and holds a Sanctum token, so a
+    | session is exactly as long-lived as that token. Thirty days matches what
+    | a catalog is for — voting daily, checking a server now and then — without
+    | leaving a stolen token useful forever.
+    |
+    */
+
+    'token_lifetime' => (int) env('AUTH_TOKEN_LIFETIME_DAYS', 30),
+
 ];

@@ -59,5 +59,18 @@ class AppServiceProvider extends ServiceProvider
         // one rather than an address a stranger typed, and there is a per-server
         // cooldown behind it — this only stops one client walking the catalog.
         RateLimiter::for('refreshes', fn (Request $request) => Limit::perMinute(6)->by($request->ip()));
+
+        // Sending mail on demand to an address a stranger typed. Limited per
+        // address as well as per network, so one client cannot walk a list of
+        // mailboxes, and one mailbox cannot be flooded from many clients.
+        RateLimiter::for('auth-codes', fn (Request $request) => [
+            Limit::perHour(5)->by((string) $request->input('email')),
+            Limit::perHour(20)->by($request->ip()),
+        ]);
+
+        // Guessing budget across addresses. The per-code attempt counter is the
+        // real defence; this stops the same client trying a thousand codes
+        // against a thousand addresses.
+        RateLimiter::for('auth-verify', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
     }
 }
