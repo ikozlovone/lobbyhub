@@ -27,7 +27,16 @@ class QueryServer implements ShouldQueue
      */
     public int $tries = 1;
 
-    public function __construct(public Server $server)
+    /**
+     * @param  QueryResult|null  $measured  An answer already in hand, from a
+     *                                      caller that had to query the address
+     *                                      before it could decide to save it at
+     *                                      all — the submission form. Recording
+     *                                      is this job's business either way, so
+     *                                      the result is passed in rather than
+     *                                      the recording being written twice.
+     */
+    public function __construct(public Server $server, public ?QueryResult $measured = null)
     {
         $this->onQueue(config('monitoring.queue'));
     }
@@ -37,7 +46,7 @@ class QueryServer implements ShouldQueue
         $driver = $manager->for($this->server);
 
         try {
-            $result = $driver->query($this->server);
+            $result = $this->measured ?? $driver->query($this->server);
         } catch (QueryFailed) {
             $this->recordOffline($schedule);
 
@@ -102,6 +111,8 @@ class QueryServer implements ShouldQueue
             'steam_id' => $result->steamId,
             'wiped_at' => $result->wipedAt,
             'players_queued' => $result->playersQueued,
+            'bots' => $result->bots,
+            'vac_enabled' => $result->vacEnabled,
         ] as $column => $value) {
             if ($value !== null) {
                 $attributes[$column] = $value;
@@ -130,6 +141,9 @@ class QueryServer implements ShouldQueue
             'status' => ServerStatus::Offline,
             'players_online' => 0,
             'last_queried_at' => $now,
+            // Every failure, not only the first of a run: this answers "when was
+            // it last down", and during an outage that is now.
+            'last_offline_at' => $now,
             'failed_queries_count' => $failures,
             'next_query_at' => $now->copy()->addSeconds($schedule->backoffFor($failures)),
         ])->save();

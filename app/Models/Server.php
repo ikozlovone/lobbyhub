@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Server extends Model
 {
@@ -31,6 +32,8 @@ class Server extends Model
             'wiped_at' => 'datetime',
             'last_queried_at' => 'datetime',
             'last_online_at' => 'datetime',
+            'last_offline_at' => 'datetime',
+            'vac_enabled' => 'boolean',
             'next_query_at' => 'datetime',
             'claimed_at' => 'datetime',
             'promoted_until' => 'datetime',
@@ -40,6 +43,29 @@ class Server extends Model
     public function getRouteKeyName(): string
     {
         return 'slug';
+    }
+
+    /**
+     * A public URL for a server, from a name we do not control.
+     *
+     * Server names are wild — emoji, unicode, pure decoration — so the address
+     * is always appended: it keeps the slug unique and stops it from coming out
+     * empty. The counter afterwards covers the rest: one machine can hold two
+     * games' servers, and a soft-deleted row still owns its slug.
+     */
+    public static function slugFor(string $name, string $host, int $port): string
+    {
+        $suffix = str_replace([':', '.'], '-', $host).'-'.$port;
+        $base = Str::limit(Str::slug($name), 60, '');
+        $base = $base === '' ? $suffix : "{$base}-{$suffix}";
+
+        $slug = $base;
+
+        for ($n = 2; static::withTrashed()->where('slug', $slug)->exists(); $n++) {
+            $slug = "{$base}-{$n}";
+        }
+
+        return $slug;
     }
 
     public function game(): BelongsTo

@@ -21,4 +21,17 @@ enum QueryProtocol: string
             self::FiveM => 'FiveM HTTP',
         };
     }
+
+    /**
+     * Whether silence is informative.
+     *
+     * TCP and HTTP have a handshake, so getting in and hearing nothing tells us
+     * something is listening and chose not to answer. A2S is UDP: there is no
+     * connection to accept, and silence covers a closed port, a firewall and a
+     * server that simply ignored us. Only the first kind is worth explaining.
+     */
+    public function isConnectionOriented(): bool
+    {
+        return $this !== self::Source;
+    }
 }

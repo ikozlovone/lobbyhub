@@ -161,6 +161,24 @@ class SourceInfoParsingTest extends TestCase
         $this->driver->parseInfo("\xFF\xFF\xFF\xFFI\x11Rust");
     }
 
+    public function test_it_reads_the_bot_count_and_anti_cheat_byte(): void
+    {
+        // Both sit between fields the parser already needed, so they were read
+        // and dropped for as long as this driver has existed.
+        $result = $this->driver->parseInfo($this->infoDatagram(bots: 4, vac: 1));
+
+        $this->assertSame(4, $result->bots);
+        $this->assertTrue($result->vacEnabled);
+    }
+
+    public function test_anti_cheat_off_is_reported_as_off_not_as_unknown(): void
+    {
+        $result = $this->driver->parseInfo($this->infoDatagram(bots: 0, vac: 0));
+
+        $this->assertSame(0, $result->bots);
+        $this->assertFalse($result->vacEnabled);
+    }
+
     /**
      * Build an A2S_INFO reply the way a real server frames one.
      */
@@ -173,6 +191,8 @@ class SourceInfoParsingTest extends TestCase
         string $version = '1.0.0',
         ?string $keywords = null,
         ?string $extra = null,
+        int $bots = 0,
+        int $vac = 0,
     ): string {
         $body = "\xFF\xFF\xFF\xFF".'I'
             .chr(17)                    // protocol version
@@ -183,11 +203,11 @@ class SourceInfoParsingTest extends TestCase
             .pack('v', $appId)
             .chr($players)
             .chr($maxPlayers)
-            .chr(0)                     // bots
+            .chr($bots)
             .'d'                        // server type: dedicated
             .'l'                        // environment: linux
             .chr(0)                     // visibility: public
-            .chr(0);                    // VAC
+            .chr($vac);
 
         if ($appId === 2400) {
             $body .= chr(0).chr(0).chr(0); // mode, witnesses, duration

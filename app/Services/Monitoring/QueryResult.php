@@ -29,5 +29,9 @@ final readonly class QueryResult
         public ?Carbon $wipedAt = null,
         /** Rust: players waiting in the join queue. */
         public ?int $playersQueued = null,
+        /** Source: bots counted among the players. Null where the protocol has none. */
+        public ?int $bots = null,
+        /** Source: whether Valve Anti-Cheat is on. Null where the protocol has none. */
+        public ?bool $vacEnabled = null,
     ) {}
 }

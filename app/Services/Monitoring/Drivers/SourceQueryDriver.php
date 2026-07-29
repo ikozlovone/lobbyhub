@@ -110,11 +110,11 @@ class SourceQueryDriver implements ProvidesServerDetails, ServerQueryDriver
         $appId = $reader->short();
         $players = $reader->byte();
         $maxPlayers = $reader->byte();
-        $reader->byte();                // bots
+        $bots = $reader->byte();
         $reader->byte();                // server type
         $reader->byte();                // environment
         $reader->byte();                // visibility
-        $reader->byte();                // VAC
+        $vac = $reader->byte();
 
         if ($appId === self::APPID_THE_SHIP) {
             $reader->skip(3);           // mode, witnesses, duration
@@ -138,6 +138,10 @@ class SourceQueryDriver implements ProvidesServerDetails, ServerQueryDriver
             steamId: $extra['steam_id'],
             wipedAt: $tags['wiped_at'],
             playersQueued: $tags['queued'],
+            bots: $bots,
+            // The byte is documented as 0 or 1; anything else is a server being
+            // creative, and "not zero" is the only reading that survives that.
+            vacEnabled: $vac !== 0,
         );
     }
 

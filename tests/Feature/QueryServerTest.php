@@ -19,6 +19,7 @@ use App\Services\Monitoring\ServerQueryManager;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class QueryServerTest extends TestCase
@@ -94,6 +95,32 @@ class QueryServerTest extends TestCase
         $this->assertSame('Procedural Map', $server->map);
     }
 
+    public function test_it_stores_the_bot_count_and_anti_cheat_flag(): void
+    {
+        $server = $this->minecraftServer();
+
+        $this->runJob($server, new QueryResult(playersOnline: 4, playersMax: 100, bots: 3, vacEnabled: true));
+
+        $server->refresh();
+
+        $this->assertSame(3, $server->bots);
+        $this->assertTrue($server->vac_enabled);
+    }
+
+    public function test_no_bots_is_stored_as_none_rather_than_left_unknown(): void
+    {
+        // Zero is an answer a Source server gives; null means we never asked a
+        // protocol that has the concept, and the two must not collapse.
+        $server = $this->minecraftServer();
+
+        $this->runJob($server, new QueryResult(playersOnline: 4, playersMax: 100, bots: 0, vacEnabled: false));
+
+        $server->refresh();
+
+        $this->assertSame(0, $server->bots);
+        $this->assertFalse($server->vac_enabled);
+    }
+
     public function test_it_does_not_wipe_fields_a_protocol_cannot_report(): void
     {
         // Minecraft reports no map, game port, wipe time or queue — a query must
@@ -153,6 +180,9 @@ class QueryServerTest extends TestCase
         $this->assertSame(ServerStatus::Offline, $server->status);
         $this->assertSame(0, $server->players_online);
         $this->assertSame(1, $server->failed_queries_count);
+        // The pair is what makes reliability readable: last seen up, last seen
+        // down. Only the second one moves here.
+        $this->assertSame(now()->timestamp, $server->last_offline_at->timestamp);
 
         // First failure: interval * 2.
         $this->assertSame(
@@ -243,12 +273,12 @@ class QueryServerTest extends TestCase
         $notDue = $this->minecraftServer(['next_query_at' => now()->addHour()]);
         $inactive = $this->minecraftServer(['next_query_at' => now()->subHour(), 'is_active' => false]);
 
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
 
         $this->artisan('servers:query')->assertSuccessful();
 
-        \Illuminate\Support\Facades\Queue::assertPushed(QueryServer::class, 1);
-        \Illuminate\Support\Facades\Queue::assertPushed(
+        Queue::assertPushed(QueryServer::class, 1);
+        Queue::assertPushed(
             QueryServer::class,
             fn (QueryServer $job) => $job->server->is($due),
         );
@@ -271,13 +301,13 @@ class QueryServerTest extends TestCase
         $manager->shouldReceive('supports')->andReturn(false);
         $this->instance(ServerQueryManager::class, $manager);
 
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
 
         $this->artisan('servers:query')
             ->expectsOutputToContain('no driver for: fivem')
             ->assertSuccessful();
 
-        \Illuminate\Support\Facades\Queue::assertNothingPushed();
+        Queue::assertNothingPushed();
     }
 
     public function test_the_dispatcher_queries_fivem_servers_now_that_a_driver_exists(): void
@@ -288,11 +318,11 @@ class QueryServerTest extends TestCase
             'next_query_at' => now()->subMinute(),
         ]);
 
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
 
         $this->artisan('servers:query')->assertSuccessful();
 
-        \Illuminate\Support\Facades\Queue::assertPushed(
+        Queue::assertPushed(
             QueryServer::class,
             fn (QueryServer $job) => $job->server->is($server),
         );
@@ -306,11 +336,11 @@ class QueryServerTest extends TestCase
             'next_query_at' => now()->subMinute(),
         ]);
 
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
 
         $this->artisan('servers:query')->assertSuccessful();
 
-        \Illuminate\Support\Facades\Queue::assertPushed(
+        Queue::assertPushed(
             QueryServer::class,
             fn (QueryServer $job) => $job->server->is($server),
         );
@@ -323,14 +353,14 @@ class QueryServerTest extends TestCase
             'next_query_at' => now()->subMinutes(10),
         ]);
 
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
 
         // Only two of the four due servers fit in the batch.
         $this->artisan('servers:query', ['--limit' => 2])
             ->expectsOutputToContain('Monitoring is behind: 4 servers due, batch size 2')
             ->assertSuccessful();
 
-        \Illuminate\Support\Facades\Queue::assertPushed(QueryServer::class, 2);
+        Queue::assertPushed(QueryServer::class, 2);
     }
 
     public function test_the_dispatcher_holds_back_servers_that_share_a_host(): void
@@ -348,13 +378,13 @@ class QueryServerTest extends TestCase
             ]);
         }
 
-        \Illuminate\Support\Facades\Queue::fake();
+        Queue::fake();
 
         $this->artisan('servers:query')
             ->expectsOutputToContain('1 server(s) held back by the per-host cap')
             ->assertSuccessful();
 
-        \Illuminate\Support\Facades\Queue::assertPushed(QueryServer::class, 2);
+        Queue::assertPushed(QueryServer::class, 2);
     }
 
     private function minecraftServer(array $attributes = []): Server
