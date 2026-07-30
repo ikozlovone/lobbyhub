@@ -8,6 +8,7 @@ use App\Services\Geo\NullGeoResolver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -35,6 +36,33 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /*
+         * Every absolute URL this app hands out is built from APP_URL, not from
+         * the address the request arrived on.
+         *
+         * Laravel derives them from the request root by default, which is right
+         * exactly once: when the only way in is the public hostname. It is not
+         * here. The frontend reads this API over loopback to keep its renders off
+         * the network, artisan runs with no request at all, and a health check
+         * arrives as 127.0.0.1 — and a "Sign in with Steam" button built during
+         * any of those points the visitor's browser at their own machine.
+         *
+         * The scheme has to be forced alongside the root: forceRootUrl keeps the
+         * host but takes the scheme from the request, and a loopback request is
+         * plain HTTP however the site is served.
+         *
+         * Not in local development, where the request is the better source: there
+         * is only one way in, and APP_URL habitually omits the port that `artisan
+         * serve` is actually listening on.
+         */
+        if (! $this->app->environment('local') && is_string($root = config('app.url')) && $root !== '') {
+            URL::forceRootUrl($root);
+
+            if (str_starts_with($root, 'https://')) {
+                URL::forceScheme('https');
+            }
+        }
+
         /*
          * Generous for a public read-only catalog, but it stops a single client
          * from turning the listing endpoints into a load test.
