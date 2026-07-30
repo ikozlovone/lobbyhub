@@ -36,6 +36,8 @@ export function ServerCard({ server, steam }: { server: Server; steam: boolean }
         <div className="flex items-start justify-between gap-2">
           <Link
             href={`/servers/${server.slug}`}
+            // Same reasoning as the table — see server-table.tsx.
+            prefetch={false}
             className="line-clamp-2 font-medium transition-colors group-hover:text-brand"
           >
             {server.name}

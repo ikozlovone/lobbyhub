@@ -106,6 +106,12 @@ function Row({
       <td className="px-3 py-2.5 align-middle">
         <Link
           href={`/servers/${server.slug}`}
+          // No prefetch. A listing holds two dozen of these and a visitor opens
+          // one of them: prefetching the rest is the page fetching itself two
+          // dozen times over, and since Next asks for each segment separately
+          // that is nearer seventy requests — every one a render on our own
+          // server, because the frontend reads the catalog from it.
+          prefetch={false}
           className="block truncate font-medium transition-colors group-hover:text-brand"
         >
           {server.name}

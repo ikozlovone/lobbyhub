@@ -15,6 +15,20 @@ const nextConfig: NextConfig = {
   // stays dynamic. That is exactly the split this catalog needs — a cached shell
   // with live player counts on top.
   cacheComponents: true,
+
+  experimental: {
+    // How long the browser may reuse a prefetched segment before asking again.
+    //
+    // The dynamic default is zero — every hover over a link that has already
+    // been prefetched fetches it again, and a listing full of links turns that
+    // into a stream of repeats. A minute is well inside the window the pages
+    // themselves are cached for on the server, so nobody sees anything older
+    // than they would have anyway.
+    staleTimes: {
+      dynamic: 60,
+      static: 300,
+    },
+  },
 }
 
 export default nextConfig
