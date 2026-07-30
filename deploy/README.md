@@ -71,11 +71,21 @@ comes out `644` and the next deploy cannot touch it.
 
 ```sh
 sudo apt install -y acl
-sudo -u deploy -H mkdir -p storage bootstrap/cache public/images web/.next
-sudo chmod -R g+rwX storage bootstrap/cache public/images web/.next
-sudo find storage bootstrap/cache public/images web/.next -type d -exec chmod g+s {} +
-sudo setfacl -R -m g:www-data:rwX -m d:g:www-data:rwX \
-  storage bootstrap/cache public/images web/.next
+sudo -u deploy -H mkdir -p storage bootstrap/cache public/images
+sudo chmod -R g+rwX storage bootstrap/cache public/images
+sudo find storage bootstrap/cache public/images -type d -exec chmod g+s {} +
+sudo setfacl -R -m g:www-data:rwX -m d:g:www-data:rwX storage bootstrap/cache public/images
+```
+
+`web/.next` needs the same, but the rule cannot live on `.next` itself: a build
+deletes and recreates it, and takes the permissions with it. So it goes on `web`,
+which survives, and `.next` inherits it on the way in. Only the default — the
+existing `node_modules` stays as it is, so the services still cannot write to the
+code they run.
+
+```sh
+sudo chmod g+s web
+sudo setfacl -m d:g:www-data:rwX web
 ```
 
 Then the dependencies, as deploy from here on:
