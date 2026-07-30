@@ -14,6 +14,11 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
+# Files this process creates — Next's runtime cache under .next — come out
+# group-writable, so the deploy user that owns the code can rewrite them later.
+# It is in the www-data group, but a default umask would leave the group
+# read-only and the next build would stall on files it cannot replace.
+UMask=0002
 WorkingDirectory=/var/www/lobbyhub/web
 Environment=NODE_ENV=production
 # NEXT_PUBLIC_* are read at build time, not here; web/.env.local is the file

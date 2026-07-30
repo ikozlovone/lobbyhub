@@ -12,6 +12,11 @@ After=network.target postgresql.service
 [Service]
 Type=simple
 User=www-data
+# Files this process creates — logs, the framework's own caches — come out
+# group-writable, so the deploy user that owns the code can rewrite them later.
+# It is in the www-data group, but a default umask would leave the group
+# read-only and the next deploy would stall on files it cannot replace.
+UMask=0002
 WorkingDirectory=/var/www/lobbyhub
 ExecStart=/usr/bin/php artisan queue:work --queue=monitoring --tries=1 --sleep=1 --max-time=3600
 Restart=always

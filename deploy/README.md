@@ -42,37 +42,56 @@ sudo -u postgres psql -c "CREATE USER lobbyhub WITH PASSWORD 'pick-a-real-one';"
 sudo -u postgres psql -c "CREATE DATABASE lobbyhub OWNER lobbyhub;"
 ```
 
-## 3. Code
+## 3. Code and who owns it
 
-Everything that writes into the project runs as `www-data` — `git`, `composer`,
-`npm`, `artisan`, all of it. Root is for `systemctl`, `cp` into `/etc` and `ufw`
-and nothing else here.
+Two users, with one job each. A **deploy** user owns the checkout and is the only
+one that writes to it — `git`, `composer`, `npm`, `artisan`. **www-data** runs the
+three services and owns nothing: it reaches the code through the group, and can
+write only to the handful of directories the runtime has to write to.
 
-That is not a style preference. Every process that serves the site is
-`www-data`, and a single command run as root leaves behind a file it cannot
-write to afterwards: a `laravel.log` root created first, a `public/images/games`
-root made while fetching artwork, a `.git` root pulled into. The failures come
-later and read like something else — a permission denied inside a log handler,
-a `git pull` refusing on "dubious ownership".
+That split is worth the extra step. It means php-fpm, the worker and the frontend
+cannot rewrite the application they are serving, which is the whole point; and it
+means `git pull` never trips over a tree owned by somebody else — the failure
+that reads as `fatal: detected dubious ownership`.
 
 ```sh
-sudo mkdir -p /var/www && cd /var/www
-sudo git clone https://github.com/ikozlovone/lobbyhub.git
-sudo mkdir -p /var/www/.composer /var/www/.npm     # www-data's home; composer and npm cache here
-sudo chown -R www-data:www-data /var/www/lobbyhub /var/www/.composer /var/www/.npm
-cd /var/www/lobbyhub
+sudo adduser --system --group --home /home/deploy --shell /bin/bash deploy
+sudo adduser deploy www-data
 
-sudo -u www-data env HOME=/var/www COMPOSER_HOME=/var/www/.composer \
-  composer install --no-dev --optimize-autoloader
-sudo -u www-data cp .env.example .env
-sudo -u www-data php artisan key:generate
+sudo mkdir -p /var/www && cd /var/www
+sudo -u deploy -H git clone https://github.com/ikozlovone/lobbyhub.git
+sudo chown -R deploy:www-data /var/www/lobbyhub
+cd /var/www/lobbyhub
 ```
 
-If something did get run as root, this puts it back and shows what was wrong:
+Now the directories the runtime writes to. `g+s` keeps the group on anything
+created later, and the default ACL keeps it group-writable whatever umask the
+writing process had — without that, a `laravel.log` first written by the worker
+comes out `644` and the next deploy cannot touch it.
 
 ```sh
-sudo find /var/www/lobbyhub ! -user www-data -printf '%u %p\n' | head
-sudo chown -R www-data:www-data /var/www/lobbyhub
+sudo apt install -y acl
+sudo -u deploy -H mkdir -p storage bootstrap/cache public/images web/.next
+sudo chmod -R g+rwX storage bootstrap/cache public/images web/.next
+sudo find storage bootstrap/cache public/images web/.next -type d -exec chmod g+s {} +
+sudo setfacl -R -m g:www-data:rwX -m d:g:www-data:rwX \
+  storage bootstrap/cache public/images web/.next
+```
+
+Then the dependencies, as deploy from here on:
+
+```sh
+sudo -u deploy -H composer install --no-dev --optimize-autoloader
+sudo -u deploy -H cp .env.example .env
+sudo -u deploy -H php artisan key:generate
+sudo chmod 640 .env          # holds the database password; www-data reads it by group
+```
+
+If something did get run as root, this shows what it left and puts it back:
+
+```sh
+sudo find /var/www/lobbyhub ! -user deploy -printf '%u %p\n' | head
+sudo chown -R deploy:www-data /var/www/lobbyhub
 ```
 
 ## 4. `.env`
@@ -121,8 +140,8 @@ their SPF and DKIM records in Cloudflare DNS before expecting mail to arrive.
 
 ```sh
 cd /var/www/lobbyhub
-sudo -u www-data php artisan migrate --force
-sudo -u www-data php artisan db:seed --force        # countries and the game catalog
+sudo -u deploy -H php artisan migrate --force
+sudo -u deploy -H php artisan db:seed --force        # countries and the game catalog
 ```
 
 ## 6. Two data files the catalog wants
@@ -132,14 +151,14 @@ resolution quietly no-ops and every server is listed as unknown. Free account at
 maxmind.com, then:
 
 ```sh
-sudo -u www-data mkdir -p storage/app/geoip
+sudo -u deploy -H mkdir -p storage/app/geoip
 # put GeoLite2-City.mmdb there (City alone is enough — it carries country data)
 ```
 
 **Game artwork** is downloaded from Steam and served from this host:
 
 ```sh
-sudo -u www-data php artisan games:artwork
+sudo -u deploy -H php artisan games:artwork
 ```
 
 ## 7. Cache the framework's own lookups
@@ -149,15 +168,17 @@ config file pins whatever `.env` said when it was written.
 
 ```sh
 cd /var/www/lobbyhub
-sudo -u www-data php artisan config:cache
-sudo -u www-data php artisan route:cache
-sudo -u www-data php artisan event:cache
+sudo -u deploy -H php artisan config:cache
+sudo -u deploy -H php artisan route:cache
+sudo -u deploy -H php artisan event:cache
 ```
 
 ## 8. Monitoring processes
 
 The worker and the scheduler need nothing from the web layer, so they can start
-as soon as the database is ready.
+as soon as the database is ready. All three units run as `www-data`, not as the
+deploy user — see section 3 — with a umask that leaves what they create writable
+by the group.
 
 ```sh
 cd /var/www/lobbyhub
@@ -197,14 +218,14 @@ build fail with `ECONNREFUSED`. Write the file:
 
 ```sh
 cd /var/www/lobbyhub/web
-sudo -u www-data tee .env.local >/dev/null <<'EOF'
+sudo -u deploy -H tee .env.local >/dev/null <<'EOF'
 NEXT_PUBLIC_API_URL=https://api.lobbyhub.gg/api
 NEXT_PUBLIC_SITE_URL=https://lobbyhub.gg
 REVALIDATE_SECRET=<the same value as FRONTEND_REVALIDATE_SECRET>
 EOF
 
-sudo -u www-data env HOME=/var/www npm ci
-sudo -u www-data env HOME=/var/www npm run build
+sudo -u deploy -H npm ci
+sudo -u deploy -H npm run build
 ```
 
 Two lines of the build output are worth reading:
@@ -254,19 +275,21 @@ Discovery is deliberately not on the timetable — one sweep can add thousands o
 servers, which is a decision about volume rather than background routine:
 
 ```sh
-sudo -u www-data php artisan discovery:steam --help
+sudo -u deploy -H php artisan discovery:steam --help
 ```
 
 ## Deploying again
 
 ```sh
 cd /var/www/lobbyhub
-sudo -u www-data git pull
-sudo -u www-data composer install --no-dev --optimize-autoloader
-sudo -u www-data php artisan migrate --force
-sudo -u www-data env HOME=/var/www npm --prefix web ci
-sudo -u www-data env HOME=/var/www npm --prefix web run build
-sudo -u www-data php artisan config:cache && sudo -u www-data php artisan route:cache && sudo -u www-data php artisan event:cache
+sudo -u deploy -H git pull
+sudo -u deploy -H composer install --no-dev --optimize-autoloader
+sudo -u deploy -H php artisan migrate --force
+sudo -u deploy -H npm --prefix web ci
+sudo -u deploy -H npm --prefix web run build
+sudo -u deploy -H php artisan config:cache
+sudo -u deploy -H php artisan route:cache
+sudo -u deploy -H php artisan event:cache
 sudo systemctl restart lobbyhub-web lobbyhub-worker lobbyhub-scheduler
 sudo systemctl reload php8.4-fpm
 ```
