@@ -44,15 +44,35 @@ sudo -u postgres psql -c "CREATE DATABASE lobbyhub OWNER lobbyhub;"
 
 ## 3. Code
 
+Everything that writes into the project runs as `www-data` — `git`, `composer`,
+`npm`, `artisan`, all of it. Root is for `systemctl`, `cp` into `/etc` and `ufw`
+and nothing else here.
+
+That is not a style preference. Every process that serves the site is
+`www-data`, and a single command run as root leaves behind a file it cannot
+write to afterwards: a `laravel.log` root created first, a `public/images/games`
+root made while fetching artwork, a `.git` root pulled into. The failures come
+later and read like something else — a permission denied inside a log handler,
+a `git pull` refusing on "dubious ownership".
+
 ```sh
 sudo mkdir -p /var/www && cd /var/www
 sudo git clone https://github.com/ikozlovone/lobbyhub.git
-sudo chown -R www-data:www-data /var/www/lobbyhub
+sudo mkdir -p /var/www/.composer /var/www/.npm     # www-data's home; composer and npm cache here
+sudo chown -R www-data:www-data /var/www/lobbyhub /var/www/.composer /var/www/.npm
 cd /var/www/lobbyhub
 
-sudo -u www-data composer install --no-dev --optimize-autoloader
+sudo -u www-data env HOME=/var/www COMPOSER_HOME=/var/www/.composer \
+  composer install --no-dev --optimize-autoloader
 sudo -u www-data cp .env.example .env
 sudo -u www-data php artisan key:generate
+```
+
+If something did get run as root, this puts it back and shows what was wrong:
+
+```sh
+sudo find /var/www/lobbyhub ! -user www-data -printf '%u %p\n' | head
+sudo chown -R www-data:www-data /var/www/lobbyhub
 ```
 
 ## 4. `.env`
@@ -183,8 +203,8 @@ NEXT_PUBLIC_SITE_URL=https://lobbyhub.gg
 REVALIDATE_SECRET=<the same value as FRONTEND_REVALIDATE_SECRET>
 EOF
 
-sudo -u www-data npm ci
-sudo -u www-data npm run build
+sudo -u www-data env HOME=/var/www npm ci
+sudo -u www-data env HOME=/var/www npm run build
 ```
 
 Two lines of the build output are worth reading:
@@ -244,8 +264,8 @@ cd /var/www/lobbyhub
 sudo -u www-data git pull
 sudo -u www-data composer install --no-dev --optimize-autoloader
 sudo -u www-data php artisan migrate --force
-sudo -u www-data npm --prefix web ci
-sudo -u www-data npm --prefix web run build
+sudo -u www-data env HOME=/var/www npm --prefix web ci
+sudo -u www-data env HOME=/var/www npm --prefix web run build
 sudo -u www-data php artisan config:cache && sudo -u www-data php artisan route:cache && sudo -u www-data php artisan event:cache
 sudo systemctl restart lobbyhub-web lobbyhub-worker lobbyhub-scheduler
 sudo systemctl reload php8.4-fpm
