@@ -16,13 +16,15 @@ Type=simple
 User=www-data
 WorkingDirectory=/var/www/lobbyhub/web
 Environment=NODE_ENV=production
-Environment=PORT=3000
-Environment=HOSTNAME=127.0.0.1
 # NEXT_PUBLIC_* are read at build time, not here; web/.env.local is the file
 # that has to be right before `npm run build`. REVALIDATE_SECRET is read at
 # runtime, so it does belong to this process.
 EnvironmentFile=/var/www/lobbyhub/web/.env.local
-ExecStart=/usr/bin/npm run start
+# next directly rather than through npm, for two reasons: the hostname can only
+# be given as a flag — `next start` defaults to 0.0.0.0 and reads no environment
+# variable for it — and npm in between would be a process that forwards systemd's
+# signals to the one that matters imperfectly.
+ExecStart=/var/www/lobbyhub/web/node_modules/.bin/next start -H 127.0.0.1 -p 3000
 Restart=always
 RestartSec=2
 
