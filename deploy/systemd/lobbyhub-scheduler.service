@@ -1,0 +1,21 @@
+# The scheduler. The Linux counterpart of
+# deploy/launchd/gg.lobbyhub.scheduler.plist.
+#
+# `schedule:work` rather than a crontab line: one process, the same behaviour on
+# any machine, and the whole timetable stays in routes/console.php instead of
+# being split between there and the crontab.
+
+[Unit]
+Description=LobbyHub scheduler
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/lobbyhub
+ExecStart=/usr/bin/php artisan schedule:work
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

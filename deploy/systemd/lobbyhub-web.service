@@ -1,0 +1,30 @@
+# The Next.js frontend, which is what nginx proxies to.
+#
+# Install:
+#   sudo cp deploy/systemd/lobbyhub-web.service /etc/systemd/system/
+#   sudo systemctl enable --now lobbyhub-web
+#
+# Bound to loopback: nothing should reach this process except through nginx,
+# which is where the Cloudflare check lives.
+
+[Unit]
+Description=LobbyHub frontend (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/lobbyhub/web
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
+# NEXT_PUBLIC_* are read at build time, not here; web/.env.local is the file
+# that has to be right before `npm run build`. REVALIDATE_SECRET is read at
+# runtime, so it does belong to this process.
+EnvironmentFile=/var/www/lobbyhub/web/.env.local
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

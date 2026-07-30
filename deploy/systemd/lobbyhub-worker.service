@@ -1,0 +1,21 @@
+# Queue worker for monitoring jobs. The Linux counterpart of
+# deploy/launchd/gg.lobbyhub.worker.plist.
+#
+# --tries=1 on purpose: a failed query is a legitimate result that the job has
+# already recorded as downtime, so retrying it would only distort the history.
+# --max-time recycles the process hourly so a leak cannot accumulate.
+
+[Unit]
+Description=LobbyHub monitoring queue worker
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/lobbyhub
+ExecStart=/usr/bin/php artisan queue:work --queue=monitoring --tries=1 --sleep=1 --max-time=3600
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
