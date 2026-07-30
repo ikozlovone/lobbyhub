@@ -75,8 +75,32 @@ class AppServiceProvider extends ServiceProvider
          * and the writes worth rationing (votes, submissions, sign-in codes)
          * have their own much tighter limiters below.
          */
-        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(600)
-            ->by($request->user()?->id ?: $request->ip()));
+        RateLimiter::for('api', function (Request $request) {
+            /*
+             * The site's own renders are not a client.
+             *
+             * The frontend runs on this machine and reads the API over loopback,
+             * so every server-rendered page arrives from one address. One click
+             * in the games menu is not one request either: Next prefetches every
+             * link on the page it is opening, three segment requests apiece —
+             * about a hundred and fifty renders in a burst, each of them reading
+             * the catalog. Against a per-visitor budget that is the whole site
+             * counting as a single visitor, and the first thing it costs is not
+             * a refused request but a half-written page: a 429 inside a render
+             * aborts the stream the browser is already reading, which it reports
+             * as "Connection closed".
+             *
+             * Nothing is given away by exempting them. These requests cannot be
+             * made from outside — the loopback listener is bound to 127.0.0.1 —
+             * and the visitors who cause them are already counted at the front
+             * door by the frontend's own limits.
+             */
+            if (in_array($request->ip(), ['127.0.0.1', '::1'], true)) {
+                return Limit::none();
+            }
+
+            return Limit::perMinute(600)->by($request->user()?->id ?: $request->ip());
+        });
 
         // Votes are the one public write, so they get their own, much tighter
         // budget: the daily unique index stops repeat votes for one server, this
