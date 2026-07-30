@@ -24,6 +24,11 @@ export async function Sidebar() {
             <li key={game.slug}>
               <Link
                 href={`/games/${game.slug}`}
+                // The menu lists every game and sits on every page, so warming
+                // it costs four requests per game on arrival — for one link the
+                // visitor might click. The page they land on is served from the
+                // shell cache anyway; the cold click is not worth the crowd.
+                prefetch={false}
                 className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
               >
                 <Thumb game={game} />
@@ -47,6 +52,7 @@ export async function Sidebar() {
               <li key={game.slug}>
                 <Link
                   href={`/games/${game.slug}`}
+                  prefetch={false}
                   className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
                 >
                   <Thumb game={game} muted />

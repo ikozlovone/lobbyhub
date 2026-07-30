@@ -95,6 +95,9 @@ function GameCard({ game, href }: { game: Game; href: string }) {
   return (
     <Link
       href={href}
+      // The home page shows the whole catalogue of games at once; warming all
+      // of them is the same crowd as the menu — see sidebar.tsx.
+      prefetch={false}
       className="group block cursor-pointer overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-line-strong"
     >
       {/* Steam header art is 460x215; the ratio is reserved either way so a
