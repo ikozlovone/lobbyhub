@@ -33,6 +33,21 @@ sudo /usr/local/sbin/refresh-cloudflare-ips.sh          # writes conf.d/cloudfla
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+Both files in `conf.d/` have to be there, and `nginx -t` names whichever is
+missing rather than saying so:
+
+- `host not found in upstream "lobbyhub_web"` — `conf.d/lobbyhub.conf` did not
+  arrive. The name is an upstream, but with the block absent nginx reads it as a
+  hostname and goes looking for it in DNS.
+- `unknown "from_cloudflare" variable` — `conf.d/cloudflare.conf` did not
+  arrive; run the refresh script.
+
+Both belong at the `http` level, so neither can be moved into `sites-enabled`:
+`upstream` and `map` are not allowed inside a `server` block. If
+`/etc/nginx/nginx.conf` has no `include /etc/nginx/conf.d/*.conf;` — some builds
+ship only the `sites-enabled` include — add it inside `http {}`, above the
+`sites-enabled` line.
+
 Cloudflare adds ranges from time to time, and a stale list breaks two things
 quietly: per-IP limits start counting everyone as one client, and real visitors
 start getting refused. A monthly run keeps it current:
