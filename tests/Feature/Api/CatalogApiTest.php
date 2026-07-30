@@ -38,6 +38,25 @@ class CatalogApiTest extends TestCase
         $this->assertTrue($minecraft['has_versions']);
     }
 
+    public function test_counters_ignore_servers_our_monitor_has_not_reached(): void
+    {
+        $this->minecraftServer(['players_online' => 40]);
+
+        // What discovery writes: an address from Steam's index, never queried by
+        // us, and deliberately absent from every listing until it is.
+        $this->minecraftServer(['status' => ServerStatus::Unknown, 'players_online' => 900]);
+
+        $this->artisan('counters:refresh');
+
+        $minecraft = collect($this->getJson('/api/games')->assertOk()->json('data'))
+            ->firstWhere('slug', 'minecraft');
+
+        // The count a visitor reads has to be the count they can open.
+        $this->assertSame(1, $minecraft['counters']['servers']);
+        $this->assertSame(40, $minecraft['counters']['players_online']);
+        $this->assertCount(1, $this->getJson('/api/games/minecraft/servers')->json('data'));
+    }
+
     public function test_a_game_page_carries_facets_with_counts(): void
     {
         $server = $this->minecraftServer(['country_id' => Country::where('code', 'DE')->value('id')]);

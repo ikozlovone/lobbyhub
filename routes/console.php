@@ -19,9 +19,10 @@ Schedule::command('ranking:recompute')
     ->everyFifteenMinutes()
     ->withoutOverlapping();
 
-// Catalog facets read these; a few minutes of staleness is invisible.
+// Four aggregate queries, and the numbers they feed sit next to live ones in
+// the same hero — five minutes of drift was visible as the two disagreeing.
 Schedule::command('counters:refresh')
-    ->everyFiveMinutes()
+    ->everyMinute()
     ->withoutOverlapping();
 
 // Re-rolls today (partial) and yesterday, so graphs stay current intraday.

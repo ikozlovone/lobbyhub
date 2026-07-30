@@ -55,7 +55,11 @@ export async function getAuthProviders() {
 
 export async function getGame(slug: string) {
   'use cache'
-  cacheLife('hours')
+  // Minutes, not hours: this object carries the facet chips, and their counts
+  // move whenever the monitor confirms a server or an import lands. Tag
+  // invalidation only fires when somebody submits one, so an hour here is an
+  // hour of a listing that has moved on without its own filters.
+  cacheLife('minutes')
   cacheTag('games', `game:${slug}`)
 
   return fetchGame(slug)

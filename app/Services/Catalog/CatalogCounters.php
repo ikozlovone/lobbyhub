@@ -100,9 +100,22 @@ class CatalogCounters
     }
 
     /** Soft-deleted and delisted servers must not show up in any counter. */
+    /**
+     * The servers these counts are about: the ones a visitor can actually open.
+     *
+     * `status = unknown` is excluded to match ServerListing, which shows only
+     * servers our own monitor has reached — discovery imports candidates from
+     * Steam's index by the thousand, and counting them here promised a catalog
+     * of 1,236 next to a table of 640. The gap closed itself as the queue caught
+     * up, which is the worst kind of wrong: right eventually, and never while
+     * anyone was looking.
+     */
     private function activeServers(): Builder
     {
-        return DB::table('servers')->whereNull('deleted_at')->where('is_active', true);
+        return DB::table('servers')
+            ->whereNull('deleted_at')
+            ->where('is_active', true)
+            ->where('status', '!=', ServerStatus::Unknown->value);
     }
 
     /** Portable conditional aggregate: sqlite has no FILTER in older builds. */
