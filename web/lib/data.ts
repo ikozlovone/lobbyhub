@@ -1,5 +1,6 @@
 import { cacheLife, cacheTag } from 'next/cache'
 import {
+  SERVER_API_URL,
   fetchGame,
   fetchGames,
   fetchHistory,
@@ -49,7 +50,7 @@ export async function getAuthProviders() {
   // costs more than a request every few minutes ever will.
   cacheLife('minutes')
 
-  return fetchProviders(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api')
+  return fetchProviders(SERVER_API_URL)
 }
 
 export async function getGame(slug: string) {

@@ -56,6 +56,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Asset URL
+    |--------------------------------------------------------------------------
+    |
+    | Where the game artwork lives, as told to anyone who asks. Without this,
+    | `asset()` answers relative to whichever address the request came in on —
+    | which is right until the frontend starts reading this API over loopback to
+    | avoid a round trip through the CDN. Then the cover of every game comes back
+    | as http://127.0.0.1:8080/images/... and gets baked into a cached page.
+    |
+    | Left unset it keeps the old behaviour, so local development needs nothing.
+    |
+    */
+    'asset_url' => env('ASSET_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

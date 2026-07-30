@@ -114,6 +114,8 @@ FRONTEND_ORIGINS=https://lobbyhub.gg
 FRONTEND_REVALIDATE_URL=http://127.0.0.1:3000/api/revalidate
 FRONTEND_REVALIDATE_SECRET=<openssl rand -hex 16>
 
+ASSET_URL=https://api.lobbyhub.gg          # see section 11: artwork URLs
+
 STEAM_API_KEY=...                        # discovery, and Sign in with Steam
 DISCORD_CLIENT_ID=... DISCORD_CLIENT_SECRET=...
 GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=...
@@ -193,24 +195,39 @@ All of it is in [nginx/README.md](nginx/README.md): copy four files, run the
 Cloudflare IP script, point three DNS records here, turn on *Always Use HTTPS*,
 and close port 80 to everything except Cloudflare's ranges.
 
-## 10. Make sure the API answers — before building the frontend
+## 10. Make sure the API answers
 
-**This order matters.** `/games/[game]` is prerendered, which means the frontend
-build fetches the catalog from the API and cannot finish without it. Build too
-early and it fails on `TypeError: fetch failed` / `ECONNREFUSED` while
-collecting page data.
+Over loopback first, because that is what the frontend build will use and it
+depends on nothing outside this machine:
+
+```sh
+curl -si http://127.0.0.1:8080/up | head -1
+curl -s  http://127.0.0.1:8080/api/games | head -c 200
+```
+
+A list of games means php-fpm, Postgres and nginx are all working. Then the
+public address, which additionally exercises DNS and Cloudflare:
 
 ```sh
 curl -s https://api.lobbyhub.gg/api/games | head -c 200
 ```
 
-A list of games means everything below it — DNS, Cloudflare, nginx, php-fpm,
-Postgres — is working. Anything else, fix that first.
+The second one failing is worth fixing before you go further, but it no longer
+blocks the build.
 
 ## 11. Frontend
 
 `NEXT_PUBLIC_*` are read at build time and baked into the bundle, so they have
 to be right *before* `npm run build` — not just before the service starts.
+
+`API_URL_INTERNAL` is the one the build actually uses. The public address
+resolves to Cloudflare, so building through it means a round trip out to the
+edge and back — which fails while DNS is still propagating, while the proxy
+cannot reach the origin, or whenever this machine cannot reach the edge at all.
+The loopback listener in the nginx config has none of those dependencies. It is
+read at runtime too, so server-side renders take the same short path; browsers
+keep using the public address, and `ASSET_URL` in the API's `.env` is what stops
+artwork URLs from coming back as `127.0.0.1`.
 
 Do not copy `web/.env.example` into place: it holds the local development
 defaults, and `http://localhost:8000/api` is precisely the value that makes a
@@ -222,6 +239,7 @@ sudo -u deploy -H tee .env.local >/dev/null <<'EOF'
 NEXT_PUBLIC_API_URL=https://api.lobbyhub.gg/api
 NEXT_PUBLIC_SITE_URL=https://lobbyhub.gg
 REVALIDATE_SECRET=<the same value as FRONTEND_REVALIDATE_SECRET>
+API_URL_INTERNAL=http://127.0.0.1:8080/api
 EOF
 
 sudo -u deploy -H npm ci

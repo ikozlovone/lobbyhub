@@ -6,7 +6,34 @@
  *  - the live layer, which calls `fetchLive` from the browser and never caches
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'
+/** The address browsers use. Compiled into the bundle, so it must be public. */
+export const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'
+
+/**
+ * Where *this* process reaches the API.
+ *
+ * The same address for the browser, and for a server that has no better one.
+ * When the API happens to live on the same machine, `API_URL_INTERNAL` points at
+ * it directly, and every render this process does — plus the whole production
+ * build, which prerenders game pages by fetching the catalog — stops leaving the
+ * box to talk to something already on it.
+ *
+ * That is not only a saved hop. With TLS terminated at the CDN, the public
+ * address resolves to the edge, so a build on the server depends on the server
+ * being reachable *from the internet* — DNS propagated, proxy healthy, origin
+ * accepting connections. None of that has anything to do with compiling a page,
+ * and all of it fails the build when it is not yet true.
+ *
+ * Named for the side it belongs to on purpose: anything a page hands to a client
+ * component must be PUBLIC_API_URL, or a visitor's browser is told to fetch the
+ * catalog from their own machine.
+ *
+ * Unset, nothing changes.
+ */
+export const SERVER_API_URL =
+  typeof window === 'undefined'
+    ? (process.env.API_URL_INTERNAL ?? PUBLIC_API_URL)
+    : PUBLIC_API_URL
 
 export type ServerStatus = 'online' | 'offline' | 'unknown'
 
@@ -176,7 +203,7 @@ class ApiError extends Error {
 }
 
 async function get<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${API_URL}${path}`
+  const url = `${SERVER_API_URL}${path}`
   const response = await fetch(url, {
     ...init,
     headers: { Accept: 'application/json', ...init?.headers },
@@ -372,7 +399,7 @@ export async function submitServer(
 export async function fetchLive(slugs: string[]): Promise<(Live & { slug: string })[]> {
   if (slugs.length === 0) return []
 
-  const response = await fetch(`${API_URL}/servers/live?slugs=${slugs.join(',')}`, {
+  const response = await fetch(`${SERVER_API_URL}/servers/live?slugs=${slugs.join(',')}`, {
     cache: 'no-store',
     headers: { Accept: 'application/json' },
   })
