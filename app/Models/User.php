@@ -46,6 +46,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Servers this account put in the catalog through the form.
+     *
+     * Not the same set as `servers()`: that one is ownership, proved with the
+     * server's own token. Submitting only means somebody typed an address.
+     */
+    public function submissions(): HasMany
+    {
+        return $this->hasMany(Server::class, 'submitted_by_user_id');
+    }
+
+    public function votes(): HasMany
+    {
+        return $this->hasMany(Vote::class);
+    }
+
+    /**
      * A display name from an address.
      *
      * Nobody signing in with a one-time code stops to type a name, and

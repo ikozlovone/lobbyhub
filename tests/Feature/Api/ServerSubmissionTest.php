@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
+use App\Models\User;
 use App\Services\Monitoring\Contracts\ServerQueryDriver;
 use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\QueryResult;
@@ -61,6 +62,33 @@ class ServerSubmissionTest extends TestCase
 
         $listing->assertJsonCount(1, 'data');
         $this->assertSame($server->slug, $listing->json('data.0.slug'));
+    }
+
+    /**
+     * Who added a server is worth knowing, and it is the only moment we can
+     * learn it: discovery imports have no submitter, and nothing later can tell
+     * one apart from the other.
+     */
+    public function test_it_records_who_submitted_the_server_when_they_are_signed_in(): void
+    {
+        $this->driverReturns(new QueryResult(playersOnline: 1, playersMax: 10, ipAddress: '8.8.8.8'));
+
+        $user = User::factory()->create();
+
+        $this->withToken($user->createToken('web')->plainTextToken)
+            ->postJson('/api/games/minecraft/servers', ['address' => '8.8.8.8:25565'])
+            ->assertCreated();
+
+        $this->assertSame($user->id, Server::firstOrFail()->submitted_by_user_id);
+    }
+
+    public function test_a_submission_without_a_session_records_nobody(): void
+    {
+        $this->driverReturns(new QueryResult(playersOnline: 1, playersMax: 10, ipAddress: '8.8.8.8'));
+
+        $this->postJson('/api/games/minecraft/servers', ['address' => '8.8.8.8:25565'])->assertCreated();
+
+        $this->assertNull(Server::firstOrFail()->submitted_by_user_id);
     }
 
     public function test_the_catalog_counts_the_new_server_before_the_form_answers(): void

@@ -7,6 +7,7 @@ use App\Enums\ServerStatus;
 use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
+use App\Models\User;
 use App\Services\Catalog\Exceptions\ServerAlreadyListed;
 use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\Exceptions\UnsupportedProtocol;
@@ -46,7 +47,12 @@ class ServerSubmission
      * @throws ServerAlreadyListed
      * @throws ValidationException
      */
-    public function submit(Game $game, string $address, ?int $queryPort = null): Server
+    public function submit(
+        Game $game,
+        string $address,
+        ?int $queryPort = null,
+        ?User $submitter = null,
+    ): Server
     {
         $parsed = ServerAddress::parse($address, $game->default_port)
             ?? $this->reject('address', "Enter the address as host:port — for example 127.0.0.1:{$game->default_port}.");
@@ -80,6 +86,9 @@ class ServerSubmission
             // an online server.
             'status' => ServerStatus::Unknown,
             'players_online' => 0,
+            // Only ever set, never cleared: a resubmission by a stranger of a
+            // server somebody else added does not rewrite who added it.
+            'submitted_by_user_id' => $server->submitted_by_user_id ?? $submitter?->id,
             'players_max' => $result->playersMax,
             'next_query_at' => now(),
         ]);

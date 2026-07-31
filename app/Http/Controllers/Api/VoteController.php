@@ -70,7 +70,11 @@ class VoteController extends Controller
                 'server_id' => $server->id,
                 'ip_hash' => Vote::hashIp((string) $request->ip()),
                 'nickname' => $validated['nickname'] ?? null,
-                'user_id' => $request->user()?->id,
+                // Named guard: voting is open to everyone, so no middleware has
+                // authenticated this request, and the default guard is sessions
+                // — which knows nothing about the bearer token a signed-in
+                // visitor sends. Left as `user()` this column was always null.
+                'user_id' => $request->user('sanctum')?->id,
                 'vote_day' => $today,
             ]);
         } catch (UniqueConstraintViolationException) {

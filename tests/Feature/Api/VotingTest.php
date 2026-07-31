@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
+use App\Models\User;
 use App\Models\Vote;
 use App\Services\Catalog\ServerRanking;
 use Database\Seeders\CountrySeeder;
@@ -61,6 +62,20 @@ class VotingTest extends TestCase
         $this->assertSame('test-server', $response->json('data.0.server.slug'));
         // The address hash backs the one-a-day rule; it is not public.
         $this->assertSame(['nickname', 'at', 'server'], array_keys($response->json('data.0')));
+    }
+
+    public function test_a_signed_in_vote_is_recorded_against_the_account(): void
+    {
+        $user = User::factory()->create();
+
+        // Bearer token, not a session: the guard that reads it has to be named
+        // explicitly on a route open to everyone, and this column was silently
+        // null until it was.
+        $this->withToken($user->createToken('web')->plainTextToken)
+            ->postJson('/api/servers/test-server/vote', ['nickname' => 'ivan'])
+            ->assertCreated();
+
+        $this->assertSame($user->id, Vote::firstOrFail()->user_id);
     }
 
     public function test_the_second_vote_of_the_day_is_refused(): void

@@ -34,7 +34,16 @@ class ServerSubmissionController extends Controller
         ]);
 
         try {
-            $server = $submission->submit($game, $validated['address'], $validated['query_port'] ?? null);
+            $server = $submission->submit(
+                $game,
+                $validated['address'],
+                $validated['query_port'] ?? null,
+                // Named guard, not the default one: this route is open to
+                // visitors who are not signed in, so nothing has authenticated
+                // the request for us, and `$request->user()` would ask the
+                // session guard about a bearer token it knows nothing about.
+                $request->user('sanctum'),
+            );
         } catch (ServerAlreadyListed $listed) {
             return response()->json([
                 'message' => 'This server is already in the catalog.',
