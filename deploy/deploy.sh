@@ -36,6 +36,10 @@ step() { printf '\n\033[1;32m==>\033[0m %s\n' "$1"; }
 note() { printf '    %s\n' "$1"; }
 # Everything the checkout is asked to do, including reading it: git refuses to
 # work in a repository owned by another user, and this one belongs to deploy.
+#
+# -H sets HOME to that user's own, which is where npm and composer keep their
+# caches. Pointing them anywhere else means two accounts writing to one cache
+# directory, and the second one to arrive is refused.
 as_deploy() { sudo -u "$DEPLOY_USER" -H "$@"; }
 
 cd "$ROOT"
@@ -70,7 +74,7 @@ changed_in() { [ -z "$changed" ] || printf '%s\n' "$changed" | grep -q "$1"; }
 # ---------------------------------------------------------------- backend
 if changed_in '^composer\.\(json\|lock\)$'; then
     step "Installing PHP dependencies"
-    as_deploy env COMPOSER_HOME=/var/www/.composer composer install --no-dev --optimize-autoloader --no-interaction
+    as_deploy composer install --no-dev --optimize-autoloader --no-interaction
 fi
 
 step "Migrating"
@@ -87,13 +91,13 @@ as_deploy php artisan optimize
 if [ "$SKIP_BUILD" = false ] && changed_in '^web/'; then
     if changed_in '^web/package-lock\.json$'; then
         step "Installing frontend dependencies"
-        as_deploy env HOME=/var/www npm --prefix web ci
+        as_deploy npm --prefix web ci
     fi
 
     step "Building the frontend"
     # NEXT_PUBLIC_* are read here, not at start: whatever web/.env.local says
     # right now is what ends up in the bundle every visitor downloads.
-    as_deploy env HOME=/var/www npm --prefix web run build
+    as_deploy npm --prefix web run build
     BUILT=true
 else
     note "Frontend unchanged, skipping the build"

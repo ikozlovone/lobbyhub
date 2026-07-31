@@ -55,7 +55,11 @@ means `git pull` never trips over a tree owned by somebody else — the failure
 that reads as `fatal: detected dubious ownership`.
 
 ```sh
+# The home directory is not a formality: npm and composer keep their caches
+# there, and a deploy user without one writes them wherever HOME happens to
+# point — usually somewhere another account already owns.
 sudo adduser --system --group --home /home/deploy --shell /bin/bash deploy
+sudo mkdir -p /home/deploy && sudo chown deploy:deploy /home/deploy
 sudo adduser deploy www-data
 
 sudo mkdir -p /var/www && cd /var/www
