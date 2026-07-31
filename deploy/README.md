@@ -352,15 +352,34 @@ sudo -u deploy -H php artisan discovery:steam --help
 ## Deploying again
 
 ```sh
-cd /var/www/lobbyhub
-sudo -u deploy -H git pull
-sudo -u deploy -H composer install --no-dev --optimize-autoloader
-sudo -u deploy -H php artisan migrate --force
-sudo -u deploy -H npm --prefix web ci
-sudo -u deploy -H npm --prefix web run build
-sudo -u deploy -H php artisan config:cache
-sudo -u deploy -H php artisan route:cache
-sudo -u deploy -H php artisan event:cache
-sudo systemctl restart lobbyhub-web lobbyhub-scheduler 'lobbyhub-worker@*'
-sudo systemctl reload php8.4-fpm
+sudo /var/www/lobbyhub/deploy/deploy.sh
 ```
+
+That is the whole of it. The script pulls, decides from the diff what needs
+doing, and ends by checking that the site answers:
+
+- `composer install` only when the lock file moved
+- `npm ci` only when the frontend's lock file moved, and a rebuild only when
+  anything under `web/` did — a backend commit has no business spending two
+  minutes rebuilding a frontend that did not change
+- `artisan migrate --force`, then `artisan optimize`, which rewrites the config,
+  route, view and event caches rather than clearing them, so nothing serves an
+  empty config in the gap
+- reloads php-fpm, restarts the scheduler and every worker instance, and
+  restarts the frontend only when it was rebuilt
+- finally curls the API, the site and the units, and exits non-zero with where
+  to look if any of them is not answering
+
+Everything that touches the checkout runs as the deploy user even though the
+script itself is run with sudo — see section 3 for why that matters.
+
+Two flags for when the default is not what you want:
+
+```sh
+sudo /var/www/lobbyhub/deploy/deploy.sh --skip-build   # backend only
+sudo /var/www/lobbyhub/deploy/deploy.sh --skip-pull    # deploy what is checked out
+```
+
+With nothing new to pull the script cannot tell what changed, so it does
+everything — including the rebuild. That is the safe way round: the cost is two
+minutes, and the alternative is a deploy that quietly skips the step you needed.
