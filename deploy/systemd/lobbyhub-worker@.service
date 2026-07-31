@@ -1,12 +1,21 @@
-# Queue worker for monitoring jobs. The Linux counterpart of
-# deploy/launchd/gg.lobbyhub.worker.plist.
+# Queue worker for monitoring jobs, one instance per number:
+#
+#   systemctl enable --now lobbyhub-worker@1 lobbyhub-worker@2
+#
+# Templated rather than copied, because how many are needed is a property of the
+# catalog and not of the code — it grows with the number of servers being polled
+# and is best found by watching `php artisan monitoring:status` while adding one
+# at a time. See deploy/README.md.
+#
+# Nothing coordinates them. The queue is a Postgres table and Laravel takes jobs
+# with a row lock, so two workers never pick up the same one.
 #
 # --tries=1 on purpose: a failed query is a legitimate result that the job has
 # already recorded as downtime, so retrying it would only distort the history.
 # --max-time recycles the process hourly so a leak cannot accumulate.
 
 [Unit]
-Description=LobbyHub monitoring queue worker
+Description=LobbyHub monitoring queue worker %i
 After=network.target postgresql.service
 
 [Service]

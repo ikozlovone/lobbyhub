@@ -10,7 +10,7 @@ Five processes end up running:
 | `nginx` | the only thing listening publicly; see [nginx/README.md](nginx/README.md) |
 | `php8.4-fpm` | the API on `api.lobbyhub.gg` |
 | `lobbyhub-web` | `next start` on `127.0.0.1:3000`, the site itself |
-| `lobbyhub-worker` | runs the monitoring queries the scheduler dispatches |
+| `lobbyhub-worker@N` | runs the monitoring queries the scheduler dispatches; one or more |
 | `lobbyhub-scheduler` | the timetable in `routes/console.php` |
 
 ## 1. Packages
@@ -196,7 +196,50 @@ by the group.
 cd /var/www/lobbyhub
 sudo cp deploy/systemd/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now lobbyhub-worker lobbyhub-scheduler
+sudo systemctl enable --now lobbyhub-worker@1 lobbyhub-scheduler
+```
+
+The worker is a template — `lobbyhub-worker@1`, `@2`, and so on. One is enough
+to start with; the section below is about when it stops being enough.
+
+### How many workers
+
+Not a number to guess. Add one, watch, repeat:
+
+```sh
+sudo -u deploy -H php artisan monitoring:status
+```
+
+or the same two figures in the admin at `/admin`: **of the intended cadence**
+and **due now**. A healthy monitor sits near 100% with `due now` flat.
+
+- **`due now` climbing while the queue is empty** — the dispatcher is not
+  putting enough work in, and more workers change nothing. Raise
+  `MONITORING_BATCH_SIZE`.
+- **`due now` climbing with a full queue** — the workers are behind. Add one:
+
+  ```sh
+  sudo systemctl enable --now lobbyhub-worker@2
+  ```
+
+Querying a game server is almost all waiting on a socket, so this scales nearly
+linearly and the processor is not what runs out. Two things are:
+
+- **Memory.** Each worker is a PHP process holding the framework, roughly
+  60–100 MB, next to Postgres, php-fpm and Node. Check `free -m` before adding
+  one; an out-of-memory kill picks its own victim, and it may not be the worker.
+- **Politeness.** These are packets aimed at machines that are not ours, and
+  large hosts keep hundreds of servers behind one address. `monitoring.max_per_host`
+  spreads a batch at dispatch, but three workers still knock three times as
+  densely. Grow one at a time rather than jumping to eight.
+
+Coming from a single `lobbyhub-worker` installed before the template existed:
+
+```sh
+sudo systemctl disable --now lobbyhub-worker
+sudo rm /etc/systemd/system/lobbyhub-worker.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now lobbyhub-worker@1
 ```
 
 ## 9. nginx, Cloudflare, firewall
@@ -295,7 +338,7 @@ scheduler starting, `servers:query` should be filling in player counts — if
 every server stays offline, the worker is not running.
 
 ```sh
-journalctl -u lobbyhub-worker -n 50
+journalctl -u lobbyhub-worker@1 -n 50
 journalctl -u lobbyhub-web -n 50
 ```
 
@@ -318,6 +361,6 @@ sudo -u deploy -H npm --prefix web run build
 sudo -u deploy -H php artisan config:cache
 sudo -u deploy -H php artisan route:cache
 sudo -u deploy -H php artisan event:cache
-sudo systemctl restart lobbyhub-web lobbyhub-worker lobbyhub-scheduler
+sudo systemctl restart lobbyhub-web lobbyhub-scheduler 'lobbyhub-worker@*'
 sudo systemctl reload php8.4-fpm
 ```
