@@ -34,6 +34,8 @@ done
 
 step() { printf '\n\033[1;32m==>\033[0m %s\n' "$1"; }
 note() { printf '    %s\n' "$1"; }
+# Everything the checkout is asked to do, including reading it: git refuses to
+# work in a repository owned by another user, and this one belongs to deploy.
 as_deploy() { sudo -u "$DEPLOY_USER" -H "$@"; }
 
 cd "$ROOT"
@@ -45,24 +47,24 @@ FPM_SERVICE="$(systemctl list-units --type=service --all --no-legend 'php*-fpm.s
 started_at=$(date +%s)
 
 # ---------------------------------------------------------------- code
-before="$(git rev-parse HEAD)"
+before="$(as_deploy git rev-parse HEAD)"
 
 if [ "$SKIP_PULL" = false ]; then
     step "Pulling"
     as_deploy git pull --ff-only
 fi
 
-after="$(git rev-parse HEAD)"
+after="$(as_deploy git rev-parse HEAD)"
 
 if [ "$before" = "$after" ] && [ "$SKIP_PULL" = false ]; then
-    note "Already at $(git log -1 --format=%h\ %s)"
+    note "Already at $(as_deploy git log -1 --format=%h\ %s)"
 else
-    git --no-pager log --oneline "$before..$after" | sed 's/^/    /' || true
+    as_deploy git --no-pager log --oneline "$before..$after" | sed 's/^/    /' || true
 fi
 
 # What changed decides what runs. A backend-only commit has no business
 # spending two minutes rebuilding a frontend that did not move.
-changed="$(git diff --name-only "$before" "$after" 2>/dev/null || echo '')"
+changed="$(as_deploy git diff --name-only "$before" "$after" 2>/dev/null || echo '')"
 changed_in() { [ -z "$changed" ] || printf '%s\n' "$changed" | grep -q "$1"; }
 
 # ---------------------------------------------------------------- backend
@@ -160,4 +162,4 @@ if [ "$failed" = true ]; then
     exit 1
 fi
 
-printf '\n\033[1;32m==>\033[0m Done in %ss — now at %s\n' "$(( $(date +%s) - started_at ))" "$(git log -1 --format='%h %s')"
+printf '\n\033[1;32m==>\033[0m Done in %ss — now at %s\n' "$(( $(date +%s) - started_at ))" "$(as_deploy git log -1 --format='%h %s')"
