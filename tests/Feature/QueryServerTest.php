@@ -363,6 +363,73 @@ class QueryServerTest extends TestCase
         Queue::assertPushed(QueryServer::class, 2);
     }
 
+    /**
+     * The bug this guards against filled a production queue with 160 000 jobs
+     * for 23 000 servers: seven copies of each, because a job waiting its turn
+     * left its server due and oldest-due, so every run queued it again.
+     */
+    public function test_a_second_run_does_not_queue_what_the_first_one_already_did(): void
+    {
+        $this->minecraftServer(['next_query_at' => now()->subMinute()]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->assertSuccessful();
+        // Nothing has run the job yet — the worker is busy, or there isn't one.
+        $this->artisan('servers:query')->expectsOutputToContain('No servers due.')->assertSuccessful();
+
+        Queue::assertPushed(QueryServer::class, 1);
+    }
+
+    public function test_a_queued_server_comes_back_after_the_base_interval(): void
+    {
+        $server = $this->minecraftServer(['next_query_at' => now()->subHour()]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->assertSuccessful();
+
+        // Short enough that a job lost with its worker is retried soon, long
+        // enough that the wait outlives any batch it could still be sitting in.
+        $this->assertSame(
+            now()->addSeconds((int) config('monitoring.interval'))->timestamp,
+            $server->refresh()->next_query_at->timestamp,
+        );
+    }
+
+    /**
+     * The lease is a placeholder, not the cadence. Whatever the tier works out
+     * when the query lands has to win — otherwise every server would settle at
+     * five minutes regardless of how busy it is.
+     */
+    public function test_the_query_overwrites_the_lease_with_the_real_tier(): void
+    {
+        $server = $this->minecraftServer(['next_query_at' => now()->subHour()]);
+
+        $this->artisan('servers:query', ['--sync' => true, '--limit' => 1])->assertSuccessful();
+
+        $this->runJob($server, new QueryResult(playersOnline: 0, playersMax: 20));
+
+        $this->assertSame(3600, (int) now()->diffInSeconds($server->refresh()->next_query_at, absolute: true));
+    }
+
+    /**
+     * `--server=` is the "look at this one now" escape hatch: it ignores the
+     * schedule going in, and must not rewrite it on the way out either.
+     */
+    public function test_a_single_named_server_is_not_leased(): void
+    {
+        $server = $this->minecraftServer(['next_query_at' => now()->addHour()]);
+        $scheduled = $server->next_query_at->timestamp;
+
+        Queue::fake();
+
+        $this->artisan('servers:query', ['--server' => $server->slug])->assertSuccessful();
+
+        Queue::assertPushed(QueryServer::class, 1);
+        $this->assertSame($scheduled, $server->refresh()->next_query_at->timestamp);
+    }
+
     public function test_the_dispatcher_holds_back_servers_that_share_a_host(): void
     {
         $minecraft = Game::where('slug', 'minecraft')->value('id');

@@ -42,6 +42,7 @@ class DispatchServerQueries extends Command
         if (! $single) {
             $supported = $spread->arrange($supported);
             $this->reportBacklog($limit, $spread->heldBack());
+            $this->lease($supported);
         }
 
         foreach ($supported as $server) {
@@ -59,6 +60,44 @@ class DispatchServerQueries extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Push what we are about to queue out of "due", so the next run cannot
+     * queue it again.
+     *
+     * Without this the two halves of the system disagree about what has been
+     * dealt with: `next_query_at` only moves when the job *runs*, and a job
+     * waiting its turn leaves its server due, and oldest-due, and therefore
+     * first in line for the next batch. A minute later it is queued again. The
+     * queue then grows by the difference between what the dispatcher puts in
+     * and what the workers take out — every minute, without bound — and the
+     * copies are all of the same handful of servers, so the workers spend
+     * themselves re-querying those while the rest of the catalog waits. It is
+     * the failure that reads as "we need more workers" and is not.
+     *
+     * The lease is the base interval: a job that never runs — a worker killed
+     * mid-batch, a queue flushed by hand — brings its server back after five
+     * minutes rather than after the hour its tier might have asked for.
+     *
+     * Written before dispatching, not after. A worker can pick a job up and
+     * finish it while this loop is still going, and an update landing after
+     * that would overwrite the cadence the job just worked out with a lease
+     * nobody is waiting on any more.
+     *
+     * @param  Collection<int, Server>  $servers
+     */
+    private function lease(Collection $servers): void
+    {
+        if ($servers->isEmpty()) {
+            return;
+        }
+
+        // pluck rather than modelKeys: the host spread hands back a plain
+        // collection, not an Eloquent one.
+        Server::query()
+            ->whereIn('id', $servers->pluck('id')->all())
+            ->update(['next_query_at' => now()->addSeconds((int) config('monitoring.interval'))]);
     }
 
     /** @return Collection<int, Server> */
