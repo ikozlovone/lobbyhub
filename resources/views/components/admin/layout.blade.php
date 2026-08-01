@@ -86,6 +86,47 @@
         .pager { display: flex; gap: 8px; margin-top: 12px; }
         .pager a, .pager span { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; text-decoration: none; }
         .pager span { color: var(--subtle); }
+
+        /* Editing */
+        .notice {
+            border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
+            background: color-mix(in srgb, var(--brand) 12%, transparent);
+            border-radius: 8px; padding: 10px 14px; margin-bottom: 18px;
+        }
+        .notice.bad {
+            border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+            background: color-mix(in srgb, var(--danger) 12%, transparent);
+        }
+        .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
+        .fields.one { grid-template-columns: 1fr; }
+        @media (max-width: 700px) { .fields { grid-template-columns: 1fr; } }
+        .field > .l { display: block; color: var(--subtle); font-size: 12px; margin-bottom: 4px; }
+        .field input[type="text"], .field input[type="number"], .field input[type="date"],
+        .field select, .field textarea { width: 100%; }
+        textarea { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; resize: vertical; }
+        input[type="color"] { padding: 2px; height: 36px; width: 56px; }
+        .hint { color: var(--subtle); font-size: 12px; margin-top: 4px; }
+        .bad-field { color: var(--danger); font-size: 12px; margin-top: 4px; }
+        .check { display: flex; align-items: center; gap: 8px; }
+        .check input { width: auto; }
+        .actions { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+        button.primary { background: var(--brand); border-color: var(--brand); color: #04140a; font-weight: 600; }
+        button.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+        .rows { display: grid; gap: 10px; }
+        .row-card { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 12px 14px; }
+        .row-card.gone { opacity: 0.55; }
+        .row-grid { display: grid; grid-template-columns: 1fr 1fr 90px auto auto; gap: 10px 14px; align-items: end; }
+        /* Versions carry a release date, so they need one column more. */
+        .row-grid.dated { grid-template-columns: 1fr 1fr 90px 150px auto auto; }
+        @media (max-width: 900px) { .row-grid, .row-grid.dated { grid-template-columns: 1fr 1fr; } }
+        details { margin-top: 10px; }
+        details summary { cursor: pointer; color: var(--subtle); font-size: 12px; }
+        details > .fields { margin-top: 10px; }
+        .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        .button {
+            display: inline-block; padding: 7px 12px; border-radius: 8px; text-decoration: none;
+            border: 1px solid var(--line); background: var(--surface-2); color: var(--fg);
+        }
     </style>
 </head>
 <body>
@@ -93,9 +134,23 @@
         <b>LOBBY<span>HUB</span></b>
         <nav>
             <a href="{{ route('admin.monitoring') }}" @if($active === 'monitoring') aria-current="page" @endif>Monitoring</a>
+            <a href="{{ route('admin.games') }}" @if($active === 'games') aria-current="page" @endif>Games</a>
             <a href="{{ route('admin.users') }}" @if($active === 'users') aria-current="page" @endif>Users</a>
         </nav>
     </header>
-    <main>{{ $slot }}</main>
+    <main>
+        {{-- Said once, here, so no screen has to remember to say it. --}}
+        @if(session('status'))
+            <div class="notice">{{ session('status') }}</div>
+        @endif
+
+        {{-- Field-level errors are printed beside their input; this covers the
+             ones that belong to the whole form, like a refused delete. --}}
+        @if($errors->has('delete'))
+            <div class="notice bad">{{ $errors->first('delete') }}</div>
+        @endif
+
+        {{ $slot }}
+    </main>
 </body>
 </html>
