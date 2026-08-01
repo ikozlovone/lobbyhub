@@ -24,10 +24,18 @@ class GameSeeder extends Seeder
      */
     public function run(): void
     {
+        $links = $this->links();
+
         foreach ($this->games() as $data) {
             $modes = $data['modes'];
             $versions = $data['versions'] ?? [];
             unset($data['modes'], $data['versions']);
+
+            // Absent rather than null for a game with none: the column is then
+            // left alone, and links added in the admin survive a re-seed.
+            if (isset($links[$data['slug']])) {
+                $data['links'] = $links[$data['slug']];
+            }
 
             $game = Game::updateOrCreate(['slug' => $data['slug']], $data);
 
@@ -92,14 +100,6 @@ class GameSeeder extends Seeder
                 'name' => 'FiveM',
                 'short_name' => 'GTA RP',
                 'aliases' => ['gta 5 rp', 'gta online rp', 'фивем', 'cfx'],
-                // Where the game itself lives. Only the official two are seeded:
-                // the hosting and donation links a competitor carries here are
-                // theirs, referral tags and all, and picking who to send our
-                // visitors to is a decision, not a default.
-                'links' => [
-                    ['name' => 'FiveM Official', 'url' => 'https://fivem.net/'],
-                    ['name' => 'FiveM Docs', 'url' => 'https://docs.fivem.net/'],
-                ],
                 // FiveM itself is not a Steam product; GTA V's art represents it.
                 'steam_appid' => 271590,
                 'query_protocol' => QueryProtocol::FiveM,
@@ -316,6 +316,213 @@ class GameSeeder extends Seeder
             $this->source('83', "'83", 1059220, 7777, 27015, 450, '#6B7A5B', [
                 ['pvp', 'PvP'],
             ], ['83', 'eighty three']),
+        ];
+    }
+
+    /**
+     * Where each game lives outside this site, shown at the top of its page.
+     *
+     * Three rules, and they are why some games have two links and some have one:
+     *
+     *  - First-party first. The studio's own site, and its own server
+     *    documentation — Valve's developer wiki, Facepunch's, Bohemia's,
+     *    Pocketpair's, Cfx.re's. A hosting company's tutorial is somebody's
+     *    marketing; a fan wiki is somebody's spare time.
+     *  - The Steam page when there is nothing else. Several of these games never
+     *    had a site, or had one that has since lapsed — thefrontgame.com and
+     *    renownthegame.com resolve to nothing, pixark.com is a domain for sale.
+     *    A store page is at least the game, published by the people who made it.
+     *  - Nothing commercial. The competitor's version of this block sells server
+     *    hosting and a donation platform, referral tags and all. Who to send our
+     *    visitors to is a decision worth making on purpose, in the admin.
+     *
+     * Every address here was fetched before it was written down. Bohemia's wiki
+     * refuses automated requests, so those four are the URLs their own pages are
+     * indexed under; the rest answered 200.
+     *
+     * @return array<string, list<array{name: string, url: string}>>
+     */
+    private function links(): array
+    {
+        return [
+            'minecraft' => [
+                ['name' => 'Minecraft Official', 'url' => 'https://www.minecraft.net/'],
+                ['name' => 'Server download', 'url' => 'https://www.minecraft.net/en-us/download/server'],
+            ],
+            'rust' => [
+                ['name' => 'Rust Official', 'url' => 'https://rust.facepunch.com/'],
+                ['name' => 'Server hosting docs', 'url' => 'https://wiki.facepunch.com/rust/Creating-a-server'],
+            ],
+            'fivem' => [
+                ['name' => 'FiveM Official', 'url' => 'https://fivem.net/'],
+                ['name' => 'FiveM Docs', 'url' => 'https://docs.fivem.net/'],
+                ['name' => 'Server setup guide', 'url' => 'https://docs.fivem.net/docs/server-manual/setting-up-a-server/'],
+            ],
+            'ark-survival-evolved' => [
+                ['name' => 'ARK Official', 'url' => 'https://playark.com/'],
+                ['name' => 'Dedicated server setup', 'url' => 'https://ark.wiki.gg/wiki/Dedicated_server_setup'],
+            ],
+            'ark-survival-ascended' => [
+                ['name' => 'ARK Official', 'url' => 'https://survivetheark.com/'],
+                ['name' => 'Dedicated server setup', 'url' => 'https://ark.wiki.gg/wiki/Dedicated_server_setup'],
+            ],
+            '7-days-to-die' => [
+                ['name' => '7 Days to Die Official', 'url' => 'https://7daystodie.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/251570/'],
+            ],
+            'project-zomboid' => [
+                ['name' => 'Project Zomboid Official', 'url' => 'https://projectzomboid.com/'],
+                ['name' => 'Dedicated server guide', 'url' => 'https://pzwiki.net/wiki/Dedicated_server'],
+            ],
+            'dayz' => [
+                ['name' => 'DayZ Official', 'url' => 'https://dayz.com/'],
+                ['name' => 'Server configuration', 'url' => 'https://community.bistudio.com/wiki/DayZ:Server_Configuration'],
+            ],
+            'counter-strike-2' => [
+                ['name' => 'Counter-Strike Official', 'url' => 'https://www.counter-strike.net/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://developer.valvesoftware.com/wiki/Counter-Strike_2/Dedicated_Servers'],
+            ],
+            'garrys-mod' => [
+                ['name' => "Garry's Mod Official", 'url' => 'https://gmod.facepunch.com/'],
+                ['name' => 'Dedicated server guide', 'url' => 'https://wiki.facepunch.com/gmod/Downloading_a_Dedicated_Server'],
+            ],
+            'team-fortress-2' => [
+                ['name' => 'Team Fortress 2 Official', 'url' => 'https://www.teamfortress.com/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://developer.valvesoftware.com/wiki/Team_Fortress_2_Dedicated_Server'],
+            ],
+            'squad' => [
+                ['name' => 'Squad Official', 'url' => 'https://joinsquad.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/393380/'],
+            ],
+            'unturned' => [
+                ['name' => 'Smartly Dressed Games', 'url' => 'https://smartlydressedgames.com/'],
+                ['name' => 'Server documentation', 'url' => 'https://docs.smartlydressedgames.com/'],
+            ],
+            'valheim' => [
+                ['name' => 'Valheim Official', 'url' => 'https://www.valheimgame.com/'],
+                ['name' => 'Dedicated server guide', 'url' => 'https://www.valheimgame.com/support/a-guide-to-dedicated-servers/'],
+            ],
+            'conan-exiles' => [
+                ['name' => 'Conan Exiles Official', 'url' => 'https://conanexiles.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/440900/'],
+            ],
+            'arma-3' => [
+                ['name' => 'Arma 3 Official', 'url' => 'https://arma3.com/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://community.bistudio.com/wiki/Arma_3_Dedicated_Server'],
+            ],
+            'arma-2' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/33900/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://community.bistudio.com/wiki/Arma_Dedicated_Server'],
+            ],
+            'arma-reforger' => [
+                ['name' => 'Arma Reforger Official', 'url' => 'https://reforger.armaplatform.com/'],
+                ['name' => 'Server hosting docs', 'url' => 'https://community.bistudio.com/wiki/Arma_Reforger:Server_Hosting'],
+            ],
+            'palworld' => [
+                ['name' => 'Palworld Official', 'url' => 'https://www.pocketpair.jp/palworld'],
+                ['name' => 'Dedicated server guide', 'url' => 'https://tech.palworldgame.com/dedicated-server-guide'],
+            ],
+            'v-rising' => [
+                ['name' => 'V Rising Official', 'url' => 'https://playvrising.com/'],
+                ['name' => 'Server instructions', 'url' => 'https://github.com/StunlockStudios/vrising-dedicated-server-instructions'],
+            ],
+            'left-4-dead-2' => [
+                ['name' => 'Left 4 Dead Official', 'url' => 'https://www.l4d.com/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://developer.valvesoftware.com/wiki/Left_4_Dead_2_Dedicated_Server'],
+            ],
+            'counter-strike-source' => [
+                ['name' => 'Counter-Strike Official', 'url' => 'https://www.counter-strike.net/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://developer.valvesoftware.com/wiki/Counter-Strike:_Source_Dedicated_Server'],
+            ],
+            'counter-strike' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/10/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://developer.valvesoftware.com/wiki/Counter-Strike_Dedicated_Server'],
+            ],
+            'counter-strike-condition-zero' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/80/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://developer.valvesoftware.com/wiki/Counter-Strike_Dedicated_Server'],
+            ],
+            'sven-co-op' => [
+                ['name' => 'Sven Co-op Official', 'url' => 'https://www.svencoop.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/225840/'],
+            ],
+            'no-more-room-in-hell' => [
+                ['name' => 'No More Room in Hell Official', 'url' => 'https://www.nomoreroominhell.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/224260/'],
+            ],
+            'scum' => [
+                ['name' => 'SCUM Official', 'url' => 'https://scumgame.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/513710/'],
+            ],
+            'enshrouded' => [
+                ['name' => 'Enshrouded Official', 'url' => 'https://enshrouded.com/'],
+                ['name' => 'Dedicated server guide', 'url' => 'https://enshrouded.com/dedicated-server'],
+            ],
+            'icarus' => [
+                ['name' => 'Icarus Official', 'url' => 'https://www.surviveicarus.com/'],
+                ['name' => 'Dedicated server guide', 'url' => 'https://www.surviveicarus.com/dedicated-servers/'],
+            ],
+            'soulmask' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/2646460/'],
+            ],
+            'space-engineers' => [
+                ['name' => 'Space Engineers Official', 'url' => 'https://www.spaceengineersgame.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/244850/'],
+            ],
+            'the-front' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/2285150/'],
+            ],
+            'renown' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/1488310/'],
+            ],
+            'myth-of-empires' => [
+                ['name' => 'Myth of Empires Official', 'url' => 'https://www.mythofempires.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/1371580/'],
+            ],
+            'pixark' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/593600/'],
+            ],
+            'atlas' => [
+                ['name' => 'ATLAS Official', 'url' => 'https://www.playatlas.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/834910/'],
+            ],
+            'dark-and-light' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/529180/'],
+            ],
+            'hell-let-loose' => [
+                ['name' => 'Hell Let Loose Official', 'url' => 'https://www.hellletloose.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/686810/'],
+            ],
+            'insurgency-sandstorm' => [
+                ['name' => 'Sandstorm Official', 'url' => 'https://sandstorm.game/'],
+                ['name' => 'Mods and server content', 'url' => 'https://mod.io/g/insurgencysandstorm'],
+            ],
+            'insurgency' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/222880/'],
+                ['name' => 'Dedicated server docs', 'url' => 'https://developer.valvesoftware.com/wiki/Insurgency_Dedicated_Server'],
+            ],
+            'mordhau' => [
+                ['name' => 'MORDHAU Official', 'url' => 'https://mordhau.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/629760/'],
+            ],
+            'squad-44' => [
+                ['name' => 'Squad 44 Official', 'url' => 'https://squad44.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/736220/'],
+            ],
+            'beyond-the-wire' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/1058650/'],
+            ],
+            'rising-storm-2-vietnam' => [
+                ['name' => 'Rising Storm 2 Official', 'url' => 'https://rs2vietnam.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/418460/'],
+            ],
+            'battalion-legacy' => [
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/489940/'],
+            ],
+            '83' => [
+                ['name' => "'83 Official", 'url' => 'https://83thegame.com/'],
+                ['name' => 'Steam page', 'url' => 'https://store.steampowered.com/app/1059220/'],
+            ],
         ];
     }
 

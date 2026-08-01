@@ -76,8 +76,14 @@ class CatalogApiTest extends TestCase
         $this->assertArrayNotHasKey('links', $index);
     }
 
+    /**
+     * Every seeded game has links, but a game added in the admin need not — and
+     * the frontend should not have to tell an empty list from a missing key.
+     */
     public function test_a_game_with_no_links_answers_with_an_empty_list(): void
     {
+        Game::where('slug', 'minecraft')->update(['links' => null]);
+
         $this->assertSame([], $this->getJson('/api/games/minecraft')->assertOk()->json('data.links'));
     }
 
