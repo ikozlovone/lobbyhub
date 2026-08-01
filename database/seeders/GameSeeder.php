@@ -174,6 +174,11 @@ class GameSeeder extends Seeder
                 ['campaign', 'Campaign'], ['versus', 'Versus'], ['survival', 'Survival'], ['modded', 'Modded'],
             ], ['l4d2']),
 
+            $this->source('counter-strike-source', 'Counter-Strike: Source', 240, 27015, null, 185, '#C8823B', [
+                ['classic', 'Classic'], ['deathmatch', 'Deathmatch'], ['zombie', 'Zombie'],
+                ['jailbreak', 'Jailbreak'], ['surf', 'Surf'], ['bhop', 'Bhop'],
+            ], ['css', 'кс сорс']),
+
             $this->source('counter-strike', 'Counter-Strike 1.6', 10, 27015, null, 190, '#C88A2B', [
                 ['classic', 'Classic'], ['deathmatch', 'Deathmatch'], ['zombie', 'Zombie'],
                 ['jailbreak', 'Jailbreak'], ['surf', 'Surf'],
@@ -212,6 +217,97 @@ class GameSeeder extends Seeder
             $this->source('space-engineers', 'Space Engineers', 244850, 27016, null, 270, '#4A6B8B', [
                 ['survival', 'Survival'], ['creative', 'Creative'], ['pvp', 'PvP'], ['modded', 'Modded'],
             ], ['se']),
+
+            // --- The ARK engine family and its neighbours ---
+
+            $this->source('ark-survival-ascended', 'ARK: Survival Ascended', 2399830, 7777, 27015, 280, '#2B8BA8', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['modded', 'Modded'], ['roleplay', 'Roleplay'],
+            ], ['asa', 'ark sa', 'арк асцендед']),
+
+            $this->source('the-front', 'The Front', 2285150, 7777, 7779, 290, '#7A5B4A', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['modded', 'Modded'],
+            ]),
+
+            $this->source('renown', 'Renown', 1488310, 7777, 27015, 300, '#7A5B3B', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['roleplay', 'Roleplay'], ['modded', 'Modded'],
+            ]),
+
+            $this->source('myth-of-empires', 'Myth of Empires', 1371580, 12888, 27015, 310, '#8B6B4A', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['roleplay', 'Roleplay'],
+            ], ['moe']),
+
+            $this->source('pixark', 'PixARK', 593600, 7777, 27015, 320, '#6BA85B', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['creative', 'Creative'], ['modded', 'Modded'],
+            ]),
+
+            // ATLAS runs a grid of servers, one port pair per cell; these are the
+            // first cell's, which is what a single-server host publishes.
+            $this->source('atlas', 'ATLAS', 834910, 5761, 57561, 330, '#3B6B8B', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['roleplay', 'Roleplay'],
+            ], ['атлас']),
+
+            $this->source('dark-and-light', 'Dark and Light', 529180, 7777, 27015, 340, '#6B4A8B', [
+                ['pve', 'PvE'], ['pvp', 'PvP'], ['roleplay', 'Roleplay'],
+            ], ['dnl']),
+
+            // --- Milsim and tactical shooters: Unreal on top of A2S ---
+
+            $this->source('hell-let-loose', 'Hell Let Loose', 686810, 7777, 27015, 350, '#6B5B3B', [
+                ['warfare', 'Warfare'], ['offensive', 'Offensive'], ['skirmish', 'Skirmish'],
+            ], ['hll', 'хлл']),
+
+            // Sandstorm listens on 27102 and answers queries on 27131 — one of the
+            // few games where the two ports are nowhere near each other.
+            $this->source('insurgency-sandstorm', 'Insurgency: Sandstorm', 581320, 27102, 27131, 360, '#A8823B', [
+                ['push', 'Push'], ['firefight', 'Firefight'], ['skirmish', 'Skirmish'],
+                ['checkpoint', 'Co-op Checkpoint'], ['competitive', 'Competitive'], ['modded', 'Modded'],
+            ], ['sandstorm', 'сандшторм']),
+
+            $this->source('mordhau', 'MORDHAU', 629760, 7777, 27015, 370, '#8B7A4A', [
+                ['frontline', 'Frontline'], ['invasion', 'Invasion'], ['deathmatch', 'Deathmatch'],
+                ['horde', 'Horde'], ['duel', 'Duel'], ['modded', 'Modded'],
+            ], ['мордхау']),
+
+            $this->source('arma-reforger', 'Arma Reforger', 1874880, 2001, 17777, 380, '#5B6B5B', [
+                ['conflict', 'Conflict'], ['game-master', 'Game Master'],
+                ['combat-ops', 'Combat Ops'], ['milsim', 'Milsim'], ['modded', 'Modded'],
+            ], ['reforger', 'рефорджер']),
+
+            $this->source('squad-44', 'Squad 44', 736220, 7787, 27165, 390, '#4A5B6B', [
+                ['advance-and-secure', 'Advance and Secure'], ['offensive', 'Offensive'],
+                ['armoured', 'Armoured'], ['modded', 'Modded'],
+            ], ['post scriptum', 'ps']),
+
+            $this->source('rising-storm-2-vietnam', 'Rising Storm 2: Vietnam', 418460, 7777, 27015, 400, '#5B6B3B', [
+                ['territories', 'Territories'], ['supremacy', 'Supremacy'],
+                ['campaign', 'Campaign'], ['skirmish', 'Skirmish'],
+            ], ['rs2', 'вьетнам']),
+
+            $this->source('insurgency', 'Insurgency', 222880, 27015, null, 410, '#8B6B2B', [
+                ['push', 'Push'], ['firefight', 'Firefight'], ['coop', 'Co-op'], ['hunt', 'Hunt'],
+            ], ['insurgency 2014']),
+
+            $this->source('arma-2', 'Arma 2', 33900, 2302, 2303, 420, '#6B5B4A', [
+                ['dayz-mod', 'DayZ Mod'], ['wasteland', 'Wasteland'],
+                ['domination', 'Domination'], ['milsim', 'Milsim'],
+            ], ['arma 2 oa', 'арма 2']),
+
+            $this->source('beyond-the-wire', 'Beyond The Wire', 1058650, 7787, 27165, 430, '#6B6B5B', [
+                ['attrition', 'Attrition'], ['frontline', 'Frontline'], ['skirmish', 'Skirmish'],
+            ], ['btw']),
+
+            // Battalion 1944 kept its servers and lost its name: it is free-to-play
+            // BATTALION: Legacy on Steam now, so the old name is only an alias.
+            $this->source('battalion-legacy', 'BATTALION: Legacy', 489940, 7777, 7780, 440, '#6B6B7A', [
+                ['arcade', 'Arcade'], ['wartide', 'Wartide'], ['competitive', 'Competitive'],
+                ['deathmatch', 'Deathmatch'],
+            ], ['battalion 1944', 'btl']),
+
+            // Early access since April 2026, so it has one mode and little else to
+            // say about it yet.
+            $this->source('83', "'83", 1059220, 7777, 27015, 450, '#6B7A5B', [
+                ['pvp', 'PvP'],
+            ], ['83', 'eighty three']),
         ];
     }
 
