@@ -148,8 +148,8 @@ class QueryServerTest extends TestCase
         $this->runJob($busy, new QueryResult(playersOnline: 300, playersMax: 500));
         $this->runJob($empty, new QueryResult(playersOnline: 0, playersMax: 500));
 
-        // Same code path, 30x apart in polling cost.
-        $this->assertSame(120, (int) now()->diffInSeconds($busy->refresh()->next_query_at, absolute: true));
+        // Same code path, 12x apart in polling cost.
+        $this->assertSame(300, (int) now()->diffInSeconds($busy->refresh()->next_query_at, absolute: true));
         $this->assertSame(3600, (int) now()->diffInSeconds($empty->refresh()->next_query_at, absolute: true));
     }
 

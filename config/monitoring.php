@@ -27,17 +27,28 @@ return [
     | and the history table. Tiers are matched top-down on the player count from
     | the query that just finished; the first match wins.
     |
+    | Nothing is polled more often than every five minutes. The busiest tier used
+    | to sit at two, which bought precision nobody reads — the live layer in the
+    | browser refreshes on its own clock, and a player count from four minutes ago
+    | reads the same as one from ninety seconds ago. What it cost was real: those
+    | are packets aimed at machines that are not ours, at two and a half times
+    | this rate, and a history table growing at the same multiple.
+    |
     */
 
     'tiers' => [
-        ['min_players' => 100, 'interval' => 120],
-        ['min_players' => 10, 'interval' => 300],
-        ['min_players' => 1, 'interval' => 900],
+        ['min_players' => 100, 'interval' => 300],
+        ['min_players' => 10, 'interval' => 600],
+        ['min_players' => 1, 'interval' => 1800],
         ['min_players' => 0, 'interval' => 3600],
     ],
 
-    /** Paid placements stay fresh no matter how quiet they are. */
-    'promoted_interval' => (int) env('MONITORING_PROMOTED_INTERVAL', 120),
+    /**
+     * Paid placements stay fresh no matter how quiet they are — but not faster
+     * than the floor above, or the promise would be "we knock on your server
+     * twice as often as anyone else's", which is not what was sold.
+     */
+    'promoted_interval' => (int) env('MONITORING_PROMOTED_INTERVAL', 300),
 
     /** Servers dispatched per run of `servers:query`. */
     'batch_size' => (int) env('MONITORING_BATCH_SIZE', 500),

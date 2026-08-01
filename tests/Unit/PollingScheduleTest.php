@@ -18,24 +18,36 @@ class PollingScheduleTest extends TestCase
     }
 
     /**
-     * Tier boundaries, using the shipped config: 100+ → 120s, 10+ → 300s,
-     * 1+ → 900s, empty → 3600s.
+     * Tier boundaries, using the shipped config: 100+ → 300s, 10+ → 600s,
+     * 1+ → 1800s, empty → 3600s.
      */
     public function test_the_interval_follows_how_busy_the_server_is(): void
     {
-        $this->assertSame(120, $this->intervalFor(500));
-        $this->assertSame(120, $this->intervalFor(100)); // boundary, inclusive
-        $this->assertSame(300, $this->intervalFor(99));
-        $this->assertSame(300, $this->intervalFor(10));
-        $this->assertSame(900, $this->intervalFor(9));
-        $this->assertSame(900, $this->intervalFor(1));
+        $this->assertSame(300, $this->intervalFor(500));
+        $this->assertSame(300, $this->intervalFor(100)); // boundary, inclusive
+        $this->assertSame(600, $this->intervalFor(99));
+        $this->assertSame(600, $this->intervalFor(10));
+        $this->assertSame(1800, $this->intervalFor(9));
+        $this->assertSame(1800, $this->intervalFor(1));
         $this->assertSame(3600, $this->intervalFor(0));
+    }
+
+    /**
+     * The floor, stated as its own fact: no server, however full or however
+     * paid-for, is knocked on more than once every five minutes.
+     */
+    public function test_nothing_is_polled_more_often_than_every_five_minutes(): void
+    {
+        $intervals = array_column(config('monitoring.tiers'), 'interval');
+        $intervals[] = (int) config('monitoring.promoted_interval');
+
+        $this->assertGreaterThanOrEqual(300, min($intervals));
     }
 
     public function test_an_empty_server_is_polled_far_less_often_than_a_busy_one(): void
     {
-        // This ratio is the whole point of tiering — it is what cuts the load.
-        $this->assertSame(30, intdiv($this->intervalFor(0), $this->intervalFor(500)));
+        // The spread is the whole point of tiering — it is what cuts the load.
+        $this->assertSame(12, intdiv($this->intervalFor(0), $this->intervalFor(500)));
     }
 
     public function test_a_promoted_server_stays_hot_even_when_empty(): void
@@ -53,6 +65,16 @@ class PollingScheduleTest extends TestCase
         $server = Server::make(['players_online' => 0, 'promoted_until' => now()->subDay()]);
 
         $this->assertSame(3600, $this->schedule->intervalFor($server));
+    }
+
+    /**
+     * The tier a full server lands in and the base the backoff counts from are
+     * the same number now. They are still two settings: the fastest tier is a
+     * choice about freshness, the base is a choice about how quickly to retry.
+     */
+    public function test_the_busiest_tier_matches_the_backoff_base(): void
+    {
+        $this->assertSame((int) config('monitoring.interval'), $this->intervalFor(500));
     }
 
     public function test_backoff_doubles_with_every_failure(): void
@@ -86,7 +108,7 @@ class PollingScheduleTest extends TestCase
 
     public function test_expected_hourly_queries_matches_the_tier(): void
     {
-        $this->assertSame(30.0, $this->schedule->expectedHourlyQueries(Server::make(['players_online' => 500])));
+        $this->assertSame(12.0, $this->schedule->expectedHourlyQueries(Server::make(['players_online' => 500])));
         $this->assertSame(1.0, $this->schedule->expectedHourlyQueries(Server::make(['players_online' => 0])));
     }
 
