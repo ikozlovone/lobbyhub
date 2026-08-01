@@ -80,7 +80,39 @@ export function GameHero({
             <ShareButton title={heading} />
           </div>
         </div>
+
+        {game.links && game.links.length > 0 && <GameLinks links={game.links} name={game.name} />}
       </div>
     </section>
+  )
+}
+
+/**
+ * Where the game lives outside this site.
+ *
+ * Up here rather than in the footer because that is the question they answer —
+ * "what is this game, and where do I get it" — and somebody who needs the docs
+ * needs them before they have scrolled a thousand servers, not after.
+ *
+ * `nofollow` on all of them: these are editorial links to somebody else's site,
+ * some of them commercial, and a listing with a few thousand game pages is
+ * exactly the shape of thing that starts passing rank around by accident.
+ */
+function GameLinks({ links, name }: { links: NonNullable<GameDetail['links']>; name: string }) {
+  return (
+    <nav aria-label={`${name} links`} className="flex flex-wrap gap-2 border-t border-line pt-4">
+      {links.map((link) => (
+        <a
+          key={link.url}
+          href={link.url}
+          target="_blank"
+          rel="nofollow noopener noreferrer"
+          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-bg/60 px-3 py-1.5 text-sm text-muted transition-colors hover:border-line-strong hover:text-fg"
+        >
+          <Icon.link className="size-3.5 text-subtle" />
+          {link.name}
+        </a>
+      ))}
+    </nav>
   )
 }

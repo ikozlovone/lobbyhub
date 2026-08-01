@@ -208,6 +208,10 @@ class GameController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'short_name' => ['nullable', 'string', 'max:32'],
             'aliases' => ['nullable', 'string'],
+            'links' => ['array'],
+            'links.*.name' => ['nullable', 'string', 'max:64'],
+            // Only the two schemes a browser will follow from a link on a page.
+            'links.*.url' => ['nullable', 'string', 'max:255', 'url:http,https'],
             'steam_appid' => ['nullable', 'integer', 'min:1'],
             'query_protocol' => ['required', Rule::enum(QueryProtocol::class)],
             'default_port' => ['required', 'integer', 'min:1', 'max:65535'],
@@ -228,6 +232,8 @@ class GameController extends Controller
         // synonyms at all, and the column is nullable rather than an empty array
         // so it matches what the seeder writes.
         $validated['aliases'] = $this->lines($request->input('aliases')) ?: null;
+
+        $validated['links'] = $this->links($request) ?: null;
 
         // Unchecked boxes are not submitted, so they have to be read from the
         // request rather than from what validation happened to see.
@@ -366,6 +372,40 @@ class GameController extends Controller
 
             $model ? $model->update($values) : $create($values);
         }
+    }
+
+    /**
+     * The rows of the links table, in the order they were typed.
+     *
+     * Blank rows are the way new ones are added, so an empty pair is skipped
+     * rather than refused. A row with one half filled is a mistake worth
+     * stopping on: a label with no address is a link that goes nowhere, and an
+     * address with no label has nothing to render.
+     *
+     * @return array<int, array{name: string, url: string}>
+     */
+    private function links(Request $request): array
+    {
+        $links = [];
+
+        foreach ((array) $request->input('links', []) as $index => $row) {
+            $name = trim((string) (is_array($row) ? $row['name'] ?? '' : ''));
+            $url = trim((string) (is_array($row) ? $row['url'] ?? '' : ''));
+
+            if ($name === '' && $url === '') {
+                continue;
+            }
+
+            if ($name === '' || $url === '') {
+                throw ValidationException::withMessages([
+                    "links.{$index}.".($name === '' ? 'name' : 'url') => 'A link needs both a label and an address.',
+                ]);
+            }
+
+            $links[] = ['name' => $name, 'url' => $url];
+        }
+
+        return $links;
     }
 
     /**

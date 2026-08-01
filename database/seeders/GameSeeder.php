@@ -92,6 +92,14 @@ class GameSeeder extends Seeder
                 'name' => 'FiveM',
                 'short_name' => 'GTA RP',
                 'aliases' => ['gta 5 rp', 'gta online rp', 'фивем', 'cfx'],
+                // Where the game itself lives. Only the official two are seeded:
+                // the hosting and donation links a competitor carries here are
+                // theirs, referral tags and all, and picking who to send our
+                // visitors to is a decision, not a default.
+                'links' => [
+                    ['name' => 'FiveM Official', 'url' => 'https://fivem.net/'],
+                    ['name' => 'FiveM Docs', 'url' => 'https://docs.fivem.net/'],
+                ],
                 // FiveM itself is not a Steam product; GTA V's art represents it.
                 'steam_appid' => 271590,
                 'query_protocol' => QueryProtocol::FiveM,

@@ -100,6 +100,60 @@ class GameAdminTest extends TestCase
         $this->assertTrue($game->has_versions);
     }
 
+    public function test_links_are_saved_in_the_order_they_were_typed(): void
+    {
+        $game = $this->game(['slug' => 'fivem']);
+
+        $this->put("/admin/games/{$game->slug}", $this->fields([
+            'slug' => 'fivem',
+            'links' => [
+                ['name' => 'FiveM Official', 'url' => 'https://fivem.net/'],
+                // A blank spare row, which is how another link gets added.
+                ['name' => '', 'url' => ''],
+                ['name' => 'FiveM Docs', 'url' => 'https://docs.fivem.net/'],
+            ],
+        ]))->assertSessionHasNoErrors();
+
+        $this->assertSame([
+            ['name' => 'FiveM Official', 'url' => 'https://fivem.net/'],
+            ['name' => 'FiveM Docs', 'url' => 'https://docs.fivem.net/'],
+        ], $game->refresh()->links);
+    }
+
+    public function test_a_link_needs_both_halves_and_a_real_address(): void
+    {
+        $game = $this->game(['slug' => 'fivem']);
+
+        $this->put("/admin/games/{$game->slug}", $this->fields([
+            'slug' => 'fivem',
+            'links' => [['name' => 'FiveM Docs', 'url' => '']],
+        ]))->assertSessionHasErrors('links.0.url');
+
+        $this->put("/admin/games/{$game->slug}", $this->fields([
+            'slug' => 'fivem',
+            'links' => [['name' => 'FiveM Docs', 'url' => 'docs.fivem.net']],
+        ]))->assertSessionHasErrors('links.0.url');
+
+        $this->assertNull($game->refresh()->links);
+    }
+
+    public function test_clearing_a_row_removes_the_link(): void
+    {
+        $game = $this->game([
+            'slug' => 'fivem',
+            'links' => [['name' => 'FiveM Docs', 'url' => 'https://docs.fivem.net/']],
+        ]);
+
+        $this->put("/admin/games/{$game->slug}", $this->fields([
+            'slug' => 'fivem',
+            'links' => [['name' => '', 'url' => '']],
+        ]))->assertSessionHasNoErrors();
+
+        // Null rather than an empty array, so it matches a game that never had
+        // any — the frontend asks one question, not two.
+        $this->assertNull($game->refresh()->links);
+    }
+
     public function test_a_slug_has_to_be_free_and_url_shaped(): void
     {
         $this->game(['slug' => 'rust']);

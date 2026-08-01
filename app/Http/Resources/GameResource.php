@@ -45,6 +45,9 @@ class GameResource extends JsonResource
                 'description' => $this->meta_description,
             ],
             'description' => $this->when($request->routeIs('api.games.show'), $this->description),
+            // Only the game's own page shows these, and most games have none —
+            // no reason to carry them through the index that every page loads.
+            'links' => $this->when($request->routeIs('api.games.show'), $this->links ?? []),
         ];
     }
 }

@@ -86,7 +86,12 @@ export type Facet = {
 
 export type CountryFacet = Facet & { code: string }
 
+/** Somewhere the game lives that is not this site: its own page, its docs. */
+export type GameLink = { name: string; url: string }
+
 export type GameDetail = Game & {
+  /** Editorial, set per game in the admin. Most games have none. */
+  links?: GameLink[]
   facets: {
     /** Availability and capacity buckets — see ServerListing::STATUSES. */
     statuses: Facet[]

@@ -147,6 +147,45 @@
             </div>
         </div>
 
+        <h2>Links</h2>
+        <p class="subtle" style="margin: -4px 0 10px">
+            Where this game lives elsewhere — its site, its docs, where servers are set up. Shown
+            at the top of the game's page; most games have none. Blank rows add more.
+        </p>
+        <div class="rows">
+            @php
+                // Filled rows first, then spares. old() wins so a refused save
+                // does not throw away what was typed.
+                $links = old('links', array_map(
+                    fn ($link) => ['name' => $link['name'] ?? '', 'url' => $link['url'] ?? ''],
+                    $game->links ?? [],
+                ));
+                $links = array_values($links) + array_fill(count($links), $blankRows, ['name' => '', 'url' => '']);
+            @endphp
+            @foreach($links as $i => $link)
+                <div class="row-card">
+                    <div class="row-grid" style="grid-template-columns: 1fr 2fr">
+                        <label class="field">
+                            <span class="l">Label</span>
+                            <input type="text" name="links[{{ $i }}][name]" value="{{ $link['name'] ?? '' }}"
+                                   maxlength="64" placeholder="FiveM Docs">
+                            @error("links.$i.name")<div class="bad-field">{{ $message }}</div>@enderror
+                        </label>
+                        <label class="field">
+                            <span class="l">Address</span>
+                            <input type="text" name="links[{{ $i }}][url]" value="{{ $link['url'] ?? '' }}"
+                                   maxlength="255" placeholder="https://docs.fivem.net/">
+                            @error("links.$i.url")<div class="bad-field">{{ $message }}</div>@enderror
+                        </label>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+        {{-- Emptying both fields of a row is how a link is removed: there is no
+             pivot, no URL and nothing else pointing at it, so a delete checkbox
+             would be a second way to do the same thing. --}}
+        <p class="hint">Clear both fields to remove a link.</p>
+
         <h2>Search engines</h2>
         <div class="panel" style="padding: 16px">
             <div class="fields one">

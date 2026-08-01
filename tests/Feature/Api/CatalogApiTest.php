@@ -57,6 +57,30 @@ class CatalogApiTest extends TestCase
         $this->assertCount(1, $this->getJson('/api/games/minecraft/servers')->json('data'));
     }
 
+    /**
+     * Editorial links belong to the game's own page. The index is loaded by
+     * every page on the site for the sidebar, and most games have none.
+     */
+    public function test_game_links_are_served_with_the_game_and_not_the_index(): void
+    {
+        $fivem = Game::where('slug', 'fivem')->firstOrFail();
+
+        $show = $this->getJson('/api/games/fivem')->assertOk();
+
+        $this->assertSame($fivem->links, $show->json('data.links'));
+        $this->assertSame('FiveM Official', $show->json('data.links.0.name'));
+
+        $index = collect($this->getJson('/api/games')->assertOk()->json('data'))
+            ->firstWhere('slug', 'fivem');
+
+        $this->assertArrayNotHasKey('links', $index);
+    }
+
+    public function test_a_game_with_no_links_answers_with_an_empty_list(): void
+    {
+        $this->assertSame([], $this->getJson('/api/games/minecraft')->assertOk()->json('data.links'));
+    }
+
     public function test_a_game_page_carries_facets_with_counts(): void
     {
         $server = $this->minecraftServer(['country_id' => Country::where('code', 'DE')->value('id')]);
