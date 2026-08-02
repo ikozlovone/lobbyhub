@@ -65,7 +65,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 >
                   LOBBY<span className="text-brand">HUB</span>
                 </Link>
-                <div className="flex flex-1 justify-center">
+                {/* min-w-0, or the search box refuses to shrink past its own
+                    content and pushes the account button off a 320px screen. */}
+                <div className="flex min-w-0 flex-1 justify-center">
                   <SearchBox apiUrl={API_URL} />
                 </div>
 
@@ -97,23 +99,71 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <main className="min-w-0 flex-1">{children}</main>
             </div>
 
-            <footer className="border-t border-line py-6 text-sm text-subtle">
-              <div className="mx-auto flex w-full max-w-[100rem] flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4">
-                <span>
-                  Player counts refresh every few minutes. Uptime is measured from our own checks.
-                </span>
-                {/* The only route to these below lg, where the rail that also
-                    carries them is hidden — and withdrawing consent has to be
-                    reachable from every page, not just the ones with a rail. */}
-                <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  <Link href="/terms" className="transition-colors hover:text-fg">
-                    Terms of use
-                  </Link>
-                  <Link href="/privacy" className="transition-colors hover:text-fg">
-                    Privacy
-                  </Link>
-                  <ConsentSettingsButton className="cursor-pointer transition-colors hover:text-fg" />
-                </nav>
+            <footer className="border-t border-line py-8 text-sm text-subtle">
+              <div className="mx-auto flex w-full max-w-[100rem] flex-col gap-6 px-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-md space-y-2">
+                  <p className="font-display text-base font-black tracking-tight text-fg">
+                    LOBBY<span className="text-brand">HUB</span>
+                  </p>
+                  <p>
+                    LobbyHub helps players discover multiplayer game servers and gaming communities.
+                  </p>
+                  <p>
+                    Player counts refresh every few minutes. Uptime is measured from our own checks.
+                  </p>
+                </div>
+
+                {/* Two lists, because they answer different questions — where do
+                    I go, and who is behind this. Every entry is a page that
+                    exists: there is no About or Contact to link to, and a footer
+                    link to a 404 is worse than a missing one. */}
+                <div className="flex flex-wrap gap-x-12 gap-y-6">
+                  <nav aria-label="Browse">
+                    <p className="font-display mb-2 text-[11px] font-bold tracking-widest text-fg uppercase">
+                      Browse
+                    </p>
+                    <ul className="space-y-1.5">
+                      <li>
+                        <Link href="/games" className="transition-colors hover:text-fg">
+                          Games
+                        </Link>
+                      </li>
+                      <li>
+                        <Link href="/search" className="transition-colors hover:text-fg">
+                          Servers
+                        </Link>
+                      </li>
+                      <li>
+                        <Link href="/add-server" className="transition-colors hover:text-fg">
+                          Add server
+                        </Link>
+                      </li>
+                    </ul>
+                  </nav>
+
+                  <nav aria-label="Legal">
+                    <p className="font-display mb-2 text-[11px] font-bold tracking-widest text-fg uppercase">
+                      Legal
+                    </p>
+                    <ul className="space-y-1.5">
+                      <li>
+                        <Link href="/terms" className="transition-colors hover:text-fg">
+                          Terms of use
+                        </Link>
+                      </li>
+                      <li>
+                        <Link href="/privacy" className="transition-colors hover:text-fg">
+                          Privacy
+                        </Link>
+                      </li>
+                      <li>
+                        {/* Withdrawing consent has to be reachable from every
+                            page, not only the ones with a rail. */}
+                        <ConsentSettingsButton className="cursor-pointer transition-colors hover:text-fg" />
+                      </li>
+                    </ul>
+                  </nav>
+                </div>
               </div>
             </footer>
             </FavoritesProvider>

@@ -56,6 +56,37 @@ class ServerController extends Controller
         return ServerResource::collection($servers)->response();
     }
 
+    /**
+     * The same listing, across every game.
+     *
+     * What the home page is built from: "the busiest servers", "the newest",
+     * "the ones wiped this week" are all one query with a different sort, and
+     * assembling them in the frontend would mean a request per game — 46 today,
+     * more with every game added.
+     *
+     * Deliberately not paginated past the first page: this feeds sections of
+     * six to twelve rows, and a crawlable, deep, cross-game listing is exactly
+     * the thin near-duplicate index the per-game one already caps.
+     */
+    public function catalog(Request $request, ServerListing $listing): JsonResponse
+    {
+        $filters = $request->validate([
+            'game' => ['sometimes', 'string', 'max:64'],
+            'country' => ['sometimes', 'string', 'max:64'],
+            'status' => ['sometimes', Rule::in(ServerListing::statuses())],
+            'q' => ['sometimes', 'string', 'max:100'],
+            'sort' => ['sometimes', Rule::in(ServerListing::sorts())],
+            // Days back to count as "recently wiped"; absent means no filter.
+            'wiped' => ['sometimes', 'integer', 'min:1', 'max:90'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'page' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_PAGE],
+        ]);
+
+        $servers = $listing->paginate(null, $filters);
+
+        return ServerResource::collection($servers)->response();
+    }
+
     public function show(Server $server): JsonResponse
     {
         abort_unless($server->is_active, 404);

@@ -24,11 +24,11 @@ export async function Sidebar() {
           the header — that is what a phone gets, where this rail is hidden. */}
       <ul className="border-b border-line pb-4">
         <li>
-          {/* First, and pointing home: the rail below lists only the games that
-              have servers, so this is the one way back to the other 24. A
-              neutral tile because it is a destination, not an action. */}
+          {/* First, and pointing at the catalog: the rail below lists only the
+              games that have servers, so this is the one way to the other 24.
+              A neutral tile because it is a destination, not an action. */}
           <Link
-            href="/"
+            href="/games"
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded bg-line text-muted">

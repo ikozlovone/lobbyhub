@@ -1,8 +1,8 @@
 'use client'
 
-import Link from 'next/link'
 import { useDeferredValue, useMemo, useState } from 'react'
 import type { Game } from '@/lib/api'
+import { GameCard } from './game-card'
 import { Icon } from './icons'
 
 /**
@@ -89,57 +89,3 @@ export function GameGrid({
   )
 }
 
-function GameCard({ game, href }: { game: Game; href: string }) {
-  const empty = game.counters.servers === 0
-
-  return (
-    <Link
-      href={href}
-      // The home page shows the whole catalogue of games at once; warming all
-      // of them is the same crowd as the menu — see sidebar.tsx.
-      prefetch={false}
-      className="group block cursor-pointer overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-line-strong"
-    >
-      {/* Steam header art is 460x215; the ratio is reserved either way so a
-          missing cover cannot shift the grid while images load. */}
-      <div
-        className="relative aspect-[460/215] overflow-hidden"
-        style={{ backgroundColor: game.accent_color ?? 'var(--color-surface-2)' }}
-      >
-        {game.cover ? (
-          <img
-            src={game.cover}
-            alt=""
-            width={460}
-            height={215}
-            loading="lazy"
-            className={`size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] ${
-              empty ? 'opacity-60' : ''
-            }`}
-          />
-        ) : (
-          <span className="font-display absolute inset-0 flex items-center justify-center px-2 text-center text-lg font-black text-white/90">
-            {game.name}
-          </span>
-        )}
-      </div>
-
-      <div className="p-3">
-        <h3 className="font-display truncate font-bold transition-colors group-hover:text-brand">
-          {game.name}
-        </h3>
-
-        <dl className="mt-2 space-y-1 text-sm">
-          <div className="flex justify-between gap-2">
-            <dt className="text-subtle">Servers</dt>
-            <dd className="tabular">{game.counters.servers.toLocaleString('en-US')}</dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-subtle">Players on servers</dt>
-            <dd className="tabular">{game.counters.players_online.toLocaleString('en-US')}</dd>
-          </div>
-        </dl>
-      </div>
-    </Link>
-  )
-}

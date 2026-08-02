@@ -35,6 +35,9 @@ Route::name('api.')->group(function () {
         ->middleware('throttle:submissions')
         ->name('games.servers.store');
 
+    // The catalog-wide listing the home page is built from.
+    Route::get('servers', [ServerController::class, 'catalog'])->name('servers.index');
+
     // Must precede servers/{server}, or "live" would be read as a slug.
     Route::get('servers/live', [ServerController::class, 'live'])->name('servers.live');
     Route::get('servers/{server}', [ServerController::class, 'show'])->name('servers.show');

@@ -105,10 +105,15 @@ export type GameDetail = Game & {
 
 export type Country = { code: string; name: string; slug: string }
 
+/** Which game a row belongs to. Only the catalog-wide listing carries it. */
+export type ServerGame = { slug: string; name: string; protocol: Monitoring['protocol'] }
+
 export type Server = {
   slug: string
   name: string
   motd: string | null
+  /** Present on cross-game listings only — inside a game the caller knows already. */
+  game?: ServerGame
   address: string
   map: string | null
   version: string | null
@@ -276,6 +281,35 @@ export async function fetchServers(game: string, filters: ServerFilters = {}, in
 
   const suffix = query.toString() ? `?${query}` : ''
   return get<Paginated<Server>>(`/games/${game}/servers${suffix}`, init)
+}
+
+export type CatalogFilters = {
+  game?: string
+  country?: string
+  status?: StatusFilter
+  q?: string
+  sort?: ServerSort
+  /** Days back to count as recently wiped. Omitted means no wipe filter at all. */
+  wiped?: number
+  page?: number
+  per_page?: number
+}
+
+/**
+ * The listing across every game — what the home page's sections are made of.
+ *
+ * One request per section rather than one per game: see ServerController's
+ * `catalog`, which exists for exactly this.
+ */
+export async function fetchCatalogServers(filters: CatalogFilters = {}, init?: RequestInit) {
+  const query = new URLSearchParams(
+    Object.entries(filters)
+      .filter(([, value]) => value !== undefined && value !== '')
+      .map(([key, value]) => [key, String(value)]),
+  )
+
+  const suffix = query.toString() ? `?${query}` : ''
+  return get<Paginated<Server>>(`/servers${suffix}`, init)
 }
 
 /**

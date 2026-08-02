@@ -1,12 +1,15 @@
 import { cacheLife, cacheTag } from 'next/cache'
 import {
   SERVER_API_URL,
+  fetchCatalogServers,
   fetchGame,
   fetchGames,
   fetchHistory,
   fetchRecentVotes,
   fetchServer,
   fetchServers,
+  type CatalogFilters,
+  type Server,
   type ServerFilters,
 } from './api'
 import { fetchProviders } from './auth'
@@ -109,6 +112,85 @@ export async function getRecentVotes(game: string) {
   cacheTag(`game:${game}`, 'votes')
 
   return fetchRecentVotes(game).catch(() => [])
+}
+
+/**
+ * The home page's cross-game sections.
+ *
+ * Each returns [] rather than throwing, and each is cached separately: a
+ * section whose request failed leaves an empty array the page hides, instead of
+ * taking the whole home page down with it. That is the "одна секция не роняет
+ * страницу" rule, enforced here rather than in six try/catch blocks upstream.
+ *
+ * Minutes, not hours: these are the counts a visitor judges the whole site by,
+ * and the live layer only refreshes rows already on screen — it cannot add the
+ * server that became busiest since the shell was built.
+ */
+async function catalogSection(filters: CatalogFilters) {
+  return fetchCatalogServers(filters)
+    .then((page) => page.data)
+    .catch(() => [] as Server[])
+}
+
+export async function getPopularServers(limit = 8) {
+  'use cache'
+  cacheLife('minutes')
+  cacheTag('servers')
+
+  return catalogSection({ sort: 'players', per_page: limit })
+}
+
+/**
+ * Trending, as far as the data honestly allows.
+ *
+ * There is no growth metric in the schema — no "players this week against last"
+ * — so this is `rank_score`, which ServerRanking already computes from recent
+ * votes and measured activity. That is a real server-side ordering rather than
+ * a shuffle, and it is the closest thing to "moving up" we can currently say.
+ * A true trend needs a daily-stats comparison; see the report.
+ */
+export async function getTrendingServers(limit = 8) {
+  'use cache'
+  cacheLife('minutes')
+  cacheTag('servers')
+
+  return catalogSection({ sort: 'rank', per_page: limit })
+}
+
+export async function getRecentlyAddedServers(limit = 8) {
+  'use cache'
+  cacheLife('minutes')
+  cacheTag('servers')
+
+  return catalogSection({ sort: 'newest', per_page: limit })
+}
+
+/**
+ * Servers wiped in the last fortnight.
+ *
+ * Empty for a catalog with no wipe data, which is the point: the section is
+ * hidden rather than filled with invented dates.
+ */
+export async function getRecentlyWipedServers(limit = 8) {
+  'use cache'
+  cacheLife('minutes')
+  cacheTag('servers')
+
+  return catalogSection({ sort: 'wiped', wiped: 14, per_page: limit })
+}
+
+/**
+ * The search results page.
+ *
+ * Not cached by term: the space of queries is unbounded and mostly one-shot, so
+ * a cache entry per term buys a hit rate near zero and holds every typo anyone
+ * ever submitted. The empty term is the browsable "all servers" listing, and
+ * that one is worth caching — hence the split.
+ */
+export async function searchServers(term: string, limit = 24) {
+  if (term === '') return getPopularServers(limit)
+
+  return catalogSection({ q: term, sort: 'players', per_page: limit })
 }
 
 export async function getServer(slug: string) {

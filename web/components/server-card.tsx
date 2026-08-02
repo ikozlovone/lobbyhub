@@ -53,6 +53,20 @@ export function ServerCard({ server, steam }: { server: Server; steam: boolean }
           </span>
         </div>
 
+        {/* Only on cross-game listings, where the payload carries a game — on a
+            game's own page every row would say the same word. A sibling of the
+            server link rather than inside it: one clickable element per
+            destination, never a link within a link. */}
+        {server.game && (
+          <Link
+            href={`/games/${server.game.slug}`}
+            prefetch={false}
+            className="w-fit rounded-sm bg-surface-2 px-1.5 py-0.5 text-[11px] text-subtle transition-colors hover:text-fg"
+          >
+            {server.game.name}
+          </Link>
+        )}
+
         <span className="flex items-center gap-2">
           {server.country && <CountryFlag country={server.country} city={server.city} />}
           <ConnectActions address={server.address} steam={steam} className="min-w-0" />

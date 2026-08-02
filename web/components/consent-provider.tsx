@@ -68,15 +68,27 @@ export function ConsentProvider({ children }: { children: React.ReactNode }) {
   // Read after mount, not during render: localStorage does not exist on the
   // server, and a banner in the prerendered HTML would be a banner shown for a
   // moment to somebody who already answered.
+  //
+  // Resolved through a promise so the state lands after the effect rather than
+  // during it — same reason as the session restore in auth-provider: a
+  // synchronous setState here re-renders the whole tree under the provider.
   useEffect(() => {
-    const stored = readConsent()
+    let cancelled = false
 
-    if (stored) setGranted(stored.granted)
+    Promise.resolve(readConsent()).then((stored) => {
+      if (cancelled) return
 
-    setReady(true)
+      if (stored) setGranted(stored.granted)
 
-    // Nothing configured means nothing to ask about — see CONFIGURED.
-    if (!stored && CONFIGURED.length > 0) setAsk('banner')
+      setReady(true)
+
+      // Nothing configured means nothing to ask about — see CONFIGURED.
+      if (!stored && CONFIGURED.length > 0) setAsk('banner')
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const decide = useCallback((categories: ConsentCategory[]) => {
@@ -202,13 +214,6 @@ function ConsentDialog({
   onClose: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [draft, setDraft] = useState<ConsentCategory[]>(granted)
-
-  // Start from what is actually stored every time it opens, so cancelling and
-  // reopening does not show yesterday's half-made edit.
-  useEffect(() => {
-    if (open) setDraft(granted)
-  }, [open, granted])
 
   useEffect(() => {
     const element = dialog.current
@@ -238,7 +243,23 @@ function ConsentDialog({
       onClick={(event) => event.target === dialog.current && onClose()}
       className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-0 text-fg backdrop:bg-black/70 backdrop:backdrop-blur-sm"
     >
-      <div className="space-y-5 p-6 sm:p-8" onClick={(event) => event.stopPropagation()}>
+      {/*
+       * Uncontrolled, and keyed on `open` so it remounts each time it is
+       * reopened: the boxes then start from what is actually stored, without a
+       * draft in state and without an effect to resync it. Cancelling and
+       * reopening cannot show yesterday's half-made edit, because there is
+       * nothing to remember it in.
+       */}
+      <form
+        key={String(open)}
+        className="space-y-5 p-6 sm:p-8"
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault()
+          const picked = new FormData(event.currentTarget).getAll('consent')
+          onSave(CONFIGURED.filter((category) => picked.includes(category)))
+        }}
+      >
         <div className="space-y-1">
           <h2 id="consent-dialog-title" className="font-display text-lg font-black tracking-tight">
             What may we store?
@@ -263,34 +284,27 @@ function ConsentDialog({
             </p>
           </li>
 
-          {CONFIGURED.map((category) => {
-            const on = draft.includes(category)
-
-            return (
-              <li key={category} className="rounded-lg border border-line p-3">
-                <label className="flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() =>
-                      setDraft(
-                        on ? draft.filter((name) => name !== category) : [...draft, category],
-                      )
-                    }
-                    className="mt-0.5 size-4 shrink-0 cursor-pointer accent-brand"
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-medium text-fg">
-                      {CATEGORY_LABELS[category].title}
-                    </span>
-                    <span className="mt-1 block text-muted">
-                      {CATEGORY_LABELS[category].detail}
-                    </span>
+          {CONFIGURED.map((category) => (
+            <li key={category} className="rounded-lg border border-line p-3">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  name="consent"
+                  value={category}
+                  // Never pre-ticked beyond what was actually granted: a box
+                  // ticked on first ask is consent nobody gave.
+                  defaultChecked={granted.includes(category)}
+                  className="mt-0.5 size-4 shrink-0 cursor-pointer accent-brand"
+                />
+                <span className="min-w-0">
+                  <span className="block font-medium text-fg">
+                    {CATEGORY_LABELS[category].title}
                   </span>
-                </label>
-              </li>
-            )
-          })}
+                  <span className="mt-1 block text-muted">{CATEGORY_LABELS[category].detail}</span>
+                </span>
+              </label>
+            </li>
+          ))}
         </ul>
 
         <div className="flex flex-wrap gap-2">
@@ -302,14 +316,13 @@ function ConsentDialog({
             Reject all
           </button>
           <button
-            type="button"
-            onClick={() => onSave(draft)}
+            type="submit"
             className="flex-1 cursor-pointer rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
           >
             Save choice
           </button>
         </div>
-      </div>
+      </form>
     </dialog>
   )
 }

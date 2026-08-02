@@ -19,6 +19,14 @@ export function robotsFor(serversCount: number, threshold = INDEX_THRESHOLD): Me
   return serversCount >= threshold ? undefined : { index: false, follow: true }
 }
 
-export function canonical(path: string): Metadata['alternates'] {
-  return { canonical: path }
+/**
+ * Returns the whole `alternates` branch, not the value inside it.
+ *
+ * Every call site spreads this into a Metadata object — `...canonical('/x')` —
+ * and the previous shape spread to `{ canonical: '/x' }`, a key Metadata has no
+ * such field for. It type-checked, because a spread of a valid partial always
+ * does, and silently emitted no <link rel="canonical"> on any page of the site.
+ */
+export function canonical(path: string): Pick<Metadata, 'alternates'> {
+  return { alternates: { canonical: path } }
 }

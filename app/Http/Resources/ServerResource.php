@@ -20,6 +20,15 @@ class ServerResource extends JsonResource
             'slug' => $this->slug,
             'name' => $this->name,
             'motd' => $this->motd,
+            /**
+             * Only present on the catalog-wide listing, which is the only one
+             * that eager-loads it — inside a game the caller already knows.
+             */
+            'game' => $this->whenLoaded('game', fn () => [
+                'slug' => $this->game->slug,
+                'name' => $this->game->name,
+                'protocol' => $this->game->query_protocol->value,
+            ]),
             // What a player connects to — reported by the server when it can.
             'address' => $this->address(),
             'map' => $this->map,

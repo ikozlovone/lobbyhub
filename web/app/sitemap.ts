@@ -18,6 +18,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const entries: MetadataRoute.Sitemap = [
     { url: SITE, changeFrequency: 'hourly', priority: 1 },
+    // The catalog. Second only to the home page: every game page hangs off it.
+    { url: `${SITE}/games`, changeFrequency: 'hourly', priority: 0.9 },
+    // The bare listing only. ?q= variants are noindex — see the search page.
+    { url: `${SITE}/search`, changeFrequency: 'hourly', priority: 0.6 },
     // The submission funnel: this page carries every per-game form under it.
     { url: `${SITE}/add-server`, changeFrequency: 'weekly', priority: 0.8 },
     // Indexable but unimportant: nobody searches for it, and a legal page a

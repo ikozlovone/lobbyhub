@@ -19,12 +19,14 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
   const [open, setOpen] = useState(false)
   const container = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (term.trim().length < 2) {
-      setResults(null)
+  // Too short to search is derived, not stored: clearing the results in an
+  // effect would set state on the way *in* to a render that already knows the
+  // answer. `results` keeps the last response; whether it is shown is decided
+  // below, so a shrinking term hides them instantly instead of a render later.
+  const short = term.trim().length < 2
 
-      return
-    }
+  useEffect(() => {
+    if (short) return
 
     const timer = setTimeout(async () => {
       try {
@@ -41,7 +43,7 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
     }, 250)
 
     return () => clearTimeout(timer)
-  }, [term, apiUrl])
+  }, [term, apiUrl, short])
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -60,7 +62,8 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
     }
   }, [])
 
-  const hasResults = (results?.games.length ?? 0) + (results?.servers.length ?? 0) > 0
+  const shown = short ? null : results
+  const hasResults = (shown?.games.length ?? 0) + (shown?.servers.length ?? 0) > 0
 
   return (
     <div ref={container} className="relative w-full max-w-xl">
@@ -74,19 +77,19 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
         id="search"
         value={term}
         onChange={(event) => setTerm(event.target.value)}
-        onFocus={() => results && setOpen(true)}
+        onFocus={() => shown && setOpen(true)}
         placeholder="Search games and servers"
         autoComplete="off"
         className="w-full rounded-lg border border-line bg-surface py-2 pr-3 pl-9 text-sm outline-none transition-colors placeholder:text-subtle"
       />
 
-      {open && results && (
+      {open && shown && (
         <div className="absolute top-full z-30 mt-1.5 w-full overflow-hidden rounded-lg border border-line bg-surface shadow-xl">
           {!hasResults && <p className="px-3 py-4 text-sm text-subtle">Nothing found.</p>}
 
-          {results.games.length > 0 && (
+          {shown.games.length > 0 && (
             <ul className="border-b border-line py-1">
-              {results.games.map((game) => (
+              {shown.games.map((game) => (
                 <li key={game.slug}>
                   <Link
                     href={`/games/${game.slug}`}
@@ -103,9 +106,9 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
             </ul>
           )}
 
-          {results.servers.length > 0 && (
+          {shown.servers.length > 0 && (
             <ul className="py-1">
-              {results.servers.map((server) => (
+              {shown.servers.map((server) => (
                 <li key={server.slug}>
                   <Link
                     href={`/servers/${server.slug}`}

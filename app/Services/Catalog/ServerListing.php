@@ -46,7 +46,7 @@ class ServerListing
      */
     private const MAX_MAP_FACETS = 40;
 
-    public function paginate(Game $game, array $filters): LengthAwarePaginator
+    public function paginate(?Game $game, array $filters): LengthAwarePaginator
     {
         $perPage = min(max((int) ($filters['per_page'] ?? 24), 1), 100);
 
@@ -55,13 +55,30 @@ class ServerListing
             ->appends($filters);
     }
 
-    public function query(Game $game, array $filters): Builder
+    /**
+     * A null $game widens the same listing to the whole catalog.
+     *
+     * The home page needs "the busiest servers we know of", not "the busiest
+     * servers in one game" — and building that from one request per game would
+     * be 46 round trips today and worse with every game added. Everything else
+     * about the query is identical, which is why this is a nullable argument
+     * rather than a second listing that would drift out of step with this one.
+     */
+    public function query(?Game $game, array $filters): Builder
     {
         $query = Server::query()
             ->active()
             ->verified()
-            ->where('game_id', $game->id)
             ->with(['country:id,code,name,slug', 'version:id,slug,name']);
+
+        if ($game !== null) {
+            $query->where('game_id', $game->id);
+        } else {
+            // Cross-game rows are useless without saying which game they are
+            // from, and the frontend needs the protocol to know whether a
+            // "Connect" button can be a steam:// link.
+            $query->with('game:id,slug,name,query_protocol');
+        }
 
         // Promoted servers ride above the sort — that is what the placement buys.
         $query->orderByRaw('case when promoted_until > ? then 0 else 1 end', [now()]);
@@ -82,8 +99,28 @@ class ServerListing
         return $this->applyFilters($query, $game, $filters);
     }
 
-    private function applyFilters(Builder $query, Game $game, array $filters): Builder
+    private function applyFilters(Builder $query, ?Game $game, array $filters): Builder
     {
+        // Catalog-wide only: inside a game the route already decided which one.
+        if ($game === null && $slug = $filters['game'] ?? null) {
+            $query->whereHas('game', fn (Builder $q) => $q->where('games.slug', $slug));
+        }
+
+        /*
+         * "Recently wiped" is a question only some games can answer, and the
+         * honest way to ask it is of the data rather than of a hard-coded list
+         * of games: a server has a wipe date or it does not. Servers whose date
+         * is in the distant past are not news, so the window is part of the
+         * filter — without it this degrades into "every Rust server, ever".
+         */
+        if (($filters['wiped'] ?? null) !== null) {
+            $days = max(1, min((int) $filters['wiped'], 90));
+
+            $query->whereNotNull('wiped_at')
+                ->where('wiped_at', '>=', now()->subDays($days))
+                ->where('wiped_at', '<=', now());
+        }
+
         if ($mode = $filters['mode'] ?? null) {
             $query->whereHas('modes', fn (Builder $q) => $q->where('game_modes.slug', $mode));
         }
