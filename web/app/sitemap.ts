@@ -24,6 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // crawler cannot find is one an app store or a payment processor reads as
     // missing.
     { url: `${SITE}/terms`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${SITE}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
   ]
 
   for (const game of games) {

@@ -97,16 +97,22 @@ export async function Sidebar() {
         </ul>
       </div>
 
-      {/* Last, and quiet: a legal page is something people look for on the rare
-          day they need it, not something to spend a tile on beside the two
-          actions at the top. It is in the footer too — that is what a phone
-          gets, where this rail is hidden. */}
-      <div className="border-t border-line pt-4">
+      {/* Last, and quiet: legal pages are what people look for on the rare day
+          they need them, not something to spend a tile on beside the two actions
+          at the top. Both are in the footer too — that is what a phone gets,
+          where this rail is hidden. */}
+      <div className="space-y-0.5 border-t border-line pt-4">
         <Link
           href="/terms"
           className="block cursor-pointer px-2 py-1 text-xs text-subtle transition-colors hover:text-muted"
         >
           Terms of use
+        </Link>
+        <Link
+          href="/privacy"
+          className="block cursor-pointer px-2 py-1 text-xs text-subtle transition-colors hover:text-muted"
+        >
+          Privacy
         </Link>
       </div>
     </nav>

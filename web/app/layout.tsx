@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { AuthProvider } from '@/components/auth/auth-provider'
 import { UserMenu } from '@/components/auth/user-menu'
+import { ConsentProvider, ConsentSettingsButton } from '@/components/consent-provider'
 import { FavoritesProvider } from '@/components/favorites-provider'
 import { Icon } from '@/components/icons'
 import { SearchBox } from '@/components/search-box'
@@ -48,6 +49,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body className="flex min-h-full flex-col">
         {/* Outermost: the sign-in dialog inside AuthProvider raises toasts too. */}
         <ToastProvider>
+          {/* Above everything that could ever want permission. Nothing needing
+              consent may mount outside it, and the answer starts at no. */}
+          <ConsentProvider>
           <AuthProvider apiUrl={API_URL} providers={providers}>
             {/* Inside AuthProvider because it only has anything to load once
                 somebody is signed in, and pressing a star while signed out is
@@ -98,15 +102,23 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 <span>
                   Player counts refresh every few minutes. Uptime is measured from our own checks.
                 </span>
-                {/* The only route to the terms below lg, where the rail that
-                    also links them is hidden. */}
-                <Link href="/terms" className="transition-colors hover:text-fg">
-                  Terms of use
-                </Link>
+                {/* The only route to these below lg, where the rail that also
+                    carries them is hidden — and withdrawing consent has to be
+                    reachable from every page, not just the ones with a rail. */}
+                <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <Link href="/terms" className="transition-colors hover:text-fg">
+                    Terms of use
+                  </Link>
+                  <Link href="/privacy" className="transition-colors hover:text-fg">
+                    Privacy
+                  </Link>
+                  <ConsentSettingsButton className="cursor-pointer transition-colors hover:text-fg" />
+                </nav>
               </div>
             </footer>
             </FavoritesProvider>
           </AuthProvider>
+          </ConsentProvider>
         </ToastProvider>
       </body>
     </html>

@@ -235,12 +235,17 @@ function Terms() {
   return (
     <p className="mt-6 text-center text-xs leading-relaxed text-subtle">
       By continuing you agree that we may store your address to keep you signed in and to contact
-      you about servers you claim. Nothing else. See the{' '}
-      {/* A new tab, not a navigation: this sits inside the sign-in dialog, and
-          following it in place throws away the code somebody is halfway
-          through typing. */}
+      you about servers you claim. Nothing else.{' '}
+      {/* New tabs, not navigations: this sits inside the sign-in dialog, and
+          following a link in place throws away the code somebody is halfway
+          through typing. Both are named at the point the address is asked for —
+          a notice somebody has to go hunting for is not one they were given. */}
       <Link href="/terms" target="_blank" className="underline hover:text-muted">
-        terms of use
+        Terms
+      </Link>{' '}
+      and{' '}
+      <Link href="/privacy" target="_blank" className="underline hover:text-muted">
+        privacy
       </Link>
       .
     </p>
