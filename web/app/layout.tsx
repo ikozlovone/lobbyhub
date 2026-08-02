@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { AuthProvider } from '@/components/auth/auth-provider'
 import { UserMenu } from '@/components/auth/user-menu'
+import { FavoritesProvider } from '@/components/favorites-provider'
 import { Icon } from '@/components/icons'
 import { SearchBox } from '@/components/search-box'
 import { Sidebar } from '@/components/sidebar'
@@ -48,6 +49,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {/* Outermost: the sign-in dialog inside AuthProvider raises toasts too. */}
         <ToastProvider>
           <AuthProvider apiUrl={API_URL} providers={providers}>
+            {/* Inside AuthProvider because it only has anything to load once
+                somebody is signed in, and pressing a star while signed out is
+                what opens that provider's dialog. */}
+            <FavoritesProvider apiUrl={API_URL}>
             <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur">
               <div className="mx-auto flex h-14 w-full max-w-[100rem] items-center gap-3 px-4">
                 <Link
@@ -93,6 +98,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 Player counts refresh every few minutes. Uptime is measured from our own checks.
               </div>
             </footer>
+            </FavoritesProvider>
           </AuthProvider>
         </ToastProvider>
       </body>

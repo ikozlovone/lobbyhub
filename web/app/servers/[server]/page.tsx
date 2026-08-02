@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
+import { FavoriteButton } from '@/components/favorite-button'
 import { Icon } from '@/components/icons'
 import { LiveProvider } from '@/components/live-provider'
 import { PlayersChart } from '@/components/players-chart'
@@ -80,9 +81,14 @@ export default async function ServerPage({ params }: Props) {
               />
             )}
             <div className="min-w-0">
-              <h1 className="font-display truncate text-xl font-black tracking-tight sm:text-2xl">
-                {server.name}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="font-display truncate text-xl font-black tracking-tight sm:text-2xl">
+                  {server.name}
+                </h1>
+                {/* The page somebody lands on from a search is where they decide
+                    to keep a server, so the star is next to its name. */}
+                <FavoriteButton slug={server.slug} name={server.name} size="size-5" className="shrink-0" />
+              </div>
               <nav aria-label="Breadcrumb" className="mt-0.5 text-xs text-subtle">
                 <Link href="/" className="hover:text-fg">
                   LobbyHub

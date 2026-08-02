@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { Server } from '@/lib/api'
 import { ConnectActions } from './connect-actions'
 import { CountryFlag } from './country-flag'
+import { FavoriteButton } from './favorite-button'
 import { useLive } from './live-provider'
 
 /**
@@ -42,11 +43,14 @@ export function ServerCard({ server, steam }: { server: Server; steam: boolean }
           >
             {server.name}
           </Link>
-          {server.promoted && (
-            <span className="shrink-0 rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-accent uppercase">
-              Promoted
-            </span>
-          )}
+          <span className="flex shrink-0 items-center gap-2">
+            {server.promoted && (
+              <span className="rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-accent uppercase">
+                Promoted
+              </span>
+            )}
+            <FavoriteButton slug={server.slug} name={server.name} />
+          </span>
         </div>
 
         <span className="flex items-center gap-2">

@@ -6,6 +6,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -59,6 +60,20 @@ class User extends Authenticatable
     public function votes(): HasMany
     {
         return $this->hasMany(Vote::class);
+    }
+
+    /**
+     * Servers this account starred, newest first.
+     *
+     * Ordered in the relation because there is only one order anyone wants this
+     * list in, and leaving it to each caller is how two screens end up
+     * disagreeing about it.
+     */
+    public function favorites(): BelongsToMany
+    {
+        return $this->belongsToMany(Server::class, 'favorites')
+            ->withPivot('created_at')
+            ->orderByPivot('created_at', 'desc');
     }
 
     /**

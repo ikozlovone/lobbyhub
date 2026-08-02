@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { Server } from '@/lib/api'
 import { ConnectActions } from './connect-actions'
 import { CountryFlag } from './country-flag'
+import { FavoriteButton } from './favorite-button'
 import { useLive } from './live-provider'
 
 /**
@@ -104,18 +105,24 @@ function Row({
       <td className="tabular px-3 py-2.5 align-middle text-xs text-subtle">{rank}</td>
 
       <td className="px-3 py-2.5 align-middle">
-        <Link
-          href={`/servers/${server.slug}`}
-          // No prefetch. A listing holds two dozen of these and a visitor opens
-          // one of them: prefetching the rest is the page fetching itself two
-          // dozen times over, and since Next asks for each segment separately
-          // that is nearer seventy requests — every one a render on our own
-          // server, because the frontend reads the catalog from it.
-          prefetch={false}
-          className="block truncate font-medium transition-colors group-hover:text-brand"
-        >
-          {server.name}
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* Before the name rather than in a column of its own: a column would
+              cost the name width on every row to serve the few that are
+              starred, and this reads as part of the row's identity anyway. */}
+          <FavoriteButton slug={server.slug} name={server.name} className="shrink-0" />
+          <Link
+            href={`/servers/${server.slug}`}
+            // No prefetch. A listing holds two dozen of these and a visitor opens
+            // one of them: prefetching the rest is the page fetching itself two
+            // dozen times over, and since Next asks for each segment separately
+            // that is nearer seventy requests — every one a render on our own
+            // server, because the frontend reads the catalog from it.
+            prefetch={false}
+            className="block min-w-0 flex-1 truncate font-medium transition-colors group-hover:text-brand"
+          >
+            {server.name}
+          </Link>
+        </div>
         <span className="mt-0.5 flex items-center gap-2 text-xs text-subtle sm:hidden">
           <span className="tabular truncate">{server.address}</span>
         </span>

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\EmailCodeController;
 use App\Http\Controllers\Api\Auth\SessionController;
 use App\Http\Controllers\Api\Auth\SocialAuthController;
+use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServerController;
@@ -86,6 +87,22 @@ Route::name('api.')->group(function () {
             Route::get('me', [SessionController::class, 'show'])->name('me');
             Route::post('logout', [SessionController::class, 'destroy'])->name('logout');
         });
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Favourites
+    |----------------------------------------------------------------------
+    |
+    | One account's own list, so every one of these is behind the token and
+    | none of them is cached anywhere — see FavoriteController.
+    |
+    */
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('favorites', [FavoriteController::class, 'index'])->name('favorites.index');
+        Route::post('servers/{server}/favorite', [FavoriteController::class, 'store'])->name('favorites.store');
+        Route::delete('servers/{server}/favorite', [FavoriteController::class, 'destroy'])->name('favorites.destroy');
     });
 });
 

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../icons'
 import { useAuth } from './auth-provider'
@@ -70,6 +71,16 @@ export function UserMenu() {
               {user.email ?? `Signed in with ${user.providers?.[0] ?? 'a provider'}`}
             </p>
           </div>
+
+          <Link
+            href="/favorites"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex w-full cursor-pointer items-center gap-2 border-b border-line px-3 py-2.5 text-left text-sm transition-colors hover:bg-surface-2"
+          >
+            <Icon.star className="size-4 text-subtle" />
+            Favorite servers
+          </Link>
 
           <button
             type="button"
