@@ -5,14 +5,13 @@ import { Icon } from './icons'
 /**
  * Persistent game navigation.
  *
- * Games with servers first, then the rest greyed back: the catalog has 27 games
- * and only a few have anything in them yet, and pretending otherwise wastes the
- * most valuable strip of the layout.
+ * Only games with servers: the catalog has 27 games and only a few have
+ * anything in them yet, and a rail of dead ends wastes the most valuable strip
+ * of the layout. The empty ones stay reachable from the catalog itself.
  */
 export async function Sidebar() {
   const games = await getGames()
   const withServers = games.filter((game) => game.counters.servers > 0)
-  const empty = games.filter((game) => game.counters.servers === 0)
 
   // The landmark is labelled for the whole rail, not just the games: it carries
   // two actions above them now, and a landmark called "Games" holding "Add
@@ -24,6 +23,22 @@ export async function Sidebar() {
           anything under it is out of sight on most screens. Both are also in
           the header — that is what a phone gets, where this rail is hidden. */}
       <ul className="border-b border-line pb-4">
+        <li>
+          {/* First, and pointing home: the rail below lists only the games that
+              have servers, so this is the one way back to the other 24. A
+              neutral tile because it is a destination, not an action. */}
+          <Link
+            href="/"
+            className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
+          >
+            <span className="flex size-7 shrink-0 items-center justify-center rounded bg-line text-muted">
+              <Icon.boxes />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-muted transition-colors group-hover:text-fg">
+              All games
+            </span>
+          </Link>
+        </li>
         <li>
           <Link
             href="/add-server"
@@ -81,41 +96,11 @@ export async function Sidebar() {
           ))}
         </ul>
       </div>
-
-      {empty.length > 0 && (
-        <div>
-          <p className="font-display mb-2 px-2 text-[11px] font-bold tracking-widest text-subtle uppercase">
-            No servers yet
-          </p>
-          <ul>
-            {empty.map((game) => (
-              <li key={game.slug}>
-                <Link
-                  href={`/games/${game.slug}`}
-                  prefetch={false}
-                  className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
-                >
-                  <Thumb game={game} muted />
-                  <span className="min-w-0 flex-1 truncate text-subtle transition-colors group-hover:text-muted">
-                    {game.name}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </nav>
   )
 }
 
-function Thumb({
-  game,
-  muted,
-}: {
-  game: Awaited<ReturnType<typeof getGames>>[number]
-  muted?: boolean
-}) {
+function Thumb({ game }: { game: Awaited<ReturnType<typeof getGames>>[number] }) {
   return game.cover ? (
     <img
       src={game.cover}
@@ -123,12 +108,12 @@ function Thumb({
       width={28}
       height={28}
       loading="lazy"
-      className={`size-7 shrink-0 rounded object-cover ${muted ? 'opacity-40' : ''}`}
+      className="size-7 shrink-0 rounded object-cover"
     />
   ) : (
     <span
       aria-hidden
-      className={`size-7 shrink-0 rounded ${muted ? 'opacity-40' : ''}`}
+      className="size-7 shrink-0 rounded"
       style={{ backgroundColor: game.accent_color ?? 'var(--color-line-strong)' }}
     />
   )
