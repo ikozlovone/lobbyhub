@@ -12,7 +12,7 @@ import { ServerInformation } from '@/components/server-information'
 import { ShareBlock } from '@/components/share-block'
 import { VotePanel } from '@/components/vote-panel'
 import { getHistory, getServer } from '@/lib/data'
-import { canonical } from '@/lib/seo'
+import { canonical, notFoundMetadata } from '@/lib/seo'
 
 type Props = { params: Promise<{ server: string }> }
 
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { server: slug } = await params
   const server = await getServer(slug)
 
-  if (!server) return {}
+  if (!server) return notFoundMetadata()
 
   const description = server.motd
     ? `${server.motd.slice(0, 140)} — live players, uptime and history on LobbyHub.`

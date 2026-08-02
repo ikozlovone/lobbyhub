@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame, getGames } from '@/lib/data'
-import { canonical, GAME_INDEX_THRESHOLD, robotsFor } from '@/lib/seo'
+import { canonical, GAME_INDEX_THRESHOLD, notFoundMetadata, robotsFor } from '@/lib/seo'
 
 type Props = { params: Promise<{ game: string }> }
 
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { game: slug } = await params
   const game = await getGame(slug)
 
-  if (!game) return {}
+  if (!game) return notFoundMetadata()
 
   return {
     title: game.seo.title ?? `${game.name} servers`,

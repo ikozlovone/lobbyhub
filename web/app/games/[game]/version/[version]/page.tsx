@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame } from '@/lib/data'
-import { canonical, robotsFor } from '@/lib/seo'
+import { canonical, notFoundMetadata, robotsFor } from '@/lib/seo'
 
 /** /games/minecraft/version/1-21 */
 type Props = { params: Promise<{ game: string; version: string }> }
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { game: gameSlug, version: versionSlug } = await params
   const found = await findVersion(gameSlug, versionSlug)
 
-  if (!found) return {}
+  if (!found) return notFoundMetadata()
 
   const { game, version } = found
 

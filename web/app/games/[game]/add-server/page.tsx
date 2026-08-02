@@ -7,7 +7,7 @@ import { Icon } from '@/components/icons'
 import { RelativeTime } from '@/components/relative-time'
 import type { Game, Server } from '@/lib/api'
 import { getGame, getGames, getLatestServers } from '@/lib/data'
-import { canonical } from '@/lib/seo'
+import { canonical, notFoundMetadata } from '@/lib/seo'
 
 type Props = { params: Promise<{ game: string }> }
 
@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { game: slug } = await params
   const game = await getGame(slug)
 
-  if (!game) return {}
+  if (!game) return notFoundMetadata()
 
   return {
     title: `Add a ${game.name} server`,

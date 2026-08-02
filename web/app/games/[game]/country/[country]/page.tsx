@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame } from '@/lib/data'
-import { canonical, robotsFor } from '@/lib/seo'
+import { canonical, notFoundMetadata, robotsFor } from '@/lib/seo'
 
 /** /games/minecraft/country/germany */
 type Props = { params: Promise<{ game: string; country: string }> }
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { game: gameSlug, country: countrySlug } = await params
   const found = await findCountry(gameSlug, countrySlug)
 
-  if (!found) return {}
+  if (!found) return notFoundMetadata()
 
   const { game, country } = found
 
