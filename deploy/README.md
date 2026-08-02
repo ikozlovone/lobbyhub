@@ -297,11 +297,23 @@ NEXT_PUBLIC_API_URL=https://api.lobbyhub.gg/api
 NEXT_PUBLIC_SITE_URL=https://lobbyhub.gg
 REVALIDATE_SECRET=<the same value as FRONTEND_REVALIDATE_SECRET>
 API_URL_INTERNAL=http://127.0.0.1:8080/api
+NEXT_PUBLIC_CONTROLLER_NAME=<full legal name of whoever runs the site>
+NEXT_PUBLIC_CONTROLLER_ADDRESS=<a postal address somebody can write to>
+NEXT_PUBLIC_CONTACT_EMAIL=privacy@lobbyhub.gg
+NEXT_PUBLIC_HOSTING_COUNTRY=<country this machine sits in>
+NEXT_PUBLIC_CONSENT_CATEGORIES=
 EOF
 
 sudo -u deploy -H npm ci
 sudo -u deploy -H npm run build
 ```
+
+The last five are what `/terms` and `/privacy` print. They are baked into the
+bundle like everything else here, so a build with any of the first four left
+empty ships both pages carrying a visible "this deployment is not configured"
+warning — which is the intended failure, and not one to discover from a user.
+`NEXT_PUBLIC_CONSENT_CATEGORIES` stays empty until an analytics or ad script is
+actually on the page; see `web/.env.example` for why.
 
 Two lines of the build output are worth reading:
 
