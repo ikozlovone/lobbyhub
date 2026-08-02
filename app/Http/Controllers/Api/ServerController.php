@@ -8,6 +8,7 @@ use App\Http\Resources\ServerResource;
 use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
+use App\Services\Catalog\FrontendCache;
 use App\Services\Catalog\ServerListing;
 use App\Services\Monitoring\ServerQueryManager;
 use Illuminate\Http\JsonResponse;
@@ -79,7 +80,7 @@ class ServerController extends Controller
      * snapshot and `refreshed: false`: the panel updates either way, and "we
      * checked forty seconds ago" is a better answer than an error.
      */
-    public function refresh(Server $server, ServerQueryManager $manager): JsonResponse
+    public function refresh(Server $server, ServerQueryManager $manager, FrontendCache $frontend): JsonResponse
     {
         abort_unless($server->is_active, 404);
 
@@ -89,9 +90,21 @@ class ServerController extends Controller
             || $server->last_queried_at->addSeconds(self::REFRESH_COOLDOWN)->isPast();
 
         if ($due && $manager->supports($server->game->query_protocol)) {
-            QueryServer::dispatchSync($server);
+            // With the slow-moving facts, not only the player count: this button
+            // sits inside the panel those fill, and the person pressing it is
+            // asking about what they are looking at.
+            QueryServer::dispatchSync($server, null, true);
 
             $server->refresh()->load(['game', 'country', 'version', 'modes']);
+
+            // The panel updates itself from this response, but the page around
+            // it is a shell cached for minutes — reload before it expires and
+            // the map, the facts and the history graph are all back to what they
+            // were, which reads as a refresh that did not save. Nothing else
+            // revalidates a server: the monitor's own polls are what the live
+            // layer covers, and doing this for those would expire every server
+            // page in the catalog every few minutes.
+            $frontend->invalidate("server:{$server->slug}");
         }
 
         return (new ServerDetailResource($server))

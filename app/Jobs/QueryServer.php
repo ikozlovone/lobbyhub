@@ -35,9 +35,16 @@ class QueryServer implements ShouldQueue
      *                                      is this job's business either way, so
      *                                      the result is passed in rather than
      *                                      the recording being written twice.
+     * @param  bool  $forceDetails  Ask for the slow-moving facts too, whatever
+     *                              the daily cadence says. Set by the refresh
+     *                              button and by nothing on the schedule — see
+     *                              refreshDetails().
      */
-    public function __construct(public Server $server, public ?QueryResult $measured = null)
-    {
+    public function __construct(
+        public Server $server,
+        public ?QueryResult $measured = null,
+        public bool $forceDetails = false,
+    ) {
         $this->onQueue(config('monitoring.queue'));
     }
 
@@ -62,10 +69,22 @@ class QueryServer implements ShouldQueue
      * them costs a second exchange — so they are refreshed on their own slow
      * cadence rather than on every poll. A failure here is not downtime: the
      * server already answered.
+     *
+     * Except when somebody asked. The refresh button sits in the panel these
+     * fields fill, and a button that leaves most of the block it lives in
+     * untouched for another day is not a refresh — it is a button that lies.
+     * The cost is bounded by what guards that endpoint: one re-query a minute
+     * per server, six a minute per address asking.
      */
     private function refreshDetails(ServerQueryDriver $driver): void
     {
         if (! $driver instanceof ProvidesServerDetails) {
+            return;
+        }
+
+        if ($this->forceDetails) {
+            $this->readDetails($driver);
+
             return;
         }
 
@@ -76,6 +95,12 @@ class QueryServer implements ShouldQueue
             return;
         }
 
+        $this->readDetails($driver);
+    }
+
+    /** The second exchange, and the row it writes. */
+    private function readDetails(ProvidesServerDetails&ServerQueryDriver $driver): void
+    {
         try {
             $details = $driver->details($this->server);
         } catch (QueryFailed) {

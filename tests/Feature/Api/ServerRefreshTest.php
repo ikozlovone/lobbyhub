@@ -3,8 +3,10 @@
 namespace Tests\Feature\Api;
 
 use App\Enums\ServerStatus;
+use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
+use App\Services\Monitoring\Contracts\ProvidesServerDetails;
 use App\Services\Monitoring\Contracts\ServerQueryDriver;
 use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\QueryResult;
@@ -12,6 +14,7 @@ use App\Services\Monitoring\ServerQueryManager;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
@@ -69,6 +72,93 @@ class ServerRefreshTest extends TestCase
         $this->assertSame(10, $this->server->refresh()->players_online);
     }
 
+    /**
+     * The bug this covers: the button sits in the "Server information" panel,
+     * and everything below the player count in that panel — mode, map size,
+     * seed, entities, FPS — comes from a second exchange that the monitor only
+     * makes once a day. Pressing refresh moved the players and left the rest of
+     * the block exactly as it was, which reads as "it did not save".
+     */
+    public function test_a_refresh_re_reads_the_facts_the_panel_is_made_of(): void
+    {
+        // The raw A2S rules, which is what the column holds — every value a
+        // string, because that is how they arrive on the wire, and ServerInfo
+        // is what turns `gmt` into "mode" for the panel.
+        $this->server->forceFill([
+            'details' => ['gmt' => 'Vanilla', 'ent_cnt' => '1000'],
+            // Synced minutes ago: the daily cadence would skip this.
+            'details_synced_at' => now()->subMinutes(5),
+        ])->save();
+
+        $this->fakeDriver(
+            new QueryResult(playersOnline: 214, playersMax: 250),
+            ['gmt' => 'Modded', 'ent_cnt' => '559673'],
+        );
+
+        $response = $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        $this->assertSame('Modded', $response->json('data.info.mode'));
+        $this->assertSame(559673, $response->json('data.info.entities'));
+        $this->assertTrue($this->server->refresh()->details_synced_at->isAfter(now()->subMinute()));
+    }
+
+    /**
+     * The scheduled poll keeps the daily cadence: it runs against every server
+     * in the catalog, and the second exchange is a second packet at somebody
+     * else's machine for facts that change on wipe.
+     */
+    public function test_the_monitor_still_leaves_those_facts_alone(): void
+    {
+        $this->server->forceFill([
+            'details' => ['gmt' => 'Vanilla'],
+            'details_synced_at' => now()->subMinutes(5),
+        ])->save();
+
+        $this->fakeDriver(new QueryResult(playersOnline: 3, playersMax: 10), ['gmt' => 'Modded']);
+
+        QueryServer::dispatchSync($this->server);
+
+        $this->assertSame('Vanilla', $this->server->refresh()->details['gmt']);
+    }
+
+    /**
+     * The other half of "it did not save": the panel updated, but the page
+     * around it is a cached shell, and a reload inside its window brought the
+     * old map, facts and graph back.
+     */
+    public function test_a_refresh_drops_the_page_the_frontend_had_cached(): void
+    {
+        config([
+            'services.frontend.revalidate_url' => 'https://front.test/api/revalidate',
+            'services.frontend.revalidate_secret' => 'shhh',
+        ]);
+        Http::fake();
+
+        $this->fakeDriver(new QueryResult(playersOnline: 214, playersMax: 250));
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://front.test/api/revalidate'
+            && $request['tags'] === ['server:refresh-me']);
+    }
+
+    /** Nothing was re-queried, so there is nothing the cached page is wrong about. */
+    public function test_a_declined_refresh_leaves_the_cache_alone(): void
+    {
+        config([
+            'services.frontend.revalidate_url' => 'https://front.test/api/revalidate',
+            'services.frontend.revalidate_secret' => 'shhh',
+        ]);
+        Http::fake();
+
+        $this->server->forceFill(['last_queried_at' => now()->subSeconds(5)])->save();
+        $this->fakeDriver(new QueryResult(playersOnline: 999, playersMax: 999));
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        Http::assertNothingSent();
+    }
+
     public function test_a_refresh_records_downtime_like_any_other_check(): void
     {
         $this->fakeDriver(null);
@@ -101,16 +191,27 @@ class ServerRefreshTest extends TestCase
         $this->postJson('/api/servers/refresh-me/refresh')->assertStatus(429);
     }
 
-    /** Null stands for a server that did not answer. */
-    private function fakeDriver(?QueryResult $result): void
+    /**
+     * Null stands for a server that did not answer.
+     *
+     * @param  array<string, mixed>|null  $details  What the second exchange
+     *                                              returns, for the tests that
+     *                                              care whether it happened.
+     */
+    private function fakeDriver(?QueryResult $result, ?array $details = null): void
     {
-        $driver = new class($result) implements ServerQueryDriver
+        $driver = new class($result, $details) implements ProvidesServerDetails, ServerQueryDriver
         {
-            public function __construct(private ?QueryResult $result) {}
+            public function __construct(private ?QueryResult $result, private ?array $details) {}
 
             public function query(Server $server): QueryResult
             {
                 return $this->result ?? throw QueryFailed::timedOut('1.2.3.4:28015');
+            }
+
+            public function details(Server $server): array
+            {
+                return $this->details ?? [];
             }
         };
 
