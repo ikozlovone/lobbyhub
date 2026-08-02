@@ -20,6 +20,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: SITE, changeFrequency: 'hourly', priority: 1 },
     // The submission funnel: this page carries every per-game form under it.
     { url: `${SITE}/add-server`, changeFrequency: 'weekly', priority: 0.8 },
+    // Indexable but unimportant: nobody searches for it, and a legal page a
+    // crawler cannot find is one an app store or a payment processor reads as
+    // missing.
+    { url: `${SITE}/terms`, changeFrequency: 'yearly', priority: 0.2 },
   ]
 
   for (const game of games) {

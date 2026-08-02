@@ -94,8 +94,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </div>
 
             <footer className="border-t border-line py-6 text-sm text-subtle">
-              <div className="mx-auto w-full max-w-[100rem] px-4">
-                Player counts refresh every few minutes. Uptime is measured from our own checks.
+              <div className="mx-auto flex w-full max-w-[100rem] flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4">
+                <span>
+                  Player counts refresh every few minutes. Uptime is measured from our own checks.
+                </span>
+                {/* The only route to the terms below lg, where the rail that
+                    also links them is hidden. */}
+                <Link href="/terms" className="transition-colors hover:text-fg">
+                  Terms of use
+                </Link>
               </div>
             </footer>
             </FavoritesProvider>
