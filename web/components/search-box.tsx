@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Icon } from './icons'
 
 type Results = {
@@ -18,6 +18,7 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
   const [results, setResults] = useState<Results | null>(null)
   const [open, setOpen] = useState(false)
   const container = useRef<HTMLDivElement>(null)
+  const id = useId()
 
   // Too short to search is derived, not stored: clearing the results in an
   // effect would set state on the way *in* to a render that already knows the
@@ -67,14 +68,17 @@ export function SearchBox({ apiUrl }: { apiUrl: string }) {
 
   return (
     <div ref={container} className="relative w-full max-w-xl">
-      <label className="sr-only" htmlFor="search">
+      {/* Generated, not the literal "search": this box is on the page twice
+          since the drawer got one, and two inputs sharing an id is a label that
+          points at whichever came first — for both of them. */}
+      <label className="sr-only" htmlFor={id}>
         Search games and servers
       </label>
       <span aria-hidden className="absolute top-1/2 left-3 -translate-y-1/2 text-subtle">
         <Icon.search />
       </span>
       <input
-        id="search"
+        id={id}
         value={term}
         onChange={(event) => setTerm(event.target.value)}
         onFocus={() => shown && setOpen(true)}

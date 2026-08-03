@@ -7,6 +7,7 @@ import { UserMenu } from '@/components/auth/user-menu'
 import { ConsentProvider, ConsentSettingsButton } from '@/components/consent-provider'
 import { FavoritesProvider } from '@/components/favorites-provider'
 import { Icon } from '@/components/icons'
+import { MobileNav } from '@/components/mobile-nav'
 import { SearchBox } from '@/components/search-box'
 import { Sidebar } from '@/components/sidebar'
 import { ToastProvider } from '@/components/toast'
@@ -59,17 +60,40 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <FavoritesProvider apiUrl={API_URL}>
             <header className="sticky top-0 z-20 border-b border-line bg-bg/90 backdrop-blur">
               <div className="mx-auto flex h-14 w-full max-w-[100rem] items-center gap-3 px-4">
+                {/* Below lg only, where the rail beside the page is hidden and
+                    this is the whole of the catalog navigation. The rail is
+                    rendered on the server either way and handed over as
+                    children — see MobileNav. */}
+                {/* The boundary goes above the client component, not inside its
+                    children: a Suspense passed *through* a client component as
+                    part of children does not shield the route from the catalog
+                    read inside it, and the build says so. The fallback holds the
+                    button's square so the header does not jump. */}
+                <Suspense fallback={<div className="size-8 shrink-0 lg:hidden" />}>
+                  <MobileNav apiUrl={API_URL}>
+                    <Sidebar />
+                  </MobileNav>
+                </Suspense>
+
                 <Link
                   href="/"
                   className="font-display shrink-0 text-lg font-black tracking-tight transition-colors hover:text-brand"
                 >
                   LOBBY<span className="text-brand">HUB</span>
                 </Link>
-                {/* min-w-0, or the search box refuses to shrink past its own
-                    content and pushes the account button off a 320px screen. */}
-                <div className="flex min-w-0 flex-1 justify-center">
+
+                {/* Hidden below lg, where it used to take the whole middle of a
+                    360px header and leave nothing for the wordmark. The same box
+                    is the first thing inside the drawer. min-w-0 above lg, or it
+                    refuses to shrink past its own content. */}
+                <div className="hidden min-w-0 flex-1 justify-center lg:flex">
                   <SearchBox apiUrl={API_URL} />
                 </div>
+
+                {/* Holds the row open once the search box stops doing it, so the
+                    account button stays at the right edge instead of sliding
+                    into the middle. */}
+                <div className="flex-1 lg:hidden" />
 
                 {/* The one thing a server owner comes here to do, reachable from
                     every page rather than only from the home grid. */}

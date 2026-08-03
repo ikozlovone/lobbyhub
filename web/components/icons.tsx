@@ -187,6 +187,11 @@ export const Icon = {
       <path d="M6 6l12 12M18 6 6 18" />
     </Svg>
   ),
+  menu: (p: Props) => (
+    <Svg {...p}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Svg>
+  ),
   mail: (p: Props) => (
     <Svg {...p}>
       <rect x="3" y="5" width="18" height="14" rx="2" />
