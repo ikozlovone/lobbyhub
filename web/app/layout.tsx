@@ -75,6 +75,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     every page rather than only from the home grid. */}
                 <Link
                   href="/add-server"
+                  prefetch={false}
                   className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
                 >
                   <Icon.plus />
@@ -124,17 +125,17 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     </p>
                     <ul className="space-y-1.5">
                       <li>
-                        <Link href="/games" className="transition-colors hover:text-fg">
+                        <Link href="/games" prefetch={false} className="transition-colors hover:text-fg">
                           Games
                         </Link>
                       </li>
                       <li>
-                        <Link href="/search" className="transition-colors hover:text-fg">
+                        <Link href="/search" prefetch={false} className="transition-colors hover:text-fg">
                           Servers
                         </Link>
                       </li>
                       <li>
-                        <Link href="/add-server" className="transition-colors hover:text-fg">
+                        <Link href="/add-server" prefetch={false} className="transition-colors hover:text-fg">
                           Add server
                         </Link>
                       </li>
@@ -147,12 +148,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     </p>
                     <ul className="space-y-1.5">
                       <li>
-                        <Link href="/terms" className="transition-colors hover:text-fg">
+                        <Link href="/terms" prefetch={false} className="transition-colors hover:text-fg">
                           Terms of use
                         </Link>
                       </li>
                       <li>
-                        <Link href="/privacy" className="transition-colors hover:text-fg">
+                        <Link href="/privacy" prefetch={false} className="transition-colors hover:text-fg">
                           Privacy
                         </Link>
                       </li>

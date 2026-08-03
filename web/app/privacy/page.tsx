@@ -178,7 +178,7 @@ export default function PrivacyPage() {
         </p>
         <p>
           The rules for using the site are in the{' '}
-          <Link href="/terms" className="text-brand hover:underline">
+          <Link href="/terms" prefetch={false} className="text-brand hover:underline">
             terms of use
           </Link>
           .

@@ -29,6 +29,7 @@ export async function Sidebar() {
               A neutral tile because it is a destination, not an action. */}
           <Link
             href="/games"
+            prefetch={false}
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded bg-line text-muted">
@@ -42,6 +43,7 @@ export async function Sidebar() {
         <li>
           <Link
             href="/add-server"
+            prefetch={false}
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded bg-brand/15 text-brand">
@@ -58,6 +60,7 @@ export async function Sidebar() {
               signed out ever discovers. */}
           <Link
             href="/favorites"
+            prefetch={false}
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded bg-accent/15 text-accent">
@@ -104,12 +107,14 @@ export async function Sidebar() {
       <div className="space-y-0.5 border-t border-line pt-4">
         <Link
           href="/terms"
+          prefetch={false}
           className="block cursor-pointer px-2 py-1 text-xs text-subtle transition-colors hover:text-muted"
         >
           Terms of use
         </Link>
         <Link
           href="/privacy"
+          prefetch={false}
           className="block cursor-pointer px-2 py-1 text-xs text-subtle transition-colors hover:text-muted"
         >
           Privacy

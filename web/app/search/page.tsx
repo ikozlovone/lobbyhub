@@ -131,6 +131,7 @@ async function Results({ searchParams }: { searchParams: Search }) {
           </p>
           <Link
             href="/games"
+            prefetch={false}
             className="mt-3 inline-block text-sm font-medium text-brand hover:underline"
           >
             Browse servers by game

@@ -240,11 +240,11 @@ function Terms() {
           following a link in place throws away the code somebody is halfway
           through typing. Both are named at the point the address is asked for —
           a notice somebody has to go hunting for is not one they were given. */}
-      <Link href="/terms" target="_blank" className="underline hover:text-muted">
+      <Link href="/terms" prefetch={false} target="_blank" className="underline hover:text-muted">
         Terms
       </Link>{' '}
       and{' '}
-      <Link href="/privacy" target="_blank" className="underline hover:text-muted">
+      <Link href="/privacy" prefetch={false} target="_blank" className="underline hover:text-muted">
         privacy
       </Link>
       .

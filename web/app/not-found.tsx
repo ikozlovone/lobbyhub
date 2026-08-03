@@ -71,18 +71,21 @@ export default function NotFound() {
       <nav aria-label="Recover" className="mt-6 flex flex-wrap justify-center gap-2">
         <Link
           href="/games"
+          prefetch={false}
           className="cursor-pointer rounded-xl border border-brand/50 bg-brand/10 px-5 py-2.5 text-sm font-medium text-brand transition-colors hover:bg-brand/20"
         >
           Browse servers by game
         </Link>
         <Link
           href="/search"
+          prefetch={false}
           className="cursor-pointer rounded-xl border border-line-strong px-5 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-2"
         >
           All servers
         </Link>
         <Link
           href="/add-server"
+          prefetch={false}
           className="cursor-pointer rounded-xl border border-line-strong px-5 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-2"
         >
           Add your server

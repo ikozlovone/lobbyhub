@@ -27,7 +27,7 @@ export default function TermsPage() {
         <p>
           Using the site means accepting these terms. If you do not accept them, do not use the
           site. What we store about you, and what you can make us delete, is in the{' '}
-          <Link href="/privacy" className="text-brand hover:underline">
+          <Link href="/privacy" prefetch={false} className="text-brand hover:underline">
             privacy notice
           </Link>
           .

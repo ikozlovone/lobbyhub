@@ -31,6 +31,7 @@ export function ServerOwnerCta() {
 
         <Link
           href="/add-server"
+          prefetch={false}
           className="flex shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-brand px-5 py-3 font-medium text-white transition-colors hover:bg-brand-strong"
         >
           <Icon.plus />

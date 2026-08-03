@@ -161,7 +161,7 @@ function ConsentBanner({
           <p className="mt-1 text-muted">
             We need what keeps you signed in — that one has no choice attached. Everything else is
             up to you.{' '}
-            <Link href="/privacy" className="text-brand hover:underline">
+            <Link href="/privacy" prefetch={false} className="text-brand hover:underline">
               What we store and why
             </Link>
             .
