@@ -175,7 +175,8 @@ export function ServerInformation({
           title="Update the information: query the server again and reload the values below"
           className="-mr-1.5 shrink-0 cursor-pointer rounded p-1.5 text-subtle transition-colors hover:bg-surface-2 hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <Icon.refresh className={busy ? 'size-4 shrink-0 animate-spin' : 'size-4 shrink-0'} />
+          {/* Size and shrink come from the icon itself now — see icons.tsx. */}
+          <Icon.refresh className={busy ? 'animate-spin' : undefined} />
         </button>
       </div>
       <dl className="divide-y divide-line">
