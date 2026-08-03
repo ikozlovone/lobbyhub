@@ -92,16 +92,21 @@ sudo chmod g+s web
 sudo setfacl -m d:g:www-data:rwX web
 ```
 
-This one is worth checking after any restore, migration to a new box, or manual
-`chmod` in the checkout, because losing it fails in a way that looks like an
-application bug rather than a permission: `next start` cannot write
-`web/.next/cache`, so every partially prerendered route — game pages, server
-pages, search — hands the browser a postponed shell it can never resume. A
-direct visit to the URL still works, the health checks still say 200, and only a
-*click* fails, with "This page couldn't load". `deploy.sh` checks for it now.
+Worth checking after any restore, move to a new box, or manual `chmod` in the
+checkout — and worth checking *reads*, not only writes, because the way this
+fails does not look like a permission problem at all.
+
+When the service cannot find or read the pages the build prerendered, every
+partially prerendered route — game pages, server pages, search — hands the
+browser a shell with nothing to resume it. A direct visit to the URL still
+works and still answers 200, so health checks pass; only a *click* fails, with
+"This page couldn't load". `deploy.sh` now checks the `x-nextjs-prerender`
+header rather than the status code, which is the difference between the two.
 
 ```sh
-sudo -u www-data test -w /var/www/lobbyhub/web/.next/cache && echo writable
+sudo -u www-data test -w /var/www/lobbyhub/web/.next/cache && echo cache writable
+sudo -u www-data head -c1 /var/www/lobbyhub/web/.next/server/app/games/rust.html >/dev/null \
+    && echo prerender readable
 ```
 
 Then the dependencies, as deploy from here on:

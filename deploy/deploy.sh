@@ -149,31 +149,26 @@ check "api /up" http://127.0.0.1:8080/up || failed=true
 check "api /api/games" http://127.0.0.1:8080/api/games || failed=true
 check "site /" -H 'Host: lobbyhub.gg' http://127.0.0.1/ || failed=true
 
-# A page the frontend renders rather than reads off disk. The home page is
-# fully static and answers 200 from a build artefact even when rendering is
-# broken, so it cannot stand in for this one.
-check "site /games/rust" -H 'Host: lobbyhub.gg' http://127.0.0.1/games/rust || failed=true
-
-# Can the service write its own runtime cache?
+# Is a rendered page actually prerendered?
 #
-# This is the failure that does not announce itself. `next start` runs as
-# www-data; a build recreates .next and takes its permissions with it, which is
-# why the ACL lives on `web` (see README step 1). Lose it and every partially
-# prerendered route — game pages, server pages, search — serves a postponed
-# shell that the browser can never resume, and a click lands on "This page
-# couldn't load" while a direct visit to the same URL works and every check
-# above still says 200.
-cache_dir="$ROOT/web/.next/cache"
-web_user="$(systemctl show -p User --value lobbyhub-web 2>/dev/null || echo www-data)"
-web_user="${web_user:-www-data}"
+# A status code cannot answer this. A game page whose build artefacts the server
+# cannot find still returns 200 with a complete body to curl and to anyone who
+# types the URL — what breaks is the *click*: the router gets a postponed shell
+# with nothing to resume it, and lands on "This page couldn't load". So the
+# check is the header, not the code. `x-nextjs-prerender` is present when the
+# shell was found and absent when it was not.
+prerender="$(curl -s -o /dev/null -D - --max-time 10 -H 'Host: lobbyhub.gg' \
+    http://127.0.0.1/games/rust 2>/dev/null | grep -ci '^x-nextjs-prerender' || true)"
 
-if sudo -u "$web_user" test -w "$cache_dir" 2>/dev/null; then
-    printf '    %-22s %s\n' ".next/cache writable" "yes"
+if [ "${prerender:-0}" -ge 1 ]; then
+    printf '    %-22s %s\n' "game page prerender" "found"
 else
-    printf '    %-22s %s\n' ".next/cache writable" "NO — by $web_user"
-    echo "      Client-side navigation will fail on game and server pages. Fix:"
-    echo "      sudo chmod g+s $ROOT/web && sudo setfacl -m d:g:www-data:rwX $ROOT/web"
-    echo "      sudo setfacl -R -m g:www-data:rwX $ROOT/web/.next"
+    printf '    %-22s %s\n' "game page prerender" "MISSING"
+    echo "      Direct visits work; clicking a game will fail with \"This page couldn't load\"."
+    echo "      The build's prerendered pages are not being found. Check that the build ran"
+    echo "      through, and that the service can read what it wrote:"
+    echo "      ls $ROOT/web/.next/server/app/games/rust.html"
+    echo "      sudo -u www-data head -c1 $ROOT/web/.next/server/app/games/rust.html >/dev/null && echo readable"
     failed=true
 fi
 
