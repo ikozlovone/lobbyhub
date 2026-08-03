@@ -23,11 +23,18 @@ export function GameHero({
 }) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-line bg-surface">
-      {game.cover && (
-        /* Steam key art is 460×215 and is being stretched well past that here.
-           The wash over it is what makes text on top readable, and it hides the
-           upscaling at the same time. */
-        <img src={game.cover} alt="" aria-hidden className="absolute inset-0 size-full object-cover" />
+      {(game.hero ?? game.cover) && (
+        /* The banner if one has been uploaded, otherwise the list card — which
+           is Steam key art at 460×215, stretched well past that here. The wash
+           over it is what makes text on top readable, and it hides the
+           upscaling at the same time. A game with its own banner has nothing to
+           hide, but the wash stays: the text still has to be legible. */
+        <img
+          src={game.hero ?? game.cover ?? ''}
+          alt=""
+          aria-hidden
+          className="absolute inset-0 size-full object-cover"
+        />
       )}
       <div
         aria-hidden

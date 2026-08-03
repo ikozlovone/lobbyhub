@@ -13,6 +13,7 @@ export type FavoriteGame = {
   slug: string
   name: string
   accent_color: string | null
+  icon: string | null
   cover: string | null
   /** Which connect buttons the rows get, exactly as in a game listing. */
   protocol: string

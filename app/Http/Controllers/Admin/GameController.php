@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Game;
 use App\Models\GameMode;
 use App\Models\GameVersion;
+use App\Services\Admin\GameArtwork;
 use App\Services\Catalog\FrontendCache;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
@@ -82,13 +83,15 @@ class GameController extends Controller
             'sort_order' => (int) Game::max('sort_order') + 10,
         ]);
 
-        return view('admin.games.form', ['game' => $game]);
+        return view('admin.games.form', ['game' => $game, 'artwork' => GameArtwork::ROLES]);
     }
 
     public function store(Request $request): RedirectResponse
     {
         $game = new Game;
         $game->fill($this->validated($request, $game))->save();
+
+        $this->applyArtwork($request, $game);
 
         $this->published($game, 'games', "game:{$game->slug}");
 
@@ -108,6 +111,7 @@ class GameController extends Controller
 
         return view('admin.games.form', [
             'game' => $game,
+            'artwork' => GameArtwork::ROLES,
             // Counted rather than read off the game's own counter: that one is
             // refreshed on a schedule, and this decides whether a delete button
             // is offered at all. Trashed servers count — they come back.
@@ -132,6 +136,8 @@ class GameController extends Controller
             $game->fill($this->validated($request, $game))->save();
 
             $this->syncFacets($request, $game);
+
+            $this->applyArtwork($request, $game);
         });
 
         $tags = ['games', "game:{$game->slug}"];
@@ -219,6 +225,19 @@ class GameController extends Controller
             'sort_order' => ['required', 'integer', 'min:0', 'max:65535'],
             'icon_path' => ['nullable', 'string', 'max:255'],
             'cover_path' => ['nullable', 'string', 'max:255'],
+            'hero_path' => ['nullable', 'string', 'max:255'],
+            /*
+             * Uploads, one per role. `image` checks that the file really is one
+             * rather than trusting what the browser called it, and the extension
+             * list is what a browser will display — svg is deliberately absent,
+             * being a document that can carry script.
+             *
+             * 4MB: a 460x215 JPEG is about 40KB, so this is generous enough for
+             * a banner nobody has optimised and small enough that the real limit
+             * stays PHP's, which says so with a 413.
+             */
+            'artwork' => ['array'],
+            'artwork.*' => ['nullable', 'file', 'image', 'mimes:jpg,jpeg,png,webp,gif,avif', 'max:4096'],
             'accent_color' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'description' => ['nullable', 'string'],
             'meta_title' => ['nullable', 'string', 'max:255'],
@@ -240,7 +259,47 @@ class GameController extends Controller
         $validated['is_active'] = $request->boolean('is_active');
         $validated['has_versions'] = $request->boolean('has_versions');
 
+        // Files are not columns. They are handled after the save, by
+        // applyArtwork, which needs the slug the save has just settled.
+        unset($validated['artwork']);
+
         return $validated;
+    }
+
+    /**
+     * The three pictures, after the game has a slug to be named after.
+     *
+     * Runs post-save on purpose: a new game's slug is only certain once it has
+     * been through validation and written, and the filenames are built from it.
+     * Nothing here is fatal — a save that stored the columns and failed to move
+     * a file should still be a save.
+     */
+    private function applyArtwork(Request $request, Game $game): void
+    {
+        $artwork = app(GameArtwork::class);
+        $changed = [];
+
+        foreach (array_keys(GameArtwork::ROLES) as $role) {
+            $file = $request->file("artwork.{$role}");
+
+            if ($file !== null) {
+                $changed[$role] = $artwork->store($game, $role, $file);
+
+                continue;
+            }
+
+            // A checkbox rather than clearing the text field: the path is also
+            // editable by hand, and "empty the box" cannot mean both "no
+            // picture" and "I did not touch this".
+            if ($request->boolean("remove.{$role}")) {
+                $artwork->forget($game, $role);
+                $changed[$role] = null;
+            }
+        }
+
+        if ($changed !== []) {
+            $game->forceFill($changed)->save();
+        }
     }
 
     /**

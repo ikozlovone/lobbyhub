@@ -68,8 +68,12 @@ export type Game = {
   short_name: string | null
   aliases: string[]
   accent_color: string | null
+  /** The thumbnail, drawn at 28px in the rail and beside a favourite. */
   icon: string | null
+  /** The card in the games list. */
   cover: string | null
+  /** The banner across a game page. Falls back to `cover` where unset. */
+  hero: string | null
   has_versions: boolean
   counters: GameCounters
   monitoring: Monitoring

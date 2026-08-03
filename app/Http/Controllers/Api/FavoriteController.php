@@ -36,7 +36,7 @@ class FavoriteController extends Controller
             // because anything renders it — leave it out and every game sorts
             // equal, which reads as "unordered" rather than as a bug.
             ->with([
-                'game:id,slug,name,accent_color,cover_path,query_protocol,sort_order',
+                'game:id,slug,name,accent_color,icon_path,cover_path,query_protocol,sort_order',
                 'country:id,code,name,slug',
                 'version:id,slug,name',
             ])
@@ -54,6 +54,8 @@ class FavoriteController extends Controller
                     'slug' => $group->first()->game->slug,
                     'name' => $group->first()->game->name,
                     'accent_color' => $group->first()->game->accent_color,
+                    // The thumbnail, like the rail: this is drawn at 36px.
+                    'icon' => $group->first()->game->icon_path ? asset($group->first()->game->icon_path) : null,
                     'cover' => $group->first()->game->cover_path ? asset($group->first()->game->cover_path) : null,
                     // The connect buttons differ per protocol, exactly as they do
                     // in a game listing.

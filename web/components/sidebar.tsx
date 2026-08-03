@@ -125,9 +125,13 @@ export async function Sidebar() {
 }
 
 function Thumb({ game }: { game: Awaited<ReturnType<typeof getGames>>[number] }) {
-  return game.cover ? (
+  // The thumbnail if there is one, the list card if not. At 28px a 460×215 card
+  // is mostly a crop of somebody's sky, which is why the thumbnail exists.
+  const thumb = game.icon ?? game.cover
+
+  return thumb ? (
     <img
-      src={game.cover}
+      src={thumb}
       alt=""
       width={28}
       height={28}

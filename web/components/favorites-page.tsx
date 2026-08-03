@@ -132,9 +132,9 @@ export function FavoritesPage({ apiUrl }: { apiUrl: string }) {
       {groups?.map((group) => (
         <section key={group.game.slug} className="space-y-3">
           <div className="flex items-center gap-3">
-            {group.game.cover && (
+            {(group.game.icon ?? group.game.cover) && (
               <img
-                src={group.game.cover}
+                src={group.game.icon ?? group.game.cover ?? ''}
                 alt=""
                 aria-hidden
                 className="size-9 shrink-0 rounded-lg border border-line object-cover"

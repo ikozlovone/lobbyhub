@@ -122,6 +122,22 @@
         details { margin-top: 10px; }
         details summary { cursor: pointer; color: var(--subtle); font-size: 12px; }
         details > .fields { margin-top: 10px; }
+        /* Artwork: one card per picture, preview beside its controls. */
+        .art { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+        .art-card {
+            display: flex; gap: 14px; padding: 14px;
+            border: 1px solid var(--line); background: var(--surface); border-radius: 10px;
+        }
+        .art-preview {
+            display: flex; align-items: center; justify-content: center;
+            flex: 0 0 120px; height: 90px; overflow: hidden;
+            border: 1px solid var(--line); border-radius: 8px; background: var(--bg);
+        }
+        .art-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .art-body { min-width: 0; flex: 1; }
+        .art-body input[type="file"] { width: 100%; padding: 6px; font-size: 12px; }
+        @media (max-width: 560px) { .art-card { flex-direction: column; } .art-preview { flex-basis: auto; } }
+
         .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
         .button {
             display: inline-block; padding: 7px 12px; border-radius: 8px; text-decoration: none;

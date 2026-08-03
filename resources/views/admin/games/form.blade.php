@@ -18,7 +18,7 @@
         {{ $game->exists ? $game->name : 'new game' }}
     </h2>
 
-    <form method="post" action="{{ $game->exists ? route('admin.games.update', $game) : route('admin.games.store') }}">
+    <form method="post" enctype="multipart/form-data" action="{{ $game->exists ? route('admin.games.update', $game) : route('admin.games.store') }}">
         @csrf
         @if($game->exists)
             @method('put')
@@ -119,18 +119,6 @@
                     </div>
                 </div>
                 <label class="field">
-                    <span class="l">Cover path</span>
-                    <input type="text" name="cover_path" value="{{ old('cover_path', $game->cover_path) }}">
-                    <div class="hint">Filled by <code>php artisan games:artwork</code> from the Steam app id.</div>
-                    @error('cover_path')<div class="bad-field">{{ $message }}</div>@enderror
-                </label>
-                <label class="field">
-                    <span class="l">Icon path</span>
-                    <input type="text" name="icon_path" value="{{ old('icon_path', $game->icon_path) }}">
-                    <div class="hint">Relative to <code>public/</code>, like <code>images/games/rust.jpg</code>.</div>
-                    @error('icon_path')<div class="bad-field">{{ $message }}</div>@enderror
-                </label>
-                <label class="field">
                     <span class="l">Sort order</span>
                     <input type="number" name="sort_order" value="{{ old('sort_order', $game->sort_order ?? 0) }}" min="0" max="65535" required>
                     <div class="hint">Low first. The catalog leaves gaps of ten so a game can be slotted in.</div>
@@ -145,6 +133,55 @@
                     @error('description')<div class="bad-field">{{ $message }}</div>@enderror
                 </label>
             </div>
+        </div>
+
+        <h2>Artwork</h2>
+        <p class="subtle" style="margin: -4px 0 10px">
+            Three pictures, three places. Uploading replaces what is there; the path below each one
+            is editable by hand for art that already sits in <code>public/</code>, and
+            <code>php artisan games:artwork</code> still fills the list card from the Steam app id.
+        </p>
+        <div class="art">
+            @foreach($artwork as $role => $meta)
+                @php $current = old($role, $game->{$role}) @endphp
+                <div class="art-card">
+                    <div class="art-preview">
+                        @if($current)
+                            <img src="{{ asset($current) }}" alt="{{ $meta['label'] }} for {{ $game->name }}">
+                        @else
+                            <span class="subtle">nothing yet</span>
+                        @endif
+                    </div>
+
+                    <div class="art-body">
+                        <p style="margin: 0 0 2px"><strong>{{ $meta['label'] }}</strong></p>
+                        <div class="hint" style="margin: 0 0 10px">{{ $meta['hint'] }}</div>
+
+                        <label class="field">
+                            <span class="l">Upload</span>
+                            <input type="file" name="artwork[{{ $role }}]" accept="image/*">
+                            @error('artwork.'.$role)<div class="bad-field">{{ $message }}</div>@enderror
+                        </label>
+
+                        <label class="field" style="margin-top: 8px">
+                            <span class="l">Path</span>
+                            <input type="text" name="{{ $role }}" value="{{ $current }}"
+                                   placeholder="images/games/{{ $game->slug ?: 'slug' }}.jpg">
+                            @error($role)<div class="bad-field">{{ $message }}</div>@enderror
+                        </label>
+
+                        @if($current)
+                            {{-- A checkbox, not an emptied path box: that one is
+                                 also hand-editable, so a blank field cannot mean
+                                 both "remove this" and "I did not touch it". --}}
+                            <div class="check" style="margin-top: 10px">
+                                <input type="checkbox" id="remove-{{ $role }}" name="remove[{{ $role }}]" value="1">
+                                <label for="remove-{{ $role }}">Remove on save</label>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endforeach
         </div>
 
         <h2>Links</h2>

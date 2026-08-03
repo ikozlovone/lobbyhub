@@ -23,8 +23,20 @@ class GameResource extends JsonResource
             'accent_color' => $this->accent_color,
             // Absolute: the frontend runs on its own origin and cannot resolve
             // a path relative to the API.
+            /*
+             * Three pictures, three jobs — see the hero_path migration.
+             *
+             *   icon  — the thumbnail, drawn at 28px in the rail
+             *   cover — the card in the games list
+             *   hero  — the banner across the top of a game page
+             *
+             * `hero` is the only one that may be missing while a game still
+             * looks finished: the frontend falls back to `cover` for it, which
+             * is what every game did before there was a third.
+             */
             'icon' => $this->icon_path ? asset($this->icon_path) : null,
             'cover' => $this->cover_path ? asset($this->cover_path) : null,
+            'hero' => $this->hero_path ? asset($this->hero_path) : null,
             'has_versions' => $this->has_versions,
             // What the submission form needs to tell an owner what we are about
             // to do to their server, and which port to expect us on.
