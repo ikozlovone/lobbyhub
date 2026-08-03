@@ -156,7 +156,13 @@ export type ServerMedia = {
   map_file?: string
 }
 
-export type ServerDetail = Server & {
+/**
+ * `game` is omitted from the base before being redeclared: an intersection
+ * cannot replace a property, it combines them, so `Server & { game: Game }`
+ * quietly means "a Game that also has ServerGame's protocol field" — a shape
+ * the API never sends. Omit makes the detail's own `game` the only one.
+ */
+export type ServerDetail = Omit<Server, 'game'> & {
   description: string | null
   host: string
   port: number

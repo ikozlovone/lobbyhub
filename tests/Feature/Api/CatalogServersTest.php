@@ -48,6 +48,25 @@ class CatalogServersTest extends TestCase
         $this->assertSame(['slug' => 'rust', 'name' => 'Rust', 'protocol' => 'source'], $game);
     }
 
+    /**
+     * The listing's trimmed `game` must not reach the detail payload.
+     *
+     * It did: ServerDetailResource composed itself with `+`, which keeps the
+     * left value, so the three-field version won and the full GameResource was
+     * dropped. The page reads game.monitoring.protocol and threw in the browser
+     * while the API answered 200.
+     */
+    public function test_the_detail_payload_keeps_the_whole_game_not_the_listing_summary(): void
+    {
+        $server = $this->server('rust');
+
+        $game = $this->getJson("/api/servers/{$server->slug}")->assertOk()->json('data.game');
+
+        $this->assertSame('source', $game['monitoring']['protocol']);
+        $this->assertArrayHasKey('counters', $game);
+        $this->assertArrayHasKey('default_port', $game['monitoring']);
+    }
+
     public function test_the_per_game_listing_still_omits_the_game(): void
     {
         $this->server('rust');
