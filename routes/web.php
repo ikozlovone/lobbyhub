@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\GameController;
 use App\Http\Controllers\Admin\MonitoringController;
+use App\Http\Controllers\Admin\ServerImportController;
 use App\Http\Controllers\Admin\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('games/{game}', [GameController::class, 'edit'])->name('games.edit');
     Route::put('games/{game}', [GameController::class, 'update'])->name('games.update');
     Route::delete('games/{game}', [GameController::class, 'destroy'])->name('games.destroy');
+
+    // Unthrottled and unbounded by design — see ServerImportController. It is
+    // the strongest reason yet to put a login or an nginx allow/deny in front
+    // of this prefix.
+    Route::get('servers/import', [ServerImportController::class, 'create'])->name('servers.import');
+    Route::post('servers/import', [ServerImportController::class, 'store'])->name('servers.import.store');
 
     Route::get('users', [UserController::class, 'index'])->name('users');
     Route::get('users/{user}', [UserController::class, 'show'])->name('users.show');

@@ -117,6 +117,11 @@ class QueryServer implements ShouldQueue
     {
         $now = now();
 
+        // Asked before anything is filled in: the result can carry a game_port,
+        // and address() reads it, so a moment later this comparison would be
+        // against a different string than the one the row was named with.
+        $unnamed = $this->isStillNamedAfterItsAddress();
+
         $attributes = [
             'status' => ServerStatus::Online,
             'players_online' => $result->playersOnline,
@@ -152,9 +157,56 @@ class QueryServer implements ShouldQueue
         // Fill first, then pick the tier: it reads the player count we just got.
         $this->server->forceFill($attributes);
         $this->server->next_query_at = $now->copy()->addSeconds($schedule->intervalFor($this->server));
+        $this->adoptReportedName($result, $unnamed);
         $this->server->save();
 
         $this->recordSample($now, true, $result);
+    }
+
+    /**
+     * Give a server its real name the first time it answers.
+     *
+     * A bulk import has nothing to call a row but the address that was pasted,
+     * so it writes that as the name — and without this the server would keep
+     * being called `45.152.161.10:28015` in every listing long after it told us
+     * it was called something else.
+     *
+     * Guarded by "the name is still exactly the address", which is true only of
+     * a row nobody has named. That matters twice over: an owner who edited the
+     * name in the admin keeps it, and the submission form — which names the
+     * server from the same MOTD before dispatching this job synchronously — is
+     * not re-slugged into a duplicate of the slug it just minted.
+     *
+     * Renaming rewrites the slug, which is a public URL, and doing that would
+     * normally be unacceptable. It is safe here precisely because it has never
+     * been public: until this query lands the row is `unknown`, and every
+     * listing filters those out (Server::scopeVerified).
+     */
+    private function adoptReportedName(QueryResult $result, bool $unnamed): void
+    {
+        $reported = trim((string) ($result->motd ?? ''));
+
+        if (! $unnamed || $reported === '') {
+            return;
+        }
+
+        $this->server->name = mb_substr($reported, 0, 255);
+        $this->server->slug = Server::slugFor($this->server->name, $this->server->host, $this->server->port);
+    }
+
+    /**
+     * Both spellings, because an IPv6 host is bracketed by the parser that
+     * named the row and bare in address().
+     */
+    private function isStillNamedAfterItsAddress(): bool
+    {
+        $host = $this->server->host;
+        $bracketed = str_contains($host, ':') ? "[{$host}]" : $host;
+
+        return in_array($this->server->name, [
+            $this->server->address(),
+            $bracketed.':'.$this->server->port,
+        ], strict: true);
     }
 
     private function recordOffline(PollingSchedule $schedule): void

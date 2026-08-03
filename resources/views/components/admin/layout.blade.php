@@ -135,6 +135,7 @@
         <nav>
             <a href="{{ route('admin.monitoring') }}" @if($active === 'monitoring') aria-current="page" @endif>Monitoring</a>
             <a href="{{ route('admin.games') }}" @if($active === 'games') aria-current="page" @endif>Games</a>
+            <a href="{{ route('admin.servers.import') }}" @if($active === 'servers') aria-current="page" @endif>Import</a>
             <a href="{{ route('admin.users') }}" @if($active === 'users') aria-current="page" @endif>Users</a>
         </nav>
     </header>

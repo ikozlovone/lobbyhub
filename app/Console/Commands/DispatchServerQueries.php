@@ -100,10 +100,30 @@ class DispatchServerQueries extends Command
             ->update(['next_query_at' => now()->addSeconds((int) config('monitoring.interval'))]);
     }
 
-    /** @return Collection<int, Server> */
+    /**
+     * Never-queried servers first, then the staleness order.
+     *
+     * A row we have never reached is not in the catalog yet: it is invisible to
+     * every public listing until our own query confirms it exists (see
+     * Server::scopeVerified). So it is worth more than another reading of a
+     * server that already has three hundred — one of these turns into a
+     * listing, the other into a data point. That is what makes an admin import
+     * appear within a cycle or two instead of behind whatever backlog exists.
+     *
+     * It is a real priority, so it can really starve: a paste of fifty thousand
+     * addresses is a hundred minutes at the default batch size during which
+     * nothing else is polled. Bounded only by how much anyone pastes, which is
+     * why the screen that does the pasting is behind /admin.
+     *
+     * @return Collection<int, Server>
+     */
     private function dueServers(int $limit): Collection
     {
-        return $this->due()->orderBy('next_query_at')->limit($limit)->get();
+        return $this->due()
+            ->orderByRaw('last_queried_at is not null')
+            ->orderBy('next_query_at')
+            ->limit($limit)
+            ->get();
     }
 
     private function due(): Builder
