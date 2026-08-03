@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
   // with live player counts on top.
   cacheComponents: true,
 
+
   experimental: {
     // How long the browser may reuse a prefetched segment before asking again.
     //

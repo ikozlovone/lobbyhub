@@ -1,4 +1,5 @@
 import { cacheLife, cacheTag } from 'next/cache'
+import { CATALOG_CACHE } from './cache'
 import {
   SERVER_API_URL,
   fetchCatalogServers,
@@ -27,7 +28,7 @@ import { fetchProviders } from './auth'
 
 export async function getGames() {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag('games')
 
   return fetchGames()
@@ -51,7 +52,7 @@ export async function getAuthProviders() {
   // change it is because somebody just put a client id in the environment and is
   // reloading the page to see whether it worked. An hour of "no, still nothing"
   // costs more than a request every few minutes ever will.
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
 
   return fetchProviders(SERVER_API_URL)
 }
@@ -62,7 +63,7 @@ export async function getGame(slug: string) {
   // move whenever the monitor confirms a server or an import lands. Tag
   // invalidation only fires when somebody submits one, so an hour here is an
   // hour of a listing that has moved on without its own filters.
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag('games', `game:${slug}`)
 
   return fetchGame(slug)
@@ -80,7 +81,7 @@ export async function getServers(game: string, filters: ServerFilters = {}) {
    * window, and the tag is here for it. Nothing calls it yet; see open questions
    * in Мониторинг.md.
    */
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag(`game:${game}`, 'servers')
 
   return fetchServers(game, filters).catch(() => null)
@@ -95,7 +96,7 @@ export async function getServers(game: string, filters: ServerFilters = {}) {
  */
 export async function getLatestServers(game: string, limit = 10) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag(`game:${game}`, 'servers')
 
   return fetchServers(game, { sort: 'newest', per_page: limit }).catch(() => null)
@@ -108,7 +109,7 @@ export async function getLatestServers(game: string, limit = 10) {
  */
 export async function getRecentVotes(game: string) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag(`game:${game}`, 'votes')
 
   return fetchRecentVotes(game).catch(() => [])
@@ -134,7 +135,7 @@ async function catalogSection(filters: CatalogFilters) {
 
 export async function getPopularServers(limit = 8) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag('servers')
 
   return catalogSection({ sort: 'players', per_page: limit })
@@ -151,7 +152,7 @@ export async function getPopularServers(limit = 8) {
  */
 export async function getTrendingServers(limit = 8) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag('servers')
 
   return catalogSection({ sort: 'rank', per_page: limit })
@@ -159,7 +160,7 @@ export async function getTrendingServers(limit = 8) {
 
 export async function getRecentlyAddedServers(limit = 8) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag('servers')
 
   return catalogSection({ sort: 'newest', per_page: limit })
@@ -173,7 +174,7 @@ export async function getRecentlyAddedServers(limit = 8) {
  */
 export async function getRecentlyWipedServers(limit = 8) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag('servers')
 
   return catalogSection({ sort: 'wiped', wiped: 14, per_page: limit })
@@ -209,7 +210,7 @@ export async function getServer(slug: string) {
    * poll — the tag below exists for exactly that and nothing calls it yet. Until
    * then the window is the guarantee, so it has to be a short one.
    */
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag(`server:${slug}`)
 
   return fetchServer(slug)
@@ -217,7 +218,7 @@ export async function getServer(slug: string) {
 
 export async function getHistory(slug: string, range: string) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
   cacheTag(`server:${slug}`)
 
   return fetchHistory(slug, range)

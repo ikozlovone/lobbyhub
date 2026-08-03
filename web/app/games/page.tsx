@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { cacheLife } from 'next/cache'
+import { CATALOG_CACHE } from '@/lib/cache'
 import Link from 'next/link'
 import { GameGrid } from '@/components/game-grid'
 import { LiveStats } from '@/components/live-stats'
@@ -24,7 +25,7 @@ export const metadata: Metadata = {
  */
 export default async function GamesPage() {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
 
   const games = await getGames()
 

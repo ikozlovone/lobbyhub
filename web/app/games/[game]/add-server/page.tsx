@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
+import { CATALOG_CACHE } from '@/lib/cache'
 import { AddServerForm } from '@/components/add-server-form'
 import { Icon } from '@/components/icons'
 import { RelativeTime } from '@/components/relative-time'
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function AddGameServerPage({ params }: Props) {
   'use cache'
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
 
   const { game: slug } = await params
   // The "latest added" rail on this page is the first place a submission shows

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
+import { CATALOG_CACHE } from '@/lib/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame } from '@/lib/data'
 import { canonical, notFoundMetadata, robotsFor } from '@/lib/seo'
@@ -44,7 +45,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function VersionPage({ params }: Props) {
   'use cache'
   // Minutes, like the game page: a newly added server has to appear here too.
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
 
   const { game: gameSlug, version: versionSlug } = await params
   cacheTag('games', `game:${gameSlug}`)

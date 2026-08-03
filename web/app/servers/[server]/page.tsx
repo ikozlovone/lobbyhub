@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
+import { CATALOG_CACHE } from '@/lib/cache'
 import { FavoriteButton } from '@/components/favorite-button'
 import { Icon } from '@/components/icons'
 import { LiveProvider } from '@/components/live-provider'
@@ -40,7 +41,7 @@ export default async function ServerPage({ params }: Props) {
   'use cache'
   // The rendered page is its own cache entry: leaving this at `hours` would
   // hold the old markup however fresh `getServer` underneath it became.
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
 
   const { server: slug } = await params
   cacheTag(`server:${slug}`)

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { cacheLife, cacheTag } from 'next/cache'
+import { CATALOG_CACHE } from '@/lib/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame, getGames } from '@/lib/data'
 import { canonical, GAME_INDEX_THRESHOLD, notFoundMetadata, robotsFor } from '@/lib/seo'
@@ -37,7 +38,7 @@ export default async function GamePage({ params }: Props) {
    * rendered page is its own cache entry, so this window is the one that
    * decides, not the shorter one on getServers underneath it.
    */
-  cacheLife('minutes')
+  cacheLife(CATALOG_CACHE)
 
   const { game: slug } = await params
   // Tagged on the page itself, not only inside getGame: this rendered markup is
