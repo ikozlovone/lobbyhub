@@ -92,6 +92,18 @@ sudo chmod g+s web
 sudo setfacl -m d:g:www-data:rwX web
 ```
 
+This one is worth checking after any restore, migration to a new box, or manual
+`chmod` in the checkout, because losing it fails in a way that looks like an
+application bug rather than a permission: `next start` cannot write
+`web/.next/cache`, so every partially prerendered route — game pages, server
+pages, search — hands the browser a postponed shell it can never resume. A
+direct visit to the URL still works, the health checks still say 200, and only a
+*click* fails, with "This page couldn't load". `deploy.sh` checks for it now.
+
+```sh
+sudo -u www-data test -w /var/www/lobbyhub/web/.next/cache && echo writable
+```
+
 Then the dependencies, as deploy from here on:
 
 ```sh

@@ -149,6 +149,34 @@ check "api /up" http://127.0.0.1:8080/up || failed=true
 check "api /api/games" http://127.0.0.1:8080/api/games || failed=true
 check "site /" -H 'Host: lobbyhub.gg' http://127.0.0.1/ || failed=true
 
+# A page the frontend renders rather than reads off disk. The home page is
+# fully static and answers 200 from a build artefact even when rendering is
+# broken, so it cannot stand in for this one.
+check "site /games/rust" -H 'Host: lobbyhub.gg' http://127.0.0.1/games/rust || failed=true
+
+# Can the service write its own runtime cache?
+#
+# This is the failure that does not announce itself. `next start` runs as
+# www-data; a build recreates .next and takes its permissions with it, which is
+# why the ACL lives on `web` (see README step 1). Lose it and every partially
+# prerendered route — game pages, server pages, search — serves a postponed
+# shell that the browser can never resume, and a click lands on "This page
+# couldn't load" while a direct visit to the same URL works and every check
+# above still says 200.
+cache_dir="$ROOT/web/.next/cache"
+web_user="$(systemctl show -p User --value lobbyhub-web 2>/dev/null || echo www-data)"
+web_user="${web_user:-www-data}"
+
+if sudo -u "$web_user" test -w "$cache_dir" 2>/dev/null; then
+    printf '    %-22s %s\n' ".next/cache writable" "yes"
+else
+    printf '    %-22s %s\n' ".next/cache writable" "NO — by $web_user"
+    echo "      Client-side navigation will fail on game and server pages. Fix:"
+    echo "      sudo chmod g+s $ROOT/web && sudo setfacl -m d:g:www-data:rwX $ROOT/web"
+    echo "      sudo setfacl -R -m g:www-data:rwX $ROOT/web/.next"
+    failed=true
+fi
+
 for unit in lobbyhub-web lobbyhub-scheduler; do
     state="$(systemctl is-active "$unit" 2>/dev/null || true)"
     printf '    %-22s %s\n' "$unit" "$state"
