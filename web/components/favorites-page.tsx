@@ -28,6 +28,14 @@ export function FavoritesPage({ apiUrl }: { apiUrl: string }) {
   const { status, user, adopt, providers } = useAuth()
   const [groups, setGroups] = useState<FavoriteGroup[] | null>(null)
   const [failed, setFailed] = useState(false)
+  /**
+   * Only the button's own read, not the first one.
+   *
+   * The first read already says so — the header reads "Reading your list…"
+   * while there is nothing to show. This is about the press: a control that
+   * takes a second and looks identical throughout is one people press twice.
+   */
+  const [refreshing, setRefreshing] = useState(false)
 
   /**
    * Read the list.
@@ -109,12 +117,20 @@ export function FavoritesPage({ apiUrl }: { apiUrl: string }) {
           </p>
         </div>
 
+        {/* Same shape as the listing's Refresh, down to the disabled styling:
+            three buttons that do the same thing should not each have their own
+            idea of what "working" looks like. Setting state straight from a
+            handler is fine — it is effects that must not. */}
         <button
           type="button"
-          onClick={() => void load()}
-          className="flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-muted transition-colors hover:text-fg"
+          disabled={refreshing}
+          onClick={() => {
+            setRefreshing(true)
+            void load().finally(() => setRefreshing(false))
+          }}
+          className="flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-muted transition-colors hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <Icon.refresh />
+          <Icon.refresh className={refreshing ? 'animate-spin' : undefined} />
           Refresh
         </button>
       </header>
