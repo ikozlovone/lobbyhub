@@ -134,7 +134,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     LobbyHub helps players discover multiplayer game servers and gaming communities.
                   </p>
                   <p>
-                    Player counts refresh every few minutes. Uptime is measured from our own checks.
+                    Player counts refresh every few minutes. Uptime is measured, not reported by
+                    owners.
                   </p>
                 </div>
 

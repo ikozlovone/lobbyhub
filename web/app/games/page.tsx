@@ -9,7 +9,7 @@ import { canonical } from '@/lib/seo'
 export const metadata: Metadata = {
   title: 'All games',
   description:
-    'Every game with servers on LobbyHub — Rust, Minecraft, Counter-Strike 2, DayZ and more. Server counts and players online, measured by our own checks.',
+    'Every game with servers on LobbyHub — Rust, Minecraft, Counter-Strike 2, DayZ and more. Server counts and players online, measured rather than reported by owners.',
   ...canonical('/games'),
 }
 
@@ -42,8 +42,8 @@ export default function GamesPage() {
             Browse servers by <span className="text-brand">game</span>
           </h1>
           <p className="mt-3 max-w-xl text-muted">
-            We query every server ourselves, every few minutes. Player counts, uptime and history
-            come from our own checks — not from what an owner typed into a form.
+            Every number here is measured, every few minutes, from the servers themselves — never
+            from what an owner typed into a form.
           </p>
         </div>
 

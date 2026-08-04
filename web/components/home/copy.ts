@@ -83,7 +83,7 @@ export const HOME_COPY = {
     paragraphs: [
       'LobbyHub helps players discover multiplayer game servers for popular titles such as Rust, Minecraft, Counter-Strike 2, DayZ and ARK. Browse available servers, compare player activity, locations and server features, and choose a community that matches your preferred playstyle.',
       'Whether you are looking for a competitive PvP server, a relaxed PvE community, a modded experience or a classic vanilla server, LobbyHub makes it easier to explore available options. Server owners can also add their communities and provide players with accurate server information.',
-      'Every number on this site comes from our own checks. We query each listed server directly, every few minutes, and publish what it answers — player counts, availability, map and version. Nothing here is typed in by an owner hoping to look busier than they are, which is what makes comparing two servers worth doing at all. Uptime is the share of those checks a server answered, so a listing that claims to be online and is not will show it within minutes rather than never.',
+      'Every number on this site is measured. We read what each listed server reports about itself, every few minutes, and publish that — player counts, availability, map and version. Nothing here is typed in by an owner hoping to look busier than they are, which is what makes comparing two servers worth doing at all. Uptime is the share of those readings a server was up for, so a listing that claims to be online and is not will show it within minutes rather than never.',
     ],
   },
 } as const

@@ -20,9 +20,10 @@ export default function TermsPage() {
     <LegalPage title="Terms of use" updated={TERMS_UPDATED}>
       <Section title="What LobbyHub is">
         <p>
-          LobbyHub is a directory and monitor for game servers. We query public servers ourselves
-          every few minutes and publish what we get back: player counts, uptime, version, map and
-          location. We do not run, host, moderate or sell any of the servers listed here.
+          LobbyHub is a directory and monitor for game servers. We collect what public servers
+          report about themselves every few minutes — by querying them directly, or by reading the
+          platform listings they publish to — and publish that: player counts, uptime, version, map
+          and location. We do not run, host, moderate or sell any of the servers listed here.
         </p>
         <p>
           Using the site means accepting these terms. If you do not accept them, do not use the
@@ -53,9 +54,9 @@ export default function TermsPage() {
           the operator’s permission to list it, and that its address is meant to be public.
         </p>
         <p>
-          We verify a submission by querying the address. What we publish about a server comes from
-          those queries, not from the form — you cannot type in a player count. The descriptive
-          details you do provide are yours to keep accurate.
+          We verify a submission by querying the address ourselves. What we publish about a server
+          is measured from then on, not taken from the form — you cannot type in a player count. The
+          descriptive details you do provide are yours to keep accurate.
         </p>
         <p>Do not submit a server that:</p>
         <ul className="list-disc space-y-1.5 pl-5">
@@ -101,10 +102,11 @@ export default function TermsPage() {
 
       <Section title="What our numbers promise">
         <p>
-          Nothing. They are measurements from our own checks, taken at intervals, over a network
-          that fails sometimes. A server can be full a second after we saw it empty, and a server we
-          could not reach may have been fine for everyone else. Uptime is the share of our checks
-          that succeeded — our view of a server, not a fact about it.
+          Nothing. They are readings taken at intervals, over a network that fails sometimes, and
+          some of them reach us through a platform&rsquo;s listing rather than from the server
+          directly — which can lag it by minutes. A server can be full a second after we saw it
+          empty, and a server we could not reach may have been fine for everyone else. Uptime is the
+          share of those readings a server was up for — our view of it, not a fact about it.
         </p>
         <p>
           The site is free and provided as is. We do not guarantee that it is available, complete or
