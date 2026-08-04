@@ -96,6 +96,7 @@ class SteamCatalogSync
             sampled: $this->counts['sampled'],
             requests: $result->requests,
             truncated: $result->truncated,
+            unreachable: $result->unreachable,
         );
     }
 

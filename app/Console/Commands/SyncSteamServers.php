@@ -57,7 +57,7 @@ class SyncSteamServers extends Command
             return self::SUCCESS;
         }
 
-        $totals = ['found' => 0, 'created' => 0, 'updated' => 0, 'requests' => 0, 'truncated' => 0];
+        $totals = ['found' => 0, 'created' => 0, 'updated' => 0, 'requests' => 0, 'truncated' => 0, 'unreachable' => 0];
 
         foreach ($games as $game) {
             if ($game->steam_appid === null) {
@@ -74,7 +74,7 @@ class SyncSteamServers extends Command
                 continue;
             }
 
-            foreach (['found', 'created', 'updated', 'requests', 'truncated'] as $key) {
+            foreach (['found', 'created', 'updated', 'requests', 'truncated', 'unreachable'] as $key) {
                 $totals[$key] += $report->{$key};
             }
 
@@ -96,6 +96,12 @@ class SyncSteamServers extends Command
              */
             if ($report->truncated > 0) {
                 $this->warn("    {$report->truncated} bucket(s) still full after every filter — some servers were not reached");
+            }
+
+            // A different gap with a different fix: the first is Steam refusing
+            // to finish, this is the network refusing to carry it.
+            if ($report->unreachable > 0) {
+                $this->warn("    {$report->unreachable} bucket(s) could not be fetched at all — network or Steam was unreachable");
             }
         }
 

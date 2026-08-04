@@ -12,7 +12,9 @@ use App\Services\Discovery\SteamServerSweep;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -35,7 +37,11 @@ class SteamSyncTest extends TestCase
         $this->seed([CountrySeeder::class, GameSeeder::class]);
 
         config([
+            // Both, and the plural one matters: there is no .env.testing, so a
+            // suite run on a developer's machine reads their real STEAM_API_KEY
+            // and every one of these tests was quietly exercising it.
             'services.steam.key' => 'test-key',
+            'services.steam.keys' => ['test-key'],
             // Three rows is a full response here, so the recursion can be proved
             // without building nine thousand of them per test.
             'monitoring.steam_saturated_at' => 3,
@@ -285,6 +291,64 @@ class SteamSyncTest extends TestCase
         $this->assertSame(1, $report->updated);
         $this->assertSame(9, $server->refresh()->players_online);
         $this->assertSame(1, Server::count());
+    }
+
+    /**
+     * The key is a query parameter, and a transport failure quotes the URL it
+     * was trying — so this message went into the console, into laravel.log and
+     * into failed_jobs, in full, every time DNS was slow.
+     */
+    public function test_a_transport_failure_does_not_quote_the_api_key(): void
+    {
+        Http::fake(fn () => throw new ConnectionException(
+            'cURL error 28: Resolving timed out for https://api.steampowered.com/…?key=test-key&filter=x'
+        ));
+
+        try {
+            $this->sync();
+            $this->fail('The sweep should have failed.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringNotContainsString('test-key', $exception->getMessage());
+            // The reason survives: a resolve timeout and a 403 need different fixes.
+            $this->assertStringContainsString('cURL error 28', $exception->getMessage());
+        }
+    }
+
+    /**
+     * A blip four levels into Counter-Strike used to abort the whole game and
+     * lose every bucket still unvisited.
+     */
+    public function test_one_unreachable_bucket_does_not_lose_the_rest(): void
+    {
+        Http::fake(function ($request) {
+            $filter = urldecode((string) ($request->data()['filter'] ?? ''));
+
+            if ($filter === '\appid\730\region\1') {
+                throw new ConnectionException('cURL error 28: Resolving timed out');
+            }
+
+            return Http::response(['response' => [
+                'servers' => $filter === '\appid\730'
+                    ? $this->fullResponse()
+                    : ($filter === '\appid\730\region\2' ? [$this->row('4.4.4.4', 27015)] : []),
+            ]]);
+        });
+
+        $report = $this->sync();
+
+        $this->assertSame(1, $report->unreachable);
+        // The regions after the one that failed were still asked.
+        $this->assertTrue(Server::where('host', '4.4.4.4')->exists());
+    }
+
+    /** If the very first question cannot be asked there is nothing to salvage. */
+    public function test_a_failure_on_the_first_request_still_fails_the_game(): void
+    {
+        Http::fake(fn () => throw new ConnectionException('cURL error 6: Could not resolve host'));
+
+        $this->expectException(RuntimeException::class);
+
+        $this->sync();
     }
 
     /** As many rows as it takes for a response to read as truncated. */

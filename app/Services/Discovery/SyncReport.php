@@ -13,5 +13,7 @@ final readonly class SyncReport
         public int $requests,
         /** Buckets Steam would not finish handing over. Anything above zero is a gap. */
         public int $truncated,
+        /** Buckets a network failure kept us from reading. Also a gap, different cause. */
+        public int $unreachable = 0,
     ) {}
 }

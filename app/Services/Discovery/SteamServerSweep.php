@@ -131,6 +131,7 @@ class SteamServerSweep
         $seen = [];
         $requests = 0;
         $truncated = 0;
+        $unreachable = 0;
 
         $this->collect(
             $keys,
@@ -146,9 +147,10 @@ class SteamServerSweep
             $onServer,
             $requests,
             $truncated,
+            $unreachable,
         );
 
-        return new SweepResult(count($seen), $requests, $truncated);
+        return new SweepResult(count($seen), $requests, $truncated, $unreachable);
     }
 
     /**
@@ -201,10 +203,36 @@ class SteamServerSweep
         callable $onServer,
         int &$requests,
         int &$truncated,
+        int &$unreachable,
     ): void {
-        // Round-robin, so a game costing sixty-eight requests spreads them
-        // rather than spending one key's whole allowance on itself.
-        $rows = $this->request($keys[$requests % count($keys)], $filter);
+        /*
+         * One bucket failing is not the game failing.
+         *
+         * A DNS resolve that timed out four levels into Counter-Strike aborted
+         * the whole sweep and lost every bucket still unvisited — a transient
+         * network blip costing a hundred thousand servers their reading. A
+         * deeper bucket is counted and skipped instead, and the rest of the
+         * tree carries on.
+         *
+         * The first request is different. If the top of the tree cannot be
+         * fetched there is nothing to salvage, and no reason to make a hundred
+         * further attempts to prove it, so that one is left to throw.
+         */
+        try {
+            // Round-robin, so a game costing sixty-eight requests spreads them
+            // rather than spending one key's whole allowance on itself.
+            $rows = $this->request($keys[$requests % count($keys)], $filter, $keys);
+        } catch (RuntimeException $exception) {
+            if ($requests === 0) {
+                throw $exception;
+            }
+
+            $unreachable++;
+            $requests++;
+
+            return;
+        }
+
         $requests++;
         $returned = count($rows);
 
@@ -255,23 +283,34 @@ class SteamServerSweep
         $axis = array_shift($next);
 
         foreach ($axis as $fragment) {
-            $this->collect($keys, $filter.$fragment, $next, $seen, $onServer, $requests, $truncated);
+            $this->collect($keys, $filter.$fragment, $next, $seen, $onServer, $requests, $truncated, $unreachable);
         }
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    private function request(string $key, string $filter): array
+    private function request(string $key, string $filter, array $keys): array
     {
         try {
-            $response = Http::timeout(90)->retry(2, 500, throw: false)->get(self::ENDPOINT, [
+            $response = Http::timeout(90)->retry(3, 1000, throw: false)->get(self::ENDPOINT, [
                 'key' => $key,
                 'filter' => $filter,
                 'limit' => self::CEILING,
             ]);
         } catch (ConnectionException $exception) {
-            throw new RuntimeException("Steam API unreachable: {$exception->getMessage()}");
+            /*
+             * Redacted, and this is not caution for its own sake.
+             *
+             * A cURL failure names the URL it was trying, and the key is a query
+             * parameter on it — so this message went into the console, into
+             * laravel.log and into failed_jobs, in full, every time DNS was slow.
+             * The reason is worth keeping (a resolve timeout and an HTTP 403 need
+             * different fixes); the credential is not.
+             */
+            throw new RuntimeException(
+                'Steam API unreachable for filter '.$filter.': '.$this->redact($exception->getMessage(), $keys),
+            );
         }
 
         if ($response->failed()) {
@@ -279,5 +318,26 @@ class SteamServerSweep
         }
 
         return $response->json('response.servers') ?? [];
+    }
+
+    /**
+     * Every key this process knows, blanked out of a string.
+     *
+     * Blunt on purpose: it does not try to understand where in the text a key
+     * might appear, only that none of them leaves in one. A transport error can
+     * quote the URL, the headers, or a redirect target, and guessing which is
+     * how a redaction misses.
+     *
+     * @param  list<string>  $keys
+     */
+    private function redact(string $message, array $keys): string
+    {
+        foreach ($keys as $key) {
+            if ($key !== '') {
+                $message = str_replace($key, '[key]', $message);
+            }
+        }
+
+        return $message;
     }
 }

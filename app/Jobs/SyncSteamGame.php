@@ -82,10 +82,11 @@ class SyncSteamGame implements ShouldBeUnique, ShouldQueue
          * missing them. That is worth a line in the log even though the command
          * prints it too — the command is watched by a person, once.
          */
-        if ($report->truncated > 0) {
+        if ($report->truncated > 0 || $report->unreachable > 0) {
             Log::warning('Steam sweep truncated', [
                 'game' => $this->game->slug,
-                'buckets' => $report->truncated,
+                'truncated' => $report->truncated,
+                'unreachable' => $report->unreachable,
                 'found' => $report->found,
                 'requests' => $report->requests,
             ]);

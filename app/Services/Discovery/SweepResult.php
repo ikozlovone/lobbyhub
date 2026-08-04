@@ -21,5 +21,7 @@ final readonly class SweepResult
         public int $found,
         public int $requests,
         public int $truncated,
+        /** Buckets a network failure kept us from reading at all. */
+        public int $unreachable = 0,
     ) {}
 }
