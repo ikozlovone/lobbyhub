@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { History, HistoryPoint } from '@/lib/api'
+import { useLiveReading } from './live-provider'
 
 /**
  * Players over time — one series, so no legend box: the heading names it.
@@ -60,11 +61,44 @@ export function PlayersChart({
 
   const source = history?.source
   const points = useMemo(() => history?.points ?? [], [history])
-  const rows = useMemo<Row[]>(
-    () => points.map((point) => ({ ...point, t: Date.parse(point.at) })),
-    [points],
-  )
-  const peak = useMemo(() => Math.max(...points.map((point) => point.players), 0), [points])
+  const live = useLiveReading(slug)
+
+  /*
+   * The series, plus whatever has been measured since it was fetched.
+   *
+   * The history is loaded once with the page and again only when the range
+   * changes, so pressing Refresh used to update every number on the page except
+   * this one: the panel showed the new count, the chart carried on ending where
+   * it had. The reading is already in the page — the refresh publishes it, and
+   * so does the poller — so the point is appended rather than re-fetched.
+   *
+   * Only onto a raw series. The longer ranges are daily aggregates, and a single
+   * reading is not one of those; putting it on the same axis would draw a value
+   * that means something different from every point beside it.
+   */
+  const rows = useMemo<Row[]>(() => {
+    const base = points.map((point) => ({ ...point, t: Date.parse(point.at) }))
+
+    if (source !== 'raw' || !live?.checked_at) return base
+
+    const at = Date.parse(live.checked_at)
+    const last = base[base.length - 1]
+
+    // Not newer means it is already drawn: the poller republishes the same
+    // reading until the server is checked again.
+    if (!Number.isFinite(at) || (last !== undefined && at <= last.t)) return base
+
+    return [...base, {
+      at: live.checked_at,
+      players: live.players,
+      // Carried so a refresh that finds the server down draws the band rather
+      // than a drop to zero that reads as an empty server.
+      online: live.status === 'online',
+      t: at,
+    }]
+  }, [points, source, live])
+
+  const peak = useMemo(() => Math.max(...rows.map((row) => row.players), 0), [rows])
   const ticks = useMemo(() => yTicks(peak), [peak])
   const stamps = useMemo(() => xTicks(rows, source), [rows, source])
   const downtime = useMemo(() => downtimeBands(rows), [rows])

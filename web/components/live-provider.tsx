@@ -84,3 +84,16 @@ export function LiveProvider({ slugs, children }: { slugs: string[]; children: R
 export function useLive(slug: string, fallback: Live): Live {
   return useContext(LiveContext)[slug] ?? fallback
 }
+
+/**
+ * The reading itself, or nothing at all.
+ *
+ * `useLive` exists to hand a component something to draw, so it substitutes the
+ * value that came with the page. That is wrong for a caller that needs to know
+ * whether anything has actually arrived since — the chart appends a point for a
+ * new reading, and a fallback would make it append the one it is already
+ * drawing, at a time it was not taken.
+ */
+export function useLiveReading(slug: string): Live | undefined {
+  return useContext(LiveContext)[slug]
+}
