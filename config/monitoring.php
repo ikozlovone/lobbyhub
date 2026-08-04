@@ -50,8 +50,31 @@ return [
      */
     'promoted_interval' => (int) env('MONITORING_PROMOTED_INTERVAL', 300),
 
-    /** Servers dispatched per run of `servers:query`. */
-    'batch_size' => (int) env('MONITORING_BATCH_SIZE', 500),
+    /**
+     * Servers dispatched per run of `servers:query`.
+     *
+     * This is a hard ceiling on the whole monitor, and the arithmetic is worth
+     * doing before changing anything else: the dispatcher runs once a minute, so
+     * the most it can ever ask for is `batch_size * 60` queries an hour. No
+     * number of workers gets past that.
+     *
+     * `monitoring:status` prints the demand as "queries expected". Keep this
+     * above that figure divided by 60, with room to spare — a batch is not
+     * always full, because the per-host cap below holds servers back.
+     *
+     * 500 was sized for a few thousand servers and quietly became the binding
+     * constraint at twenty-odd thousand: 30,000 an hour against 92,000 asked
+     * for, so a third of the catalog on the right cadence and the rest drifting.
+     */
+    'batch_size' => (int) env('MONITORING_BATCH_SIZE', 2000),
+
+    /**
+     * How long one server's queued query blocks another being queued for it.
+     *
+     * The lock is normally released the moment the job finishes, so this only
+     * matters when a worker dies holding one. See QueryServer.
+     */
+    'unique_for' => (int) env('MONITORING_UNIQUE_FOR', 3600),
 
     /**
      * One provider often holds hundreds of servers behind a single IP. Querying

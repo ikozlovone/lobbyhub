@@ -51,7 +51,10 @@ class DispatchServerQueries extends Command
                 : QueryServer::dispatch($server);
         }
 
-        $verb = $this->option('sync') ? 'queried' : 'dispatched';
+        // "offered", not "dispatched", on the queued path: a server that already
+        // has a query waiting is refused by the job's uniqueness lock, and
+        // saying otherwise would make a batch full of repeats look like work.
+        $verb = $this->option('sync') ? 'queried' : 'offered to the queue';
         $this->info("{$supported->count()} server(s) {$verb}.");
 
         if ($skipped->isNotEmpty()) {
@@ -79,6 +82,15 @@ class DispatchServerQueries extends Command
      * The lease is the base interval: a job that never runs — a worker killed
      * mid-batch, a queue flushed by hand — brings its server back after five
      * minutes rather than after the hour its tier might have asked for.
+     *
+     * Which is also the limit of what a lease can do, and the reason QueryServer
+     * is `ShouldBeUnique` as well. Five minutes is only long enough while the
+     * queue drains inside five minutes; past that the server falls due again
+     * with its first job still waiting, and the loop above resumes. The lease
+     * keeps the dispatcher from reconsidering a server it has dealt with; the
+     * lock keeps a second copy from existing when it does. A server refused by
+     * the lock is still leased here, which is correct — a query for it is
+     * already queued, and this run has nothing left to do about it.
      *
      * Written before dispatching, not after. A worker can pick a job up and
      * finish it while this loop is still going, and an update landing after

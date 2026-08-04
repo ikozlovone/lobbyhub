@@ -31,12 +31,31 @@ class MonitoringStatus extends Command
         $this->components->twoColumnDetail('  offline', (string) (clone $active)->where('status', ServerStatus::Offline)->count());
         $this->components->twoColumnDetail('  never queried', (string) $neverQueried);
 
+        /*
+         * What the catalog is actually showing, as opposed to what it is owed.
+         *
+         * "oldest overdue by" is measured against `next_query_at`, and the
+         * dispatcher moves that when it *queues* a server, not when the server
+         * is reached — so a query sitting in the queue for hours reads here as
+         * dealt with. During a backlog the two numbers come apart, and this is
+         * the one that matches what a visitor sees.
+         *
+         * Never-queried servers are excluded rather than counted as infinitely
+         * stale: they are not in any listing yet, and they have their own line
+         * above.
+         */
+        $stalest = (clone $active)->whereNotNull('last_queried_at')->min('last_queried_at');
+
         $this->line('');
         $this->components->twoColumnDetail('<fg=gray>schedule</>', '');
         $this->components->twoColumnDetail('  due now', (string) $due);
         $this->components->twoColumnDetail(
             '  oldest overdue by',
             $oldest ? now()->diffInSeconds($oldest, absolute: true).'s' : '—',
+        );
+        $this->components->twoColumnDetail(
+            '  stalest reading',
+            $stalest ? now()->diffInSeconds(Carbon::parse($stalest), absolute: true).'s' : '—',
         );
         $this->components->twoColumnDetail('  batch size', (string) config('monitoring.batch_size'));
 

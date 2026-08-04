@@ -13,11 +13,32 @@ use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\PollingSchedule;
 use App\Services\Monitoring\QueryResult;
 use App\Services\Monitoring\ServerQueryManager;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;
 
-class QueryServer implements ShouldQueue
+/**
+ * One server, queried and recorded.
+ *
+ * Unique per server while a copy of it is queued, which matters more than it
+ * sounds. The dispatcher leases what it queues — it pushes `next_query_at` five
+ * minutes out so the next run does not pick the same server again — and that
+ * holds only while the queue drains inside five minutes. Once it does not, a
+ * server whose job is still waiting comes back into "due" every five minutes
+ * and is queued again, and again, for as long as its first job sits there. The
+ * queue then fills with copies of a handful of servers while the rest of the
+ * catalog is never reached, which reads as "we need more workers" and is not:
+ * measured on a stalled queue here, 20,882 jobs turned out to be 314 servers,
+ * a median of 67 copies each.
+ *
+ * `dispatchSync` does not take this lock — the gate lives in PendingDispatch,
+ * which only the queued path goes through. That is deliberate and not a
+ * loophole: the submission form and the refresh button run inline because
+ * somebody is waiting on the answer, and neither should be refused because a
+ * scheduled poll of the same server happens to be queued.
+ */
+class QueryServer implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -26,6 +47,13 @@ class QueryServer implements ShouldQueue
      * down) and gets recorded as such. Retrying is the polling cadence's job.
      */
     public int $tries = 1;
+
+    /**
+     * When this job was made, which is when the dispatcher decided the server
+     * was due. Everything the guard below knows, it knows from comparing this
+     * with when the server was actually reached.
+     */
+    public Carbon $queuedAt;
 
     /**
      * @param  QueryResult|null  $measured  An answer already in hand, from a
@@ -46,10 +74,36 @@ class QueryServer implements ShouldQueue
         public bool $forceDetails = false,
     ) {
         $this->onQueue(config('monitoring.queue'));
+
+        $this->queuedAt = now();
+    }
+
+    /** One queued job per server; see the note on the class. */
+    public function uniqueId(): string
+    {
+        return (string) $this->server->getKey();
+    }
+
+    /**
+     * How long the lock outlives a job that never reports back.
+     *
+     * Both ways a job normally ends — done, or failed — release it, so this
+     * only covers a worker killed mid-query: an OOM, a SIGKILL, a machine
+     * rebooted. The cost of getting it wrong is asymmetric in one direction
+     * only, which is why it is not longer: too short and copies return during a
+     * backlog, too long and one dead process silences one server for that long.
+     */
+    public function uniqueFor(): int
+    {
+        return (int) config('monitoring.unique_for', 3600);
     }
 
     public function handle(ServerQueryManager $manager, GeoResolver $geo, PollingSchedule $schedule): void
     {
+        if ($this->wasOvertakenByAnotherQuery()) {
+            return;
+        }
+
         $driver = $manager->for($this->server);
 
         try {
@@ -62,6 +116,43 @@ class QueryServer implements ShouldQueue
 
         $this->recordOnline($result, $geo, $schedule);
         $this->refreshDetails($driver);
+    }
+
+    /**
+     * Has somebody else already reached this server since this job was made?
+     *
+     * The second half of the uniqueness guard on the class, and the cheaper
+     * half. The lock stops copies being *made*; this stops a copy that exists
+     * anyway from spending a worker on a socket somebody else just opened. They
+     * exist for two reasons: the lock has an expiry, and there is no lock at all
+     * over jobs queued before it shipped.
+     *
+     * A copy is not free without this. It is a full query and a stat row,
+     * indistinguishable from real work right up to the point where you notice
+     * the same server in the history sixty times an hour.
+     *
+     * Comparing against when the job was made rather than against an interval:
+     * the question is not "was this recent" but "did this already happen", and
+     * only the first has a boundary to get wrong. A server queried after this
+     * job was queued has, by definition, had the reading this job was sent for.
+     *
+     * Two callers are exempt, both because somebody is waiting on the answer.
+     * `measured` is the submission form, which queried the address itself before
+     * it would agree to store it and is here only to have the reading written
+     * down. `forceDetails` is the refresh button, whose own cooldown already
+     * decides how often it may knock. Neither is queued, so neither can reach
+     * this today — they are named anyway, because a button that silently does
+     * nothing is not a failure anyone would go looking for here.
+     */
+    private function wasOvertakenByAnotherQuery(): bool
+    {
+        if ($this->measured !== null || $this->forceDetails) {
+            return false;
+        }
+
+        $lastQueried = $this->server->last_queried_at;
+
+        return $lastQueried !== null && $lastQueried->greaterThan($this->queuedAt);
     }
 
     /**

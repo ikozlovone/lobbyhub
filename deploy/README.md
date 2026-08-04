@@ -263,6 +263,48 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now lobbyhub-worker@1
 ```
 
+### Emptying the monitoring queue
+
+Occasionally the queue is worth throwing away rather than draining — after a
+backlog built up under an older configuration, say, where everything in it is
+about a state of the world that has moved on. Four steps, and the third is the
+one that is easy to miss.
+
+```sh
+# 1. Stop both sides, so nothing refills the queue mid-flush.
+sudo systemctl stop lobbyhub-scheduler
+sudo systemctl stop 'lobbyhub-worker@*'
+
+# 2. Throw the queue away. --force because the command asks for confirmation
+#    in production and there is no terminal to answer it here.
+sudo -u deploy -H php artisan queue:clear database --queue=monitoring --force
+
+# 3. Free the servers those queries had claimed.
+sudo -u deploy -H php artisan monitoring:unlock
+
+# 4. Start again.
+sudo systemctl start lobbyhub-scheduler
+sudo systemctl start 'lobbyhub-worker@1'
+sudo -u deploy -H php artisan monitoring:status
+```
+
+Step 3 is not optional. A queued query holds a lock on its server so that a
+second one cannot be queued for it, and that lock lives in the cache rather
+than in the queue — so `queue:clear` deletes the jobs and leaves the locks. Skip
+this and every server that had a query waiting is refused a new one until its
+lock expires by itself, which is `MONITORING_UNIQUE_FOR`: an hour of a monitor
+that looks healthy in every reading and is polling nothing. `monitoring:unlock`
+is safe to run when there is nothing stuck — it says so and exits — and refuses
+to run while queries are still queued, because releasing those locks is how you
+get two copies of every query.
+
+Afterwards `pending jobs` should settle near the number of genuinely overdue
+servers and stop climbing on its own. Watch **stalest reading** rather than
+*oldest overdue by*: the second is measured from when a server was queued, which
+the dispatcher moves whether or not anything reached the server, so during a
+backlog it reports work as done that has not happened. The first is measured
+from the last actual answer, which is what the site is showing.
+
 ## 9. nginx, Cloudflare, firewall
 
 All of it is in [nginx/README.md](nginx/README.md): copy four files, run the

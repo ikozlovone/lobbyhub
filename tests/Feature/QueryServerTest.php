@@ -381,6 +381,89 @@ class QueryServerTest extends TestCase
         Queue::assertPushed(QueryServer::class, 1);
     }
 
+    /**
+     * The other half of that guard, for the case the lease cannot cover.
+     *
+     * The lease only holds while the queue drains inside five minutes. Once it
+     * does not, the server falls due again with its first job still waiting —
+     * and this is what stops the second one being made. Measured on a stalled
+     * queue before it existed: 20,882 jobs for 314 servers.
+     */
+    public function test_a_server_with_a_query_already_waiting_is_not_queued_again(): void
+    {
+        $server = $this->minecraftServer(['next_query_at' => now()->subHour()]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->assertSuccessful();
+
+        // Five minutes on, the lease has run out and nothing has drained the
+        // queue — exactly the state that used to multiply.
+        $this->travel((int) config('monitoring.interval') + 1)->seconds();
+        $server->refresh();
+
+        $this->artisan('servers:query')->assertSuccessful();
+
+        Queue::assertPushed(QueryServer::class, 1);
+    }
+
+    /**
+     * The lock is what the queue is protected by; this is what a worker is
+     * protected by. A copy that exists anyway — queued before the lock shipped,
+     * or after its expiry — must not cost a socket and a stat row.
+     */
+    public function test_a_job_overtaken_by_another_query_does_nothing(): void
+    {
+        $server = $this->minecraftServer([
+            'players_online' => 3,
+            'last_queried_at' => now()->subHour(),
+        ]);
+
+        $stale = new QueryServer($server);
+
+        // Somebody else reaches the server while this job waits its turn.
+        $this->travel(30)->seconds();
+        $server->forceFill(['players_online' => 99, 'last_queried_at' => now()])->save();
+
+        $this->travel(30)->seconds();
+        $this->runQueuedJob($stale, new QueryResult(playersOnline: 3, playersMax: 20));
+
+        // Neither the reading nor the history was touched by the copy.
+        $this->assertSame(99, $server->refresh()->players_online);
+        $this->assertSame(0, ServerStat::where('server_id', $server->id)->count());
+    }
+
+    /** The same job, when nothing overtook it, still does its work. */
+    public function test_a_job_that_was_not_overtaken_runs_normally(): void
+    {
+        $server = $this->minecraftServer(['last_queried_at' => now()->subHour()]);
+
+        $job = new QueryServer($server);
+
+        $this->travel(60)->seconds();
+        $this->runQueuedJob($job, new QueryResult(playersOnline: 7, playersMax: 20));
+
+        $this->assertSame(7, $server->refresh()->players_online);
+        $this->assertSame(1, ServerStat::where('server_id', $server->id)->count());
+    }
+
+    /**
+     * The refresh button and the submission form run inline because somebody is
+     * looking at the panel. Neither may be silenced by a scheduled poll that
+     * happens to have touched the server a moment ago.
+     */
+    public function test_a_query_somebody_asked_for_is_never_skipped(): void
+    {
+        $server = $this->minecraftServer(['last_queried_at' => now()->addHour()]);
+
+        $this->runQueuedJob(
+            new QueryServer($server, forceDetails: true),
+            new QueryResult(playersOnline: 5, playersMax: 20),
+        );
+
+        $this->assertSame(5, $server->refresh()->players_online);
+    }
+
     public function test_a_queued_server_comes_back_after_the_base_interval(): void
     {
         $server = $this->minecraftServer(['next_query_at' => now()->subHour()]);
@@ -466,6 +549,15 @@ class QueryServerTest extends TestCase
      */
     private function runJob(Server $server, QueryResult|QueryFailed $outcome, ?GeoResolver $geo = null): void
     {
+        $this->runQueuedJob(new QueryServer($server), $outcome, $geo);
+    }
+
+    /**
+     * The same, for a job built earlier than it is run — which is the whole
+     * point when what is being tested is how long it sat in the queue.
+     */
+    private function runQueuedJob(QueryServer $job, QueryResult|QueryFailed $outcome, ?GeoResolver $geo = null): void
+    {
         $driver = new class($outcome) implements ServerQueryDriver
         {
             public function __construct(private QueryResult|QueryFailed $outcome) {}
@@ -483,6 +575,6 @@ class QueryServerTest extends TestCase
         $manager = \Mockery::mock(ServerQueryManager::class);
         $manager->shouldReceive('for')->andReturn($driver);
 
-        (new QueryServer($server))->handle($manager, $geo ?? new NullGeoResolver, new PollingSchedule);
+        $job->handle($manager, $geo ?? new NullGeoResolver, new PollingSchedule);
     }
 }
