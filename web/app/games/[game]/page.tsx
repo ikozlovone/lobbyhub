@@ -1,13 +1,17 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
-import { cacheLife, cacheTag } from 'next/cache'
-import { CATALOG_CACHE } from '@/lib/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame, getGames } from '@/lib/data'
 import { canonical, GAME_INDEX_THRESHOLD, notFoundMetadata, robotsFor } from '@/lib/seo'
 
 type Props = { params: Promise<{ game: string }> }
 
+/**
+ * Every game, from the cached catalog.
+ *
+ * This is what keeps `params` resolved before the page renders rather than
+ * suspending on it, and it is still worth doing now that the page body is read
+ * at request time: prerendering produces the shell, not the listing.
+ */
 export async function generateStaticParams() {
   const games = await getGames()
   return games.map((game) => ({ game: game.slug }))
@@ -29,24 +33,22 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
+/**
+ * A game's server list.
+ *
+ * Nothing on this route is cached, and that is deliberate: which servers are
+ * listed, how many are online and what the chip counts say are the questions
+ * the page exists to answer, and an answer from a minute ago is a wrong one.
+ * GameListing does the reading behind Suspense boundaries so the shell still
+ * prerenders — see the note there.
+ */
 export default async function GamePage({ params }: Props) {
-  'use cache'
-  /*
-   * Names, facets and descriptions change rarely, and the live layer refreshes
-   * the player counts client-side — but *which servers are on the page* is part
-   * of this markup, and a server added a minute ago has to be findable. The
-   * rendered page is its own cache entry, so this window is the one that
-   * decides, not the shorter one on getServers underneath it.
-   */
-  cacheLife(CATALOG_CACHE)
-
   const { game: slug } = await params
-  // Tagged on the page itself, not only inside getGame: this rendered markup is
-  // its own cache entry, and it is the one a visitor is served.
-  cacheTag('games', `game:${slug}`)
-  const game = await getGame(slug)
 
-  if (!game) notFound()
-
-  return <GameListing gameSlug={slug} heading={`${game.name} server list`} />
+  return (
+    <GameListing
+      gameSlug={slug}
+      describe={(game) => ({ heading: `${game.name} server list`, crumb: 'Servers' })}
+    />
+  )
 }

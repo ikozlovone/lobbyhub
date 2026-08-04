@@ -93,7 +93,7 @@ class GameController extends Controller
 
         $this->applyArtwork($request, $game);
 
-        $this->published($game, 'games', "game:{$game->slug}");
+        $this->published($game);
 
         // Straight to the edit screen: a game without modes has no facets, and
         // that is the next thing to fill in, not something to discover later.
@@ -130,8 +130,6 @@ class GameController extends Controller
      */
     public function update(Request $request, Game $game): RedirectResponse
     {
-        $wasKnownAs = $game->slug;
-
         DB::transaction(function () use ($request, $game) {
             $game->fill($this->validated($request, $game))->save();
 
@@ -140,16 +138,11 @@ class GameController extends Controller
             $this->applyArtwork($request, $game);
         });
 
-        $tags = ['games', "game:{$game->slug}"];
-
-        // A renamed game leaves a cached page behind under the old address. It
-        // is a 404 now, and the frontend would keep serving the old body from
-        // that tag until the window ran out.
-        if ($wasKnownAs !== $game->slug) {
-            $tags[] = "game:{$wasKnownAs}";
-        }
-
-        $this->published($game, ...$tags);
+        // A renamed game used to need its old slug expiring too, or the
+        // frontend kept serving the old page from that tag. Nothing caches a
+        // game's page any more: the old address 404s on the next request by
+        // itself, and the new one renders from the row we just saved.
+        $this->published($game);
 
         return redirect()
             ->route('admin.games.edit', $game)
@@ -171,10 +164,9 @@ class GameController extends Controller
         }
 
         $name = $game->name;
-        $slug = $game->slug;
         $game->delete();
 
-        $this->published($game, 'games', "game:{$slug}");
+        $this->published($game);
 
         return redirect()
             ->route('admin.games')
@@ -188,13 +180,18 @@ class GameController extends Controller
      * telling the frontend to revalidate first would have it refetch the very
      * payload we just replaced — storing the old catalog for another window,
      * this time with nothing left to invalidate it.
+     *
+     * One tag, because the frontend now keeps exactly one thing: the game
+     * catalog behind its navigation rail. Its pages read the listing, the
+     * facets and the counters when the request arrives, so an edit is visible
+     * on the next page view whether anything is invalidated or not.
      */
-    private function published(Game $game, string ...$tags): void
+    private function published(Game $game): void
     {
         Cache::forget('api:games');
         Cache::forget("api:games:{$game->id}");
 
-        $this->frontend->invalidate(...$tags);
+        $this->frontend->invalidate('games');
     }
 
     /**

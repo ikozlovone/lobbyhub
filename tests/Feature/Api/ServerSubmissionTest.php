@@ -112,6 +112,11 @@ class ServerSubmissionTest extends TestCase
         $this->assertSame(42, $after['counters']['players_online']);
     }
 
+    /**
+     * One tag, because one thing is cached: the catalog behind the rail, where
+     * a game shows up once it has a server. The listing this server just joined
+     * and its own page are read per request, so they have it already.
+     */
     public function test_it_tells_the_frontend_which_cached_pages_are_now_wrong(): void
     {
         config()->set('services.frontend.revalidate_url', 'http://frontend.test/api/revalidate');
@@ -123,13 +128,9 @@ class ServerSubmissionTest extends TestCase
         $this->postJson('/api/games/minecraft/servers', ['address' => '8.8.8.8:25565'])->assertCreated();
 
         Http::assertSent(function ($request) {
-            $tags = $request['tags'];
-
             return $request->url() === 'http://frontend.test/api/revalidate'
                 && $request->header('x-revalidate-secret') === ['shared-secret']
-                && in_array('games', $tags, true)          // the count in the sidebar
-                && in_array('game:minecraft', $tags, true) // the listing it joined
-                && in_array('servers', $tags, true);
+                && $request['tags'] === ['games'];
         });
     }
 

@@ -7,10 +7,12 @@ import { Rolling } from './live-stats'
 /**
  * The three numbers in a game's hero.
  *
- * The page shell around them is cached for hours, so the copy baked into it
- * would be hours old — these are the whole reason someone opens a monitoring
- * site, and stale is worse than late. Same treatment as the home page totals:
- * re-read on an interval, roll to the new value so a change is visible.
+ * They arrive with the page and are true when they do — the hero is read at
+ * request time. This keeps them true for as long as the tab stays open: these
+ * are the whole reason someone opens a monitoring site, and a number that
+ * stopped moving an hour ago is worse than one that arrived late. Same
+ * treatment as the home page totals: re-read on an interval, roll to the new
+ * value so a change is visible.
  */
 const REFRESH_MS = 60_000
 

@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { cacheLife, cacheTag } from 'next/cache'
 import { CATALOG_CACHE } from './cache'
 import {
@@ -16,17 +17,52 @@ import {
 import { fetchProviders } from './auth'
 
 /**
- * Cached entry points for everything a page shell renders.
+ * Every read a page shell makes, split by one question: can a visitor tell if
+ * this is a minute old?
  *
- * Both the page body and `generateMetadata` must read through these: data
- * fetched outside a `use cache` scope makes the whole route dynamic, which
- * throws away the prerendering the catalog depends on.
+ * ── Cached ────────────────────────────────────────────────────────────────
+ * Navigation chrome. The list of games is the rail on every page and the thing
+ * `notFound` is decided against; it changes when an admin adds a game, and
+ * FrontendCache already invalidates the `games` tag when one does. Caching it
+ * is what keeps a rail on 46 games from costing a request per page view.
  *
- * Tags are per-entity so Laravel can invalidate one server or one game with
- * revalidateTag instead of waiting out the whole cacheLife window.
+ * ── Fresh ─────────────────────────────────────────────────────────────────
+ * Everything measured: which servers exist, who is on them, what the monitor
+ * last saw. These are read on every request, so a visitor opening a page gets
+ * what is in the database at that moment. They are wrapped in React's `cache`
+ * so that a page and its `generateMetadata` reading the same thing is one call
+ * to Laravel and not two, and in nothing else — the memo lives and dies with
+ * the request.
+ *
+ * The cost is a request per page view, which is why SERVER_API_URL prefers
+ * API_URL_INTERNAL: on the production box that is a loopback call to a Laravel
+ * already holding the connection pool.
+ *
+ * Anything in the fresh half must be reached from inside a `<Suspense>`
+ * boundary, or it blocks the route's static shell instead of streaming into it.
  */
 
-export async function getGames() {
+/**
+ * Uncached, explicitly.
+ *
+ * Cache Components already leave `fetch` uncached outside a `use cache` scope,
+ * so this changes nothing today. It is here because the failure it prevents is
+ * silent: a caching default reintroduced upstream would make these reads stale
+ * again with nothing in this file to show for it.
+ */
+const FRESH = { cache: 'no-store' } as const satisfies RequestInit
+
+/* ── Cached: navigation chrome ─────────────────────────────────────────── */
+
+/**
+ * The game catalog: the rail, the grid, and which slugs are real.
+ *
+ * The counters ride along on this payload and will be up to a revalidate window
+ * old. Nothing shows them from here — the rail only asks whether a game has any
+ * servers at all, and the pages that print counters read them fresh. See
+ * getGamesWithCounters.
+ */
+export const getGames = async () => {
   'use cache'
   cacheLife(CATALOG_CACHE)
   cacheTag('games')
@@ -41,105 +77,73 @@ export async function getGames() {
  *
  * The failure is deliberately *not* swallowed in here. Catching it inside the
  * cache scope stores the empty list, and an API that was down for the one second
- * this ran would leave the dialog with no buttons at all for the next hour —
+ * this ran would leave the dialog with no buttons at all for the next window —
  * a transient outage turning into a lasting one. Thrown, nothing is cached and
  * the next render tries again; the caller decides what an empty dialog looks
  * like meanwhile.
  */
-export async function getAuthProviders() {
+export const getAuthProviders = async () => {
   'use cache'
-  // Minutes, not hours, even though this changes about once a year: when it does
-  // change it is because somebody just put a client id in the environment and is
-  // reloading the page to see whether it worked. An hour of "no, still nothing"
-  // costs more than a request every few minutes ever will.
   cacheLife(CATALOG_CACHE)
 
   return fetchProviders(SERVER_API_URL)
 }
 
-export async function getGame(slug: string) {
-  'use cache'
-  // Minutes, not hours: this object carries the facet chips, and their counts
-  // move whenever the monitor confirms a server or an import lands. Tag
-  // invalidation only fires when somebody submits one, so an hour here is an
-  // hour of a listing that has moved on without its own filters.
-  cacheLife(CATALOG_CACHE)
-  cacheTag('games', `game:${slug}`)
-
-  return fetchGame(slug)
-}
-
-export async function getServers(game: string, filters: ServerFilters = {}) {
-  'use cache'
-  /*
-   * The live layer overwrites the player counts in the browser, so those can go
-   * stale here freely. Membership cannot: an owner who has just added a server
-   * goes straight to the listing to look for it, and at `hours` it would not be
-   * there — through no fault of the submission, which published it instantly.
-   *
-   * Revalidating `game:{game}` on submission would be better than a short
-   * window, and the tag is here for it. Nothing calls it yet; see open questions
-   * in Мониторинг.md.
-   */
-  cacheLife(CATALOG_CACHE)
-  cacheTag(`game:${game}`, 'servers')
-
-  return fetchServers(game, filters).catch(() => null)
-}
+/* ── Fresh: everything measured ────────────────────────────────────────── */
 
 /**
- * The newest additions to one game's catalog.
+ * The same catalog, read at request time.
  *
- * Kept apart from `getServers` because it is the one listing whose whole point
- * is being current — an hour-old copy of "just added" says the opposite of what
- * the panel is there to say.
+ * Separate from `getGames` because of what it is for: /games prints servers,
+ * servers online and players online for all 46 games, and those are the numbers
+ * somebody judges the whole site by. The rail keeps the cached copy.
  */
-export async function getLatestServers(game: string, limit = 10) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
-  cacheTag(`game:${game}`, 'servers')
+export const getGamesWithCounters = cache(async () => fetchGames(FRESH))
 
-  return fetchServers(game, { sort: 'newest', per_page: limit }).catch(() => null)
-}
+/**
+ * One game with its facets.
+ *
+ * Fresh rather than cached because of the facets: the chip counts, the map and
+ * version lists, and the counters in the hero all move whenever the monitor
+ * confirms a server or an import lands.
+ */
+export const getGame = cache(async (slug: string) => fetchGame(slug, FRESH))
+
+export const getServers = cache(async (game: string, filters: ServerFilters = {}) =>
+  fetchServers(game, filters, FRESH).catch(() => null),
+)
+
+/** The newest additions to one game's catalog. */
+export const getLatestServers = cache(async (game: string, limit = 10) =>
+  fetchServers(game, { sort: 'newest', per_page: limit }, FRESH).catch(() => null),
+)
 
 /**
  * Who voted for what, lately. The rail beside a listing, and the only place a
- * visitor sees that other people are here — so it is cached in minutes, not
- * hours, or it would show the same four names all day.
+ * visitor sees that other people are here.
  */
-export async function getRecentVotes(game: string) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
-  cacheTag(`game:${game}`, 'votes')
-
-  return fetchRecentVotes(game).catch(() => [])
-}
+export const getRecentVotes = cache(async (game: string) =>
+  fetchRecentVotes(game, FRESH).catch(() => []),
+)
 
 /**
  * The home page's cross-game sections.
  *
- * Each returns [] rather than throwing, and each is cached separately: a
- * section whose request failed leaves an empty array the page hides, instead of
- * taking the whole home page down with it. That is the "одна секция не роняет
- * страницу" rule, enforced here rather than in six try/catch blocks upstream.
- *
- * Minutes, not hours: these are the counts a visitor judges the whole site by,
- * and the live layer only refreshes rows already on screen — it cannot add the
- * server that became busiest since the shell was built.
+ * Each returns [] rather than throwing: a section whose request failed leaves
+ * an empty array the page hides, instead of taking the whole home page down
+ * with it. That is the "одна секция не роняет страницу" rule, enforced here
+ * rather than in six try/catch blocks upstream. Each also sits behind its own
+ * Suspense boundary on the page, so a slow section delays only itself.
  */
 async function catalogSection(filters: CatalogFilters) {
-  return fetchCatalogServers(filters)
+  return fetchCatalogServers(filters, FRESH)
     .then((page) => page.data)
     .catch(() => [] as Server[])
 }
 
-export async function getPopularServers(limit = 8) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
-  cacheTag('servers')
-
-  return catalogSection({ sort: 'players', per_page: limit })
-}
+export const getPopularServers = cache(async (limit = 8) =>
+  catalogSection({ sort: 'players', per_page: limit }),
+)
 
 /**
  * Trending, as far as the data honestly allows.
@@ -150,21 +154,13 @@ export async function getPopularServers(limit = 8) {
  * a shuffle, and it is the closest thing to "moving up" we can currently say.
  * A true trend needs a daily-stats comparison; see the report.
  */
-export async function getTrendingServers(limit = 8) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
-  cacheTag('servers')
+export const getTrendingServers = cache(async (limit = 8) =>
+  catalogSection({ sort: 'rank', per_page: limit }),
+)
 
-  return catalogSection({ sort: 'rank', per_page: limit })
-}
-
-export async function getRecentlyAddedServers(limit = 8) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
-  cacheTag('servers')
-
-  return catalogSection({ sort: 'newest', per_page: limit })
-}
+export const getRecentlyAddedServers = cache(async (limit = 8) =>
+  catalogSection({ sort: 'newest', per_page: limit }),
+)
 
 /**
  * Servers wiped in the last fortnight.
@@ -172,54 +168,28 @@ export async function getRecentlyAddedServers(limit = 8) {
  * Empty for a catalog with no wipe data, which is the point: the section is
  * hidden rather than filled with invented dates.
  */
-export async function getRecentlyWipedServers(limit = 8) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
-  cacheTag('servers')
+export const getRecentlyWipedServers = cache(async (limit = 8) =>
+  catalogSection({ sort: 'wiped', wiped: 14, per_page: limit }),
+)
 
-  return catalogSection({ sort: 'wiped', wiped: 14, per_page: limit })
-}
-
-/**
- * The search results page.
- *
- * Not cached by term: the space of queries is unbounded and mostly one-shot, so
- * a cache entry per term buys a hit rate near zero and holds every typo anyone
- * ever submitted. The empty term is the browsable "all servers" listing, and
- * that one is worth caching — hence the split.
- */
-export async function searchServers(term: string, limit = 24) {
+/** The search results page. */
+export const searchServers = cache(async (term: string, limit = 24) => {
   if (term === '') return getPopularServers(limit)
 
   return catalogSection({ q: term, sort: 'players', per_page: limit })
-}
+})
 
-export async function getServer(slug: string) {
-  'use cache'
-  /*
-   * Minutes, not hours.
-   *
-   * The live layer only refreshes player counts. Everything else the detail
-   * page shows — map, FPS, entities, bots, anti-cheat, version, wipe time — is
-   * a measurement that arrives with each poll and then sits in this payload
-   * until it expires. At `hours` a server could be re-queried a dozen times
-   * while the page kept showing what it looked like this morning, which is the
-   * one thing a monitoring site must not do.
-   *
-   * The right answer is for Laravel to call revalidateTag when it writes a
-   * poll — the tag below exists for exactly that and nothing calls it yet. Until
-   * then the window is the guarantee, so it has to be a short one.
-   */
-  cacheLife(CATALOG_CACHE)
-  cacheTag(`server:${slug}`)
+/**
+ * One server, in full.
+ *
+ * Map, FPS, entities, bots, anti-cheat, version, wipe time: every one of them
+ * is a measurement that arrives with a poll and then sits in this payload. The
+ * live layer in the browser only refreshes the player count, so this read is
+ * the only thing standing between a visitor and this morning's snapshot — which
+ * is the one thing a monitoring site must not show.
+ */
+export const getServer = cache(async (slug: string) => fetchServer(slug, FRESH))
 
-  return fetchServer(slug)
-}
-
-export async function getHistory(slug: string, range: string) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
-  cacheTag(`server:${slug}`)
-
-  return fetchHistory(slug, range)
-}
+export const getHistory = cache(async (slug: string, range: string) =>
+  fetchHistory(slug, range, FRESH),
+)

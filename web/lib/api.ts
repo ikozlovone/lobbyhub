@@ -1,8 +1,9 @@
 /**
  * Typed client for the Laravel catalog API.
  *
- * Everything here is server-side by default. Two callers exist:
- *  - cached page shells, which wrap these in `use cache` + cacheLife
+ * Three callers, and lib/data is where the first two are sorted out:
+ *  - the cached catalog chrome, which wraps these in `use cache` + cacheLife
+ *  - page reads, which pass `{ cache: 'no-store' }` and run per request
  *  - the live layer, which calls `fetchLive` from the browser and never caches
  */
 
@@ -248,12 +249,18 @@ async function getOrNull<T>(path: string, init?: RequestInit): Promise<T | null>
   }
 }
 
-export async function fetchGames() {
-  return (await get<{ data: Game[] }>('/games')).data
+/**
+ * `init` on every reader below, for the same reason `fetchServers` has always
+ * had one: the catalog is read from two kinds of scope now. Cached chrome calls
+ * these bare, and the pages that must show what is in the database *right now*
+ * pass `{ cache: 'no-store' }` through — see FRESH in lib/data.
+ */
+export async function fetchGames(init?: RequestInit) {
+  return (await get<{ data: Game[] }>('/games', init)).data
 }
 
-export async function fetchGame(slug: string) {
-  const response = await getOrNull<{ data: GameDetail }>(`/games/${slug}`)
+export async function fetchGame(slug: string, init?: RequestInit) {
+  const response = await getOrNull<{ data: GameDetail }>(`/games/${slug}`, init)
   return response?.data ?? null
 }
 
@@ -332,13 +339,13 @@ export type RecentVote = {
   server: { slug: string; name: string }
 }
 
-export async function fetchRecentVotes(game: string) {
-  const response = await getOrNull<{ data: RecentVote[] }>(`/games/${game}/votes`)
+export async function fetchRecentVotes(game: string, init?: RequestInit) {
+  const response = await getOrNull<{ data: RecentVote[] }>(`/games/${game}/votes`, init)
   return response?.data ?? []
 }
 
-export async function fetchServer(slug: string) {
-  const response = await getOrNull<{ data: ServerDetail }>(`/servers/${slug}`)
+export async function fetchServer(slug: string, init?: RequestInit) {
+  const response = await getOrNull<{ data: ServerDetail }>(`/servers/${slug}`, init)
   return response?.data ?? null
 }
 
@@ -371,8 +378,11 @@ export async function refreshServer(
   }
 }
 
-export async function fetchHistory(slug: string, range: string) {
-  const response = await getOrNull<{ data: History }>(`/servers/${slug}/history?range=${range}`)
+export async function fetchHistory(slug: string, range: string, init?: RequestInit) {
+  const response = await getOrNull<{ data: History }>(
+    `/servers/${slug}/history?range=${range}`,
+    init,
+  )
   return response?.data ?? null
 }
 

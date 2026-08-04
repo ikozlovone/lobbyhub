@@ -6,10 +6,14 @@ import { fetchLive, type Live } from '@/lib/api'
 /**
  * The live half of every page.
  *
- * Page shells are cached for hours, so the player counts baked into them go
- * stale within minutes. This provider re-fetches just the moving numbers and
- * hands them to whichever rows are on screen. Server-rendered values remain the
- * fallback, so the page is correct before hydration and merely fresher after.
+ * The rows arrive correct now — pages read the catalog when the request lands,
+ * not from a cached shell — so this is no longer a correction. It is what keeps
+ * them correct: a listing left open drifts within minutes, and this re-fetches
+ * just the moving numbers for whichever rows are on screen.
+ *
+ * Which is also why there is no fetch on mount. The server-rendered values are
+ * seconds old at that point, and asking again for what we were just handed
+ * would be a second request per page view buying nothing.
  */
 
 type LiveMap = Record<string, Live>

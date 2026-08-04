@@ -141,10 +141,11 @@ class ServerSubmission
          */
         $this->counters->refresh();
 
-        // And tell the frontend, whose pages hold both the listing and those
-        // counts. Without this the owner waits out a cache window before their
-        // server — and the number beside the game — appear.
-        $this->frontend->invalidate('games', "game:{$game->slug}", 'servers', "server:{$server->slug}");
+        // And tell the frontend, which caches the catalog behind its navigation
+        // rail — the one place a game with its first server would otherwise not
+        // appear for another window. The listing and the counts on it are read
+        // per request, so the server itself is findable the moment this returns.
+        $this->frontend->invalidate('games');
 
         return $server->refresh();
     }

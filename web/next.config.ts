@@ -18,16 +18,32 @@ const nextConfig: NextConfig = {
 
 
   experimental: {
-    // How long the browser may reuse a prefetched segment before asking again.
+    // How long the router may reuse a segment it already has before asking the
+    // server again.
     //
-    // The dynamic default is zero — every hover over a link that has already
-    // been prefetched fetches it again, and a listing full of links turns that
-    // into a stream of repeats. A minute is well inside the window the pages
-    // themselves are cached for on the server, so nobody sees anything older
-    // than they would have anyway.
+    // Both zero, which is the whole point. This used to be 60/300, on the
+    // reasoning that the pages were cached on the server for longer anyway so
+    // reuse cost nothing. That stopped being true when the listings became
+    // request-time reads: leave a game page and come back inside the window and
+    // the router would answer from memory without a request, so the visitor
+    // would be looking at the rows from their previous visit — the one thing
+    // this whole split exists to prevent.
+    //
+    // Not a real extra request either. The dynamic half of these routes has to
+    // be fetched on arrival regardless; letting the static shell ride along on
+    // that same response is free.
+    //
+    // `dynamic` is the one that governs the catalog: these routes all have an
+    // uncached half, so zero means the router asks again every time. `static`
+    // covers the fully prerendered pages — terms, privacy — and 30 is simply
+    // the lowest the config schema accepts; there is nothing on those to go
+    // stale.
+    //
+    // Back and forward are unaffected — Next keeps its own cache for those to
+    // hold scroll position, and that is the behaviour people expect there.
     staleTimes: {
-      dynamic: 60,
-      static: 300,
+      dynamic: 0,
+      static: 30,
     },
   },
 }

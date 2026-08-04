@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { cacheLife, cacheTag } from 'next/cache'
-import { CATALOG_CACHE } from '@/lib/cache'
+import { Suspense } from 'react'
 import { AddServerForm } from '@/components/add-server-form'
 import { Icon } from '@/components/icons'
 import { RelativeTime } from '@/components/relative-time'
@@ -33,14 +32,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function AddGameServerPage({ params }: Props) {
-  'use cache'
-  cacheLife(CATALOG_CACHE)
+/**
+ * The submission form for one game.
+ *
+ * Read at request time like the rest of the catalog, and for a sharper reason
+ * than most: the "latest added" rail is where a submitter looks to confirm
+ * their own server went in, and the counters above it are what they watch move.
+ * A cached copy of this page answered the question "did that work?" with the
+ * state of the world before they pressed the button.
+ */
+export default function AddGameServerPage({ params }: Props) {
+  return (
+    <Suspense fallback={<Skeleton />}>
+      <Content params={params} />
+    </Suspense>
+  )
+}
 
+async function Content({ params }: Props) {
   const { game: slug } = await params
-  // The "latest added" rail on this page is the first place a submission shows
-  // up, so a submission has to be able to expire it.
-  cacheTag('games', `game:${slug}`)
   const [game, latest] = await Promise.all([getGame(slug), getLatestServers(slug)])
 
   if (!game) notFound()
@@ -127,6 +137,22 @@ export default async function AddGameServerPage({ params }: Props) {
             </p>
           )}
         </aside>
+      </div>
+    </div>
+  )
+}
+
+/** The same three blocks in the same places: header, form column, latest rail. */
+function Skeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading form">
+      <div className="h-32 animate-pulse rounded-lg bg-surface" />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-4">
+          <div className="h-56 animate-pulse rounded-lg bg-surface" />
+          <div className="h-64 animate-pulse rounded-lg bg-surface" />
+        </div>
+        <div className="h-80 animate-pulse rounded-lg bg-surface" />
       </div>
     </div>
   )

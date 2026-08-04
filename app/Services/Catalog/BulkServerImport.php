@@ -60,7 +60,12 @@ class BulkServerImport
             // import that does not move them looks like it did nothing. Cheap
             // enough to run once per import; never once per line.
             $this->counters->refresh();
-            $this->frontend->invalidate('games', "game:{$game->slug}", 'servers');
+
+            // Only the rail's catalog is cached now — the listings these
+            // servers land in are read per request. counters->refresh() already
+            // expires it when a count moved; this covers the import that added
+            // to a game the rail was already showing.
+            $this->frontend->invalidate('games');
         }
 
         return $report;

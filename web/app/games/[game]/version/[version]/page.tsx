@@ -1,7 +1,4 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
-import { cacheLife, cacheTag } from 'next/cache'
-import { CATALOG_CACHE } from '@/lib/cache'
 import { GameListing } from '@/components/game-listing'
 import { getGame } from '@/lib/data'
 import { canonical, notFoundMetadata, robotsFor } from '@/lib/seo'
@@ -15,9 +12,10 @@ type Props = { params: Promise<{ game: string; version: string }> }
  * Cache Components require it to return at least one param, and a facet list is
  * legitimately empty until servers are categorised. More importantly, the long
  * tail of facet pages is meant to number in the tens of thousands — prerendering
- * all of them at build time is the wrong trade. Without it each page renders on
- * first request and is then cached by the `use cache` scope below, which is the
- * behaviour we actually want.
+ * all of them at build time is the wrong trade. Without it `params` resolves at
+ * request time, so this route has no static shell of its own and streams behind
+ * the skeleton in ../../loading.tsx — which is the right shape for a page nobody
+ * has necessarily asked for before.
  */
 async function findVersion(gameSlug: string, versionSlug: string) {
   const game = await getGame(gameSlug)
@@ -43,23 +41,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function VersionPage({ params }: Props) {
-  'use cache'
-  // Minutes, like the game page: a newly added server has to appear here too.
-  cacheLife(CATALOG_CACHE)
-
   const { game: gameSlug, version: versionSlug } = await params
-  cacheTag('games', `game:${gameSlug}`)
-  const found = await findVersion(gameSlug, versionSlug)
-
-  if (!found) notFound()
 
   return (
     <GameListing
       gameSlug={gameSlug}
       filters={{ version: versionSlug }}
-      heading={`${found.game.name} ${found.version.name} servers`}
-      crumb={found.version.name}
-      facetLabel={found.version.name}
+      describe={(game) => {
+        // Read at request time along with the listing: a version appears in the
+        // facets the moment a server reports it, and so should its page.
+        const version = game.facets.versions.find((candidate) => candidate.slug === versionSlug)
+
+        if (!version) return null
+
+        return {
+          heading: `${game.name} ${version.name} servers`,
+          crumb: version.name,
+          facetLabel: version.name,
+        }
+      }}
     />
   )
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { BenefitsSection } from '@/components/home/benefits-section'
 import { HOME_COPY } from '@/components/home/copy'
 import { HeroSection } from '@/components/home/hero-section'
@@ -7,7 +8,7 @@ import { PopularGamesSection } from '@/components/home/popular-games-section'
 import { ServerOwnerCta } from '@/components/home/server-owner-cta'
 import { ServerSection } from '@/components/server-section'
 import {
-  getGames,
+  getGamesWithCounters,
   getPopularServers,
   getRecentlyAddedServers,
   getRecentlyWipedServers,
@@ -43,58 +44,39 @@ export const metadata: Metadata = {
  * counts refreshing rows that are already in the HTML, and the favourite stars.
  * Search is a plain GET form, so the first screen works with JavaScript off.
  *
- * The five reads are independent, and each swallows its own failure inside
- * lib/data — see catalogSection. A collection with nothing in it renders
- * nothing, so an API outage leaves the page as hero, benefits and copy rather
- * than as an error.
+ * Every collection is read when the request arrives — these are the counts a
+ * visitor judges the whole site by, and the live layer can only refresh rows
+ * already on screen, never add the server that became busiest since. Each sits
+ * behind its own Suspense boundary, so the hero and the copy are the static
+ * shell and a slow section delays only itself.
+ *
+ * The reads are independent, and each swallows its own failure inside lib/data
+ * — see catalogSection. A collection with nothing in it renders nothing, so an
+ * API outage leaves the page as hero, benefits and copy rather than as an error.
  */
-export default async function HomePage() {
-  const [games, popular, trending, recent, wiped] = await Promise.all([
-    getGames().catch(() => []),
-    getPopularServers(8),
-    getTrendingServers(8),
-    getRecentlyAddedServers(8),
-    getRecentlyWipedServers(8),
-  ])
-
-  // Trending repeats the busiest servers almost exactly in a small catalog, and
-  // two near-identical strips one above the other read as a bug, not a feature.
-  const shown = new Set(popular.map((server) => server.slug))
-  const trendingRows = trending.filter((server) => !shown.has(server.slug))
-
+export default function HomePage() {
   return (
     <div className="space-y-10">
       <HeroSection />
 
-      <PopularGamesSection games={games} />
+      <Suspense fallback={<GamesSkeleton />}>
+        <Games />
+      </Suspense>
 
-      <ServerSection
-        title={HOME_COPY.popular.title}
-        description={HOME_COPY.popular.description}
-        servers={popular}
-        viewAllHref="/search"
-      />
+      {/* Popular and trending share a boundary because they share an answer:
+          trending is filtered against what popular already showed, so neither
+          can be rendered until both have arrived. */}
+      <Suspense fallback={<SectionSkeleton count={2} />}>
+        <PopularAndTrending />
+      </Suspense>
 
-      <ServerSection
-        title={HOME_COPY.trending.title}
-        description={HOME_COPY.trending.description}
-        servers={trendingRows}
-        viewAllHref="/search"
-      />
+      <Suspense fallback={<SectionSkeleton />}>
+        <RecentlyAdded />
+      </Suspense>
 
-      <ServerSection
-        title={HOME_COPY.recent.title}
-        description={HOME_COPY.recent.description}
-        servers={recent}
-        viewAllHref="/search"
-      />
-
-      {/* No "view all": there is no wipe-filtered listing to send anyone to. */}
-      <ServerSection
-        title={HOME_COPY.wiped.title}
-        description={HOME_COPY.wiped.description}
-        servers={wiped}
-      />
+      <Suspense fallback={<SectionSkeleton />}>
+        <RecentlyWiped />
+      </Suspense>
 
       <BenefitsSection />
 
@@ -132,6 +114,99 @@ export default async function HomePage() {
           }),
         }}
       />
+    </div>
+  )
+}
+
+async function Games() {
+  // The one read here that is allowed to fail loudly enough to matter: the grid
+  // is the page's navigation. An empty list renders an empty grid, not an error.
+  return <PopularGamesSection games={await getGamesWithCounters().catch(() => [])} />
+}
+
+async function PopularAndTrending() {
+  const [popular, trending] = await Promise.all([getPopularServers(8), getTrendingServers(8)])
+
+  // Trending repeats the busiest servers almost exactly in a small catalog, and
+  // two near-identical strips one above the other read as a bug, not a feature.
+  const shown = new Set(popular.map((server) => server.slug))
+  const trendingRows = trending.filter((server) => !shown.has(server.slug))
+
+  return (
+    <div className="space-y-10">
+      <ServerSection
+        title={HOME_COPY.popular.title}
+        description={HOME_COPY.popular.description}
+        servers={popular}
+        viewAllHref="/search"
+      />
+
+      <ServerSection
+        title={HOME_COPY.trending.title}
+        description={HOME_COPY.trending.description}
+        servers={trendingRows}
+        viewAllHref="/search"
+      />
+    </div>
+  )
+}
+
+async function RecentlyAdded() {
+  return (
+    <ServerSection
+      title={HOME_COPY.recent.title}
+      description={HOME_COPY.recent.description}
+      servers={await getRecentlyAddedServers(8)}
+      viewAllHref="/search"
+    />
+  )
+}
+
+async function RecentlyWiped() {
+  return (
+    /* No "view all": there is no wipe-filtered listing to send anyone to. */
+    <ServerSection
+      title={HOME_COPY.wiped.title}
+      description={HOME_COPY.wiped.description}
+      servers={await getRecentlyWipedServers(8)}
+    />
+  )
+}
+
+function GamesSkeleton() {
+  return (
+    <div className="space-y-4" aria-hidden>
+      <div className="h-7 w-56 animate-pulse rounded bg-surface" />
+      <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        {Array.from({ length: 5 }, (_, index) => (
+          <li key={index} className="h-44 animate-pulse rounded-xl bg-surface" />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * One strip's worth of waiting.
+ *
+ * A section renders nothing when its collection is empty, so this can be
+ * followed by nothing at all — which is why it is one row of cards rather than
+ * a full grid. Reserving four rows for something that may not exist is a bigger
+ * shift than reserving one.
+ */
+function SectionSkeleton({ count = 1 }: { count?: number }) {
+  return (
+    <div className="space-y-10" aria-hidden>
+      {Array.from({ length: count }, (_, section) => (
+        <div key={section} className="space-y-4">
+          <div className="h-7 w-64 animate-pulse rounded bg-surface" />
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {Array.from({ length: 4 }, (_, card) => (
+              <li key={card} className="h-44 animate-pulse rounded-xl bg-surface" />
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   )
 }

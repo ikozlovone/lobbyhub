@@ -9,15 +9,16 @@ use Throwable;
 /**
  * Tells the frontend that something it has cached is no longer true.
  *
- * The catalog is served from page shells cached for minutes — long enough that
- * an owner who adds a server and goes straight back to the listing would not
- * find it, or the count beside the game, or their own server's page. The window
- * is the fallback, not the mechanism; this is the mechanism.
+ * Which is now one thing: the game catalog behind its navigation rail. Listings,
+ * facets, counters and server pages are all read when a request arrives, so they
+ * need no telling — a write here is on the site by the next page view. The rail
+ * is cached because it is on every page and changes only when a game is added,
+ * edited, or gains its first server, and `games` is the tag for all three.
  *
  * Best effort by design. The frontend may be down, mid-deploy, or simply not
  * configured — none of which is a reason to fail a submission that succeeded.
- * A failure here costs freshness for the length of the cache window, which is
- * exactly where we were without it.
+ * A failure here costs a stale rail for the length of its window, and nothing
+ * else.
  */
 class FrontendCache
 {

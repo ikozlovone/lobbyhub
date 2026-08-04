@@ -1,8 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { cacheLife, cacheTag } from 'next/cache'
-import { CATALOG_CACHE } from '@/lib/cache'
 import { FavoriteButton } from '@/components/favorite-button'
 import { Icon } from '@/components/icons'
 import { LiveProvider } from '@/components/live-provider'
@@ -37,14 +35,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
+/**
+ * One server, read at request time.
+ *
+ * Nothing here is cached. Map, FPS, entities, bots, anti-cheat, version, wipe
+ * time and the history graph are all measurements that arrive with a poll, and
+ * the live layer in the browser only refreshes the player count — so a cached
+ * shell meant a visitor could be looking at this morning's snapshot of
+ * everything else. `params` suspends without a generateStaticParams to resolve
+ * it, and loading.tsx is the boundary that catches it for the whole route.
+ */
 export default async function ServerPage({ params }: Props) {
-  'use cache'
-  // The rendered page is its own cache entry: leaving this at `hours` would
-  // hold the old markup however fresh `getServer` underneath it became.
-  cacheLife(CATALOG_CACHE)
-
   const { server: slug } = await params
-  cacheTag(`server:${slug}`)
   const [server, history] = await Promise.all([getServer(slug), getHistory(slug, '24h')])
 
   if (!server) notFound()

@@ -20,16 +20,17 @@ import { useToast } from './toast'
 /**
  * The listing, and everything that narrows it.
  *
- * Two layers, like the rest of the site. The first page arrives inside the
- * cached page shell, rendered on the server — so the list is in the HTML for
- * anyone who does not run JavaScript, crawlers included. Every filter after
- * that is answered by the API directly, because the alternative is a full
- * navigation and a re-render of the shell to change one chip.
+ * Two layers, like the rest of the site. The first page is read on the server
+ * when the request lands and shipped inside the HTML — so the list is there for
+ * anyone who does not run JavaScript, crawlers included, and it is current.
+ * Every filter after that is answered by the API directly, because the
+ * alternative is a full navigation and a re-render to change one chip.
  *
  * Filter state is mirrored into the query string with replaceState rather than
- * a router push: the page it belongs to is prerendered and cached, and pushing
- * would ask Next to re-resolve a route that has not changed. The cost is that
- * restoring a shared link takes one extra request — see the mount effect.
+ * a router push: pushing would ask Next to re-resolve a route whose path has
+ * not changed, and re-run the listing read behind it, to show rows this
+ * component already has. The cost is that restoring a shared link takes one
+ * extra request — see the mount effect.
  */
 
 type View = 'table' | 'grid'
@@ -205,8 +206,9 @@ export function ServerBrowser({
 
   // Restore a shared link once, after hydration.
   //
-  // The alternative is reading searchParams on the server, which would make the
-  // whole route dynamic and throw away the prerendering the catalog runs on.
+  // The alternative is reading searchParams on the server, which would put the
+  // filters in the route's cache key and give every combination anyone has ever
+  // linked its own render.
   //
   // This goes to `request` rather than `load` for two reasons: nothing here
   // should flash the Refresh spinner on a page that is still loading, and every

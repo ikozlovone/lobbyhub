@@ -8,7 +8,6 @@ use App\Http\Resources\ServerResource;
 use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
-use App\Services\Catalog\FrontendCache;
 use App\Services\Catalog\ServerListing;
 use App\Services\Monitoring\ServerQueryManager;
 use Illuminate\Http\JsonResponse;
@@ -111,7 +110,7 @@ class ServerController extends Controller
      * snapshot and `refreshed: false`: the panel updates either way, and "we
      * checked forty seconds ago" is a better answer than an error.
      */
-    public function refresh(Server $server, ServerQueryManager $manager, FrontendCache $frontend): JsonResponse
+    public function refresh(Server $server, ServerQueryManager $manager): JsonResponse
     {
         abort_unless($server->is_active, 404);
 
@@ -128,14 +127,12 @@ class ServerController extends Controller
 
             $server->refresh()->load(['game', 'country', 'version', 'modes']);
 
-            // The panel updates itself from this response, but the page around
-            // it is a shell cached for minutes — reload before it expires and
-            // the map, the facts and the history graph are all back to what they
-            // were, which reads as a refresh that did not save. Nothing else
-            // revalidates a server: the monitor's own polls are what the live
-            // layer covers, and doing this for those would expire every server
-            // page in the catalog every few minutes.
-            $frontend->invalidate("server:{$server->slug}");
+            // Nothing to tell the frontend. This used to expire the server's
+            // page, which was a shell cached for minutes — reload it before the
+            // window turned and the map, the facts and the graph were all back
+            // to what they were, reading as a refresh that did not save. That
+            // page is read per request now, so the reload shows what this write
+            // just put in the database.
         }
 
         return (new ServerDetailResource($server))
@@ -144,9 +141,10 @@ class ServerController extends Controller
     }
 
     /**
-     * The live half of the two-layer page: static shells are cached for hours,
-     * this endpoint keeps the numbers on them honest. Deliberately tiny and
-     * uncached so a page can poll it at the monitoring cadence.
+     * The live half of the two-layer page. Pages arrive with correct numbers on
+     * them; this is what keeps a page somebody left open from drifting.
+     * Deliberately tiny and uncached so it can be polled at the monitoring
+     * cadence by every listing on the site.
      */
     public function live(Request $request): JsonResponse
     {

@@ -122,11 +122,16 @@ class ServerRefreshTest extends TestCase
     }
 
     /**
-     * The other half of "it did not save": the panel updated, but the page
-     * around it is a cached shell, and a reload inside its window brought the
-     * old map, facts and graph back.
+     * This used to be the other half of "it did not save": the panel updated,
+     * but the page around it was a cached shell, and a reload inside its window
+     * brought the old map, facts and graph back — so a refresh had to expire it.
+     *
+     * The server page is read when it is requested now, so the reload shows
+     * what this write just put in the database and there is nothing to expire.
+     * The call this made was a synchronous HTTP request, with a timeout, inside
+     * a request somebody was waiting on.
      */
-    public function test_a_refresh_drops_the_page_the_frontend_had_cached(): void
+    public function test_a_refresh_has_nothing_to_tell_the_frontend(): void
     {
         config([
             'services.frontend.revalidate_url' => 'https://front.test/api/revalidate',
@@ -138,11 +143,10 @@ class ServerRefreshTest extends TestCase
 
         $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
 
-        Http::assertSent(fn ($request) => $request->url() === 'https://front.test/api/revalidate'
-            && $request['tags'] === ['server:refresh-me']);
+        Http::assertNothingSent();
     }
 
-    /** Nothing was re-queried, so there is nothing the cached page is wrong about. */
+    /** The same, down the branch where the cooldown declined to re-query. */
     public function test_a_declined_refresh_leaves_the_cache_alone(): void
     {
         config([

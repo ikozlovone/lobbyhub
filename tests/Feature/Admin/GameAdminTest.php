@@ -234,6 +234,12 @@ class GameAdminTest extends TestCase
         ]))->assertSessionHasErrors('modes.0.name');
     }
 
+    /**
+     * The rail carries the name and the icon, so an edit has to reach it. The
+     * game's own page does not need telling — it is read when a visitor asks
+     * for it — which is why one tag now covers what used to take three,
+     * including the old slug of a game that was just renamed.
+     */
     public function test_saving_tells_the_frontend_to_drop_what_it_cached(): void
     {
         config([
@@ -246,11 +252,8 @@ class GameAdminTest extends TestCase
         $this->put("/admin/games/{$game->slug}", $this->fields(['slug' => 'rust-console', 'name' => 'Rust Console']))
             ->assertSessionHasNoErrors();
 
-        // Both slugs: the page cached under the old address is a 404 now.
         Http::assertSent(fn ($request) => $request->url() === 'https://front.test/api/revalidate'
-            && in_array('games', $request['tags'], true)
-            && in_array('game:rust-console', $request['tags'], true)
-            && in_array('game:rust', $request['tags'], true));
+            && $request['tags'] === ['games']);
     }
 
     public function test_saving_drops_the_api_response_the_edit_replaced(): void

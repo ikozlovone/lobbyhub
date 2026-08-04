@@ -118,34 +118,27 @@ class CatalogCounters
     }
 
     /**
-     * Tell the frontend that a game's listing is not what it has cached.
+     * Tell the frontend that a game has gained or lost servers.
      *
-     * The page shells hold the first page of servers inside them, so a game that
-     * gained or lost one is serving markup that is wrong about which servers
-     * exist — and nothing here was telling the frontend. Submissions did; the
-     * two ways a listing actually fills up did not. Discovery imports thousands
-     * of candidates, and the monitor turns them into listed servers one query at
-     * a time, and both of those happen without anyone touching the site. A page
-     * prerendered before either would keep saying "no servers listed yet" until
-     * a visitor happened to walk into it and pay for the rebuild themselves.
+     * Listings themselves need no telling: the frontend reads them when a
+     * request arrives, so a server the monitor listed a second ago is on the
+     * page a second later. What it does keep is the catalog behind its
+     * navigation rail — where a game appears only once it has a server — and
+     * that is what this expires.
      *
-     * Membership only. Player counts and online tallies move every minute on
-     * their own, and the browser's live layer overwrites them anyway — expiring
-     * every page over those would mean the shells are never cached at all.
+     * Membership only, which is what `$slugs` already holds: player counts and
+     * online tallies move every minute on their own, and purging the rail over
+     * those would mean it is never cached at all.
      *
-     * The game-level tag only, not `games`: that one is on every page in the
-     * catalog, and a minute-by-minute purge of all of them is the same thing
-     * again by another route. The sidebar's counters ride the cache window.
-     *
-     * @param  list<string>  $slugs
+     * @param  list<string>  $slugs  games whose server count changed
      */
     private function republish(array $slugs): void
     {
-        // The frontend route caps a call at 32 tags, so send them in batches of
-        // that rather than watching the tail get dropped.
-        foreach (array_chunk($slugs, 32) as $batch) {
-            $this->frontend->invalidate(...array_map(fn (string $slug) => "game:{$slug}", $batch));
+        if ($slugs === []) {
+            return;
         }
+
+        $this->frontend->invalidate('games');
     }
 
     /** Soft-deleted and delisted servers must not show up in any counter. */
