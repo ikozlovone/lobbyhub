@@ -30,6 +30,17 @@ EnvironmentFile=/var/www/lobbyhub/web/.env.local
 # variable for it — and npm in between would be a process that forwards systemd's
 # signals to the one that matters imperfectly.
 ExecStart=/var/www/lobbyhub/web/node_modules/.bin/next start -H 127.0.0.1 -p 3000
+# 143 is 128 + SIGTERM, which is the signal systemd itself sends to stop this.
+# `next start` installs no handler for it, so Node terminates the default way
+# and systemd reads the exit code as a crash: every restart logs "Failed with
+# result 'exit-code'" for a stop it asked for. Left alone that is a line in the
+# journal that trains you to ignore the ones that mean something, and it counts
+# toward the start rate limit that would eventually refuse to bring the service
+# back at all.
+#
+# Only this unit needs it. The two PHP daemons trap the signal and exit 0 —
+# measured, not assumed.
+SuccessExitStatus=143
 Restart=always
 RestartSec=2
 

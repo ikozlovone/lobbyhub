@@ -458,3 +458,14 @@ sudo /var/www/lobbyhub/deploy/deploy.sh --skip-pull    # deploy what is checked 
 With nothing new to pull the script cannot tell what changed, so it does
 everything — including the rebuild. That is the safe way round: the cost is two
 minutes, and the alternative is a deploy that quietly skips the step you needed.
+
+One thing it does not do is copy the unit files. They are installed once in
+section 8 and then live in `/etc/systemd/system`, so a change to anything under
+`deploy/systemd/` reaches the machine with the pull and does nothing until it is
+put where systemd reads it:
+
+```sh
+sudo cp /var/www/lobbyhub/deploy/systemd/*.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart lobbyhub-web lobbyhub-scheduler 'lobbyhub-worker@*'
+```
