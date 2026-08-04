@@ -211,7 +211,7 @@ export function PlayersChart({
               <summary className="cursor-pointer transition-colors hover:text-fg">
                 Show the numbers
               </summary>
-              <div className="mt-2 max-h-64 overflow-y-auto">
+              <div className="scrollbar-slim mt-2 max-h-64 overflow-y-auto">
                 <table className="w-full text-left">
                   <thead className="sticky top-0 bg-surface text-subtle">
                     <tr>

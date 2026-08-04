@@ -114,7 +114,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               {/* Below lg the games list would push the page down before any of its
                   content; it is reachable from the home page there instead. */}
               <aside className="hidden w-56 shrink-0 lg:block">
-                <div className="sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1">
+                <div className="scrollbar-slim sticky top-20 max-h-[calc(100dvh-6rem)] overflow-y-auto pr-1">
                   <Suspense fallback={<div className="h-64 animate-pulse rounded bg-surface" />}>
                     <Sidebar />
                   </Suspense>

@@ -46,6 +46,111 @@ body {
 }
 
 /*
+ * Scrollbars.
+ *
+ * A catalog is a thing you scroll for a long time, so this bar is on screen
+ * more than any control on the page and has to earn the space quietly: no rail
+ * drawn down the side of every listing, a thumb thin enough to read as a
+ * position marker rather than as furniture, and no brand colour until somebody
+ * actually takes hold of it.
+ *
+ * Two implementations of one design, and never both at once. Chromium drops
+ * ::-webkit-scrollbar entirely the moment scrollbar-width or scrollbar-color is
+ * set to anything but auto, so the standard properties are fenced behind a
+ * query for the pseudo-element Firefox does not have. Each engine gets the
+ * version it can actually draw instead of the intersection of the two.
+ *
+ * In @layer base so a component can still opt out with a utility: the share
+ * rail hides its scrollbar and draws its own arrows, and an unlayered rule here
+ * would beat it — the same trap as the [popover] note below, from the other
+ * side.
+ */
+@layer base {
+  :root {
+    /*
+     * Deliberately not in @theme. Every colour in there becomes a utility the
+     * rest of the app can reach for, and these three are one control's paint.
+     *
+     * The resting value is the dimmest slate in this family that still holds
+     * 3:1 against the page background. A scrollbar is a control, and a control
+     * nobody can find is decoration.
+     */
+    --scrollbar-thumb: #4a6389;
+    --scrollbar-thumb-hover: var(--color-subtle);
+    /* Green only while it is being dragged, which is the one moment this is
+       something being operated rather than something being looked past. */
+    --scrollbar-thumb-active: color-mix(in oklab, var(--color-brand) 45%, var(--color-subtle));
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* Transparent rather than tinted: a visible track is a line down the full
+     height of a thousand-row listing, which is the furniture this avoids. */
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /*
+   * A 6px bar sitting in a 10px gutter: the border is transparent and the fill
+   * is clipped inside it, so the thumb looks thin and still catches the pointer
+   * across the full width. Painting a 6px scrollbar instead would leave a 6px
+   * target, and the people who drag one are the people who find a thin one hard
+   * to hit already.
+   */
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    background-clip: content-box;
+    border: 2px solid transparent;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--scrollbar-thumb-active);
+  }
+
+  /*
+   * Firefox, which has none of the above and does not need most of it — `thin`
+   * is already a rounded overlay bar there. Only the colour has to be said, and
+   * scrollbar-color inherits, so the root carries it for every scroller under
+   * it while scrollbar-width, which does not inherit, is set on all of them.
+   */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scrollbar-thumb) transparent;
+    }
+  }
+}
+
+@layer components {
+  /*
+   * For a scroller inside a panel — the games rail, the readings under a chart.
+   * The page's own bar is sized to be found from anywhere on a wide screen; the
+   * same weight inside a 224px column reads as a second border beside the one
+   * already there.
+   *
+   * Chromium and Safari only. Firefox has three scrollbar widths and `thin` is
+   * already the narrowest, so there is nothing below it to ask for.
+   */
+  .scrollbar-slim::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-slim::-webkit-scrollbar-thumb {
+    border-width: 1px;
+  }
+}
+
+/*
  * Live counters rewrite themselves every couple of minutes. Tabular figures
  * keep the digits from shifting sideways when the value changes.
  */
