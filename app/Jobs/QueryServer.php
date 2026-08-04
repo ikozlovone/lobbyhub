@@ -52,8 +52,15 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
      * When this job was made, which is when the dispatcher decided the server
      * was due. Everything the guard below knows, it knows from comparing this
      * with when the server was actually reached.
+     *
+     * Nullable, and that is not decoration. A job already in the queue when
+     * this field was added was serialized without it, and a typed property with
+     * no default is an error to *read* — so the guard would throw on every one
+     * of them, and at `tries = 1` a backlog would go straight to failed_jobs
+     * instead of being worked. Null is what those jobs have, and it means what
+     * it should: nothing is known about when this was queued, so do not skip.
      */
-    public Carbon $queuedAt;
+    public ?Carbon $queuedAt = null;
 
     /**
      * @param  QueryResult|null  $measured  An answer already in hand, from a
@@ -146,7 +153,7 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
      */
     private function wasOvertakenByAnotherQuery(): bool
     {
-        if ($this->measured !== null || $this->forceDetails) {
+        if ($this->measured !== null || $this->forceDetails || $this->queuedAt === null) {
             return false;
         }
 

@@ -448,6 +448,31 @@ class QueryServerTest extends TestCase
     }
 
     /**
+     * A job queued before `queuedAt` existed still works.
+     *
+     * Those were serialized without the field, and a typed property with no
+     * default is an error to read rather than a null — so the guard threw on
+     * every one of them, and at `tries = 1` that sent a whole backlog to
+     * failed_jobs without a single query being made. Null stands for "queued by
+     * a version that did not record this", and the only safe reading of that is
+     * to do the work.
+     */
+    public function test_a_job_queued_before_this_field_existed_still_runs(): void
+    {
+        $server = $this->minecraftServer(['last_queried_at' => now()->subHour()]);
+
+        $job = new QueryServer($server);
+        $job->queuedAt = null;
+
+        // Something reached the server since — which would normally skip it.
+        $server->forceFill(['last_queried_at' => now()])->save();
+
+        $this->runQueuedJob($job, new QueryResult(playersOnline: 12, playersMax: 20));
+
+        $this->assertSame(12, $server->refresh()->players_online);
+    }
+
+    /**
      * The refresh button and the submission form run inline because somebody is
      * looking at the panel. Neither may be silenced by a scheduled poll that
      * happens to have touched the server a moment ago.
