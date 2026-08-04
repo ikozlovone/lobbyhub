@@ -13,6 +13,7 @@ class SyncSteamServers extends Command
 {
     protected $signature = 'steam:sync
         {--game= : Slug of a single game; omit to sweep every game with an app id}
+        {--populated : Only servers with players on them — the cheap, frequent pass}
         {--sync : Run the sweeps inline instead of queueing them}';
 
     protected $description = 'Read every Source server Steam knows about and write it into the catalog';
@@ -43,11 +44,15 @@ class SyncSteamServers extends Command
         if (! $this->option('sync')) {
             foreach ($games as $game) {
                 if ($game->steam_appid !== null) {
-                    SyncSteamGame::dispatch($game);
+                    SyncSteamGame::dispatch($game, (bool) $this->option('populated'));
                 }
             }
 
-            $this->info("{$games->count()} game(s) offered to the queue.");
+            $this->info(sprintf(
+                '%d game(s) offered to the queue%s.',
+                $games->count(),
+                $this->option('populated') ? ' (occupied servers only)' : '',
+            ));
 
             return self::SUCCESS;
         }
@@ -62,7 +67,7 @@ class SyncSteamServers extends Command
             }
 
             try {
-                $report = $sync->run($game, $sweep);
+                $report = $sync->run($game, $sweep, (bool) $this->option('populated'));
             } catch (RuntimeException $exception) {
                 $this->error("  {$game->slug}: {$exception->getMessage()}");
 

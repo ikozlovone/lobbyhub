@@ -32,6 +32,29 @@ class MonitoringStatus extends Command
         $this->components->twoColumnDetail('  never queried', (string) $neverQueried);
 
         /*
+         * Which half of the monitor each server belongs to.
+         *
+         * The interesting figure is the second one. Everything Steam is
+         * currently listing costs no packet at all, so the queue's real work is
+         * whatever is left — and if that number climbs while the sweep is
+         * supposedly running, the sweep is the thing to look at, not the
+         * workers.
+         */
+        $trustFor = (int) config('monitoring.steam_trust_for');
+        $covered = (clone $active)->where('steam_seen_at', '>=', now()->subSeconds($trustFor))->count();
+
+        $this->line('');
+        $this->components->twoColumnDetail('<fg=gray>source</>', '<fg=gray>steam sweep</>');
+        $this->components->twoColumnDetail('  covered by the sweep', (string) $covered);
+        $this->components->twoColumnDetail('  left to the poller', (string) ((clone $active)->count() - $covered));
+        $this->components->twoColumnDetail(
+            '  last seen in a list',
+            ($seen = (clone $active)->max('steam_seen_at'))
+                ? now()->diffInSeconds(Carbon::parse($seen), absolute: true).'s ago'
+                : '—',
+        );
+
+        /*
          * What the catalog is actually showing, as opposed to what it is owed.
          *
          * "oldest overdue by" is measured against `next_query_at`, and the

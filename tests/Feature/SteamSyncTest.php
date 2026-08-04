@@ -232,6 +232,76 @@ class SteamSyncTest extends TestCase
         return $rows;
     }
 
+    /**
+     * The cheap pass. Reading everything every five minutes costs about four
+     * hundred requests, which is 115 000 calls a day against a key rated for
+     * 100 000; occupied servers are a slice of that and are the ones on the
+     * fast tiers anyway.
+     */
+    public function test_the_populated_pass_asks_only_about_occupied_servers(): void
+    {
+        $seen = [];
+
+        Http::fake(function ($request) use (&$seen) {
+            $seen[] = urldecode((string) ($request->data()['filter'] ?? ''));
+
+            return Http::response(['response' => ['servers' => []]]);
+        });
+
+        app(SteamCatalogSync::class)->run($this->game(), app(SteamServerSweep::class), populatedOnly: true);
+
+        $this->assertSame(['\appid\730\empty\1'], $seen);
+    }
+
+    /**
+     * Applied on top of `\empty\1`, the emptiness axis splits a bucket into
+     * nothing and itself — a request that subdivides nothing.
+     */
+    public function test_the_populated_pass_does_not_subdivide_by_emptiness(): void
+    {
+        $seen = [];
+
+        Http::fake(function ($request) use (&$seen) {
+            $filter = urldecode((string) ($request->data()['filter'] ?? ''));
+            $seen[] = $filter;
+
+            // Only the top question is full, so exactly one axis is applied.
+            return Http::response(['response' => [
+                'servers' => $filter === '\appid\730\empty\1' ? $this->fullResponse() : [],
+            ]]);
+        });
+
+        app(SteamCatalogSync::class)->run($this->game(), app(SteamServerSweep::class), populatedOnly: true);
+
+        $this->assertContains('\appid\730\empty\1\region\0', $seen);
+        $this->assertNotContains('\appid\730\empty\1\noplayers\1', $seen);
+    }
+
+    /** A second key is a second daily allowance, and nothing else changes. */
+    public function test_requests_are_dealt_across_every_key(): void
+    {
+        config(['services.steam.keys' => ['first', 'second']]);
+
+        $keys = [];
+
+        Http::fake(function ($request) use (&$keys) {
+            $filter = urldecode((string) ($request->data()['filter'] ?? ''));
+            $keys[] = $request->data()['key'] ?? null;
+
+            return Http::response(['response' => [
+                'servers' => $filter === '\appid\730' ? $this->fullResponse() : [],
+            ]]);
+        });
+
+        $this->sync();
+
+        // Ten requests: the bare question and its nine regions, alternating.
+        $this->assertSame('first', $keys[0]);
+        $this->assertSame('second', $keys[1]);
+        $this->assertSame('first', $keys[2]);
+        $this->assertSame(5, count(array_filter($keys, fn ($k) => $k === 'second')));
+    }
+
     private function game(): Game
     {
         return Game::where('slug', 'counter-strike-2')->firstOrFail();

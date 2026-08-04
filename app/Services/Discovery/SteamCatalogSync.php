@@ -74,7 +74,7 @@ class SteamCatalogSync
         private readonly GeoResolver $geo,
     ) {}
 
-    public function run(Game $game, SteamServerSweep $sweep): SyncReport
+    public function run(Game $game, SteamServerSweep $sweep, bool $populatedOnly = false): SyncReport
     {
         $this->game = $game;
         $this->now = now();
@@ -83,7 +83,7 @@ class SteamCatalogSync
         $this->updates = $this->inserts = $this->samples = [];
         $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0];
 
-        $result = $sweep->stream($game, fn (DiscoveredServer $found) => $this->write($found));
+        $result = $sweep->stream($game, fn (DiscoveredServer $found) => $this->write($found), $populatedOnly);
 
         $this->flushUpdates();
         $this->flushInserts();

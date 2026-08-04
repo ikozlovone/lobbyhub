@@ -50,6 +50,23 @@ return [
 
     'steam' => [
         'key' => env('STEAM_API_KEY'),
+
+        /*
+         * More than one key, comma-separated in the same variable.
+         *
+         * A key is rated per day, and the sweep's cost is not small: twelve of
+         * the catalog's forty-five games hold more servers than one response
+         * can carry, and reaching all of them costs eighteen requests for
+         * Valheim and sixty-eight for Counter-Strike 2. Requests are dealt
+         * round-robin across whatever is listed here, so a second key is a
+         * second day's allowance and nothing else has to change.
+         *
+         * One key stays one key: a value with no comma in it is a list of one.
+         */
+        'keys' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('STEAM_API_KEY', '')),
+        ))),
     ],
 
     /*

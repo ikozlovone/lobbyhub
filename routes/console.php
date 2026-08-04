@@ -9,18 +9,34 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 /*
- * Steam's own list, for every game that has an app id.
+ * Steam's own list, for every game that has an app id — in two passes, because
+ * one pass at the cadence the busy servers deserve does not fit in a key.
  *
- * Five minutes, which is the fastest cadence any tier asks for — so a server on
- * the hottest tier is never waiting on this, and one on the quiet tier is
- * simply read more often than it is recorded.
+ * Reading everything every five minutes costs around four hundred requests a
+ * pass: twelve of the forty-five games hold more servers than one response
+ * carries, and reaching all of them is eighteen requests for Valheim and
+ * sixty-eight for Counter-Strike 2. That is about 115 000 calls a day against a
+ * key rated for 100 000.
+ *
+ * Splitting it by whether anyone is playing costs almost nothing and matches
+ * the tiers that already exist. Occupied servers are a small slice — Rust's are
+ * one request, Counter-Strike's twenty-six against its sixty-eight — and they
+ * are the ones sitting on the five and ten minute tiers. Empty servers are on
+ * the hour, so reading them every half hour is still ahead of what they are
+ * owed. Together: roughly 42 000 calls a day.
  *
  * Ahead of `servers:query` in the file because that is the order they matter
- * in: the sweep is what makes most of the catalog not need a packet at all, and
- * the poller below is left with what it did not cover.
+ * in: the sweeps are what make most of the catalog need no packet at all, and
+ * the poller below is left with what they did not cover — which now includes
+ * servers that emptied since the last full pass, and those answer in
+ * milliseconds rather than timing out.
  */
-Schedule::command('steam:sync')
+Schedule::command('steam:sync --populated')
     ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+Schedule::command('steam:sync')
+    ->everyThirtyMinutes()
     ->withoutOverlapping();
 
 // The dispatcher itself is cheap; the actual queries run on the queue.

@@ -37,11 +37,19 @@ class SyncSteamGame implements ShouldBeUnique, ShouldQueue
      */
     public int $timeout = 900;
 
-    public function __construct(public Game $game)
+    public function __construct(public Game $game, public bool $populatedOnly = false)
     {
         $this->onQueue(config('monitoring.queue'));
     }
 
+    /**
+     * Per game, and deliberately not per mode.
+     *
+     * The two sweeps write the same rows, so letting a five-minute occupied
+     * pass start on top of a running full one would have both of them updating
+     * the same servers for no gain. One at a time per game; the full sweep
+     * covers everything the other would have, so nothing is missed by waiting.
+     */
     public function uniqueId(): string
     {
         return (string) $this->game->getKey();
@@ -54,7 +62,7 @@ class SyncSteamGame implements ShouldBeUnique, ShouldQueue
 
     public function handle(SteamServerSweep $sweep, SteamCatalogSync $sync): void
     {
-        $report = $sync->run($this->game, $sweep);
+        $report = $sync->run($this->game, $sweep, $this->populatedOnly);
 
         /*
          * Only the gap is logged, and only when there is one.

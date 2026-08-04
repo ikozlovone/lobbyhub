@@ -66,6 +66,19 @@ class SteamServerSweep
     }
 
     /**
+     * Servers with at least one player on them.
+     *
+     * The whole reason there are two sweeps. A game's population is mostly
+     * empty servers — of Counter-Strike 2's hundred thousand, the non-empty
+     * ones in Europe were 3 824 against more than ten thousand empty — and an
+     * empty server sits on the hour-long tier anyway. Reading only the occupied
+     * ones is a request or two per game instead of eighteen to sixty-eight, so
+     * it can run at the cadence the busy servers actually deserve while the
+     * full population is read on the cadence the quiet ones do.
+     */
+    private const POPULATED = '\empty\1';
+
+    /**
      * The ladder. Each entry is a set of filter fragments that together cover
      * the bucket they are applied to.
      *
@@ -106,27 +119,29 @@ class SteamServerSweep
      * into one row each — and nothing else grows with the size of the game.
      *
      * @param  callable(DiscoveredServer): void  $onServer
+     * @param  bool  $populatedOnly  Only servers with someone on them
      */
-    public function stream(Game $game, callable $onServer): SweepResult
+    public function stream(Game $game, callable $onServer, bool $populatedOnly = false): SweepResult
     {
         if ($game->steam_appid === null) {
             throw new RuntimeException("Game [{$game->slug}] has no Steam app id");
         }
 
-        $key = (string) config('services.steam.key');
-
-        if ($key === '') {
-            throw new RuntimeException('STEAM_API_KEY is not set');
-        }
-
+        $keys = $this->keys();
         $seen = [];
         $requests = 0;
         $truncated = 0;
 
         $this->collect(
-            $key,
-            '\appid\\'.$game->steam_appid,
-            self::AXES,
+            $keys,
+            '\appid\\'.$game->steam_appid.($populatedOnly ? self::POPULATED : ''),
+            /*
+             * The emptiness axis is dropped when the question already carries
+             * it. Applied on top of `\empty\1` its two children are "occupied
+             * and empty", which is nothing, and "occupied and occupied", which
+             * is the parent again — a wasted request that subdivides nothing.
+             */
+            $populatedOnly ? self::populatedAxes() : self::AXES,
             $seen,
             $onServer,
             $requests,
@@ -137,17 +152,49 @@ class SteamServerSweep
     }
 
     /**
+     * @return list<list<string>>
+     */
+    private static function populatedAxes(): array
+    {
+        return [self::AXES[0], ...self::NAME_AXES];
+    }
+
+    /**
+     * The keys to deal requests round-robin across.
+     *
+     * @return list<string>
+     */
+    private function keys(): array
+    {
+        $keys = (array) config('services.steam.keys', []);
+
+        // Falls back to the single-value setting, so a deployment that has not
+        // heard of the plural one keeps working.
+        if ($keys === []) {
+            $single = (string) config('services.steam.key');
+            $keys = $single === '' ? [] : [$single];
+        }
+
+        if ($keys === []) {
+            throw new RuntimeException('STEAM_API_KEY is not set');
+        }
+
+        return array_values($keys);
+    }
+
+    /**
      * One bucket, and its children if it turned out to be full.
      *
      * The address set is what makes the overlapping axes safe: a server listed
      * under two regions is handed to the caller once, the first time it is met.
      *
+     * @param  list<string>  $keys
      * @param  list<list<string>>  $axes
      * @param  array<string, true>  $seen
      * @param  callable(DiscoveredServer): void  $onServer
      */
     private function collect(
-        string $key,
+        array $keys,
         string $filter,
         array $axes,
         array &$seen,
@@ -155,7 +202,9 @@ class SteamServerSweep
         int &$requests,
         int &$truncated,
     ): void {
-        $rows = $this->request($key, $filter);
+        // Round-robin, so a game costing sixty-eight requests spreads them
+        // rather than spending one key's whole allowance on itself.
+        $rows = $this->request($keys[$requests % count($keys)], $filter);
         $requests++;
         $returned = count($rows);
 
@@ -206,7 +255,7 @@ class SteamServerSweep
         $axis = array_shift($next);
 
         foreach ($axis as $fragment) {
-            $this->collect($key, $filter.$fragment, $next, $seen, $onServer, $requests, $truncated);
+            $this->collect($keys, $filter.$fragment, $next, $seen, $onServer, $requests, $truncated);
         }
     }
 
