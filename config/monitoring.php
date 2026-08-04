@@ -77,6 +77,33 @@ return [
     'unique_for' => (int) env('MONITORING_UNIQUE_FOR', 3600),
 
     /**
+     * How long a server seen in Steam's own list is left alone by the poller.
+     *
+     * `steam:sync` reads every registered Source server in a handful of
+     * requests and writes the same measurements a query would have produced, so
+     * anything it touched needs no packet. Three sweep intervals rather than
+     * one: a cycle that fails or runs long must not dump twenty thousand
+     * servers back onto the queue, and the cost of waiting is a snapshot that
+     * is fifteen minutes old at worst before the poller takes over again.
+     *
+     * Raising it past the point where the sweep is actually running means
+     * offline Source servers stay marked online for that long — absence from
+     * Steam is only noticed by the poller this gates.
+     */
+    'steam_trust_for' => (int) env('MONITORING_STEAM_TRUST_FOR', 900),
+
+    /**
+     * How many rows in one Steam response count as a truncated answer.
+     *
+     * The cap is not exact — the same saturated question answered 10 000,
+     * 9 999, 9 996 and 9 971 — so a sweep that tests for the ceiling itself
+     * reads a cut-off bucket as a finished one and stops looking. Ninety
+     * percent, and generous on purpose: subdividing a bucket that was not full
+     * costs a few requests, failing to subdivide one that was loses servers.
+     */
+    'steam_saturated_at' => (int) env('MONITORING_STEAM_SATURATED_AT', 9000),
+
+    /**
      * One provider often holds hundreds of servers behind a single IP. Querying
      * them all in one batch looks like a port scan, so a batch takes at most
      * this many per host and the rest wait for the next run.

@@ -138,9 +138,31 @@ class DispatchServerQueries extends Command
             ->get();
     }
 
+    /**
+     * Due, and not already answered by the Steam sweep.
+     *
+     * A Source server that Steam is currently listing has told us everything a
+     * packet would — players, map, version, bots, anti-cheat, the tag string —
+     * so the packet buys a worker-second and nothing else. What the sweep
+     * cannot say is why a server is *absent* from it: switched off, or running
+     * without a game server login token and therefore invisible to Steam. Those
+     * are the servers left here, and they are the ones worth the five-second
+     * timeout.
+     *
+     * The window is generous on purpose. It is not "seen in the last sweep" but
+     * "seen recently enough that the next sweep will cover it", so one failed
+     * cycle does not dump twenty thousand servers back onto the queue.
+     */
     private function due(): Builder
     {
-        return Server::query()->active()->where('next_query_at', '<=', now());
+        $trustFor = (int) config('monitoring.steam_trust_for');
+
+        return Server::query()
+            ->active()
+            ->where('next_query_at', '<=', now())
+            ->where(fn (Builder $query) => $query
+                ->whereNull('steam_seen_at')
+                ->orWhere('steam_seen_at', '<', now()->subSeconds($trustFor)));
     }
 
     /**

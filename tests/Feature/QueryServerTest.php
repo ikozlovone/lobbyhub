@@ -538,6 +538,53 @@ class QueryServerTest extends TestCase
         $this->assertSame($scheduled, $server->refresh()->next_query_at->timestamp);
     }
 
+    /**
+     * The point of the Steam sweep: a server it has just read needs no packet.
+     * Everything a query would have returned is already in the row, and the
+     * five seconds a silent one costs is the whole reason this exists.
+     */
+    public function test_the_dispatcher_leaves_servers_the_steam_sweep_just_read(): void
+    {
+        $this->minecraftServer(['next_query_at' => now()->subHour(), 'steam_seen_at' => now()]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->expectsOutputToContain('No servers due.')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+    }
+
+    /**
+     * And the case the sweep cannot answer. Absence from Steam's list is either
+     * a server that is off or one running without a login token, and telling
+     * those apart is what a packet is still for.
+     */
+    public function test_a_server_the_sweep_has_stopped_seeing_is_queried_again(): void
+    {
+        $this->minecraftServer([
+            'next_query_at' => now()->subHour(),
+            'steam_seen_at' => now()->subSeconds((int) config('monitoring.steam_trust_for') + 60),
+        ]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->assertSuccessful();
+
+        Queue::assertPushed(QueryServer::class, 1);
+    }
+
+    /** Minecraft and FiveM are not on Steam at all, and are polled as they always were. */
+    public function test_a_server_never_seen_on_steam_is_queried_as_before(): void
+    {
+        $this->minecraftServer(['next_query_at' => now()->subHour(), 'steam_seen_at' => null]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->assertSuccessful();
+
+        Queue::assertPushed(QueryServer::class, 1);
+    }
+
     public function test_the_dispatcher_holds_back_servers_that_share_a_host(): void
     {
         $minecraft = Game::where('slug', 'minecraft')->value('id');

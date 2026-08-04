@@ -1,0 +1,17 @@
+<?php
+
+namespace App\Services\Discovery;
+
+/** What one game's sync did, for the command that prints it and the log. */
+final readonly class SyncReport
+{
+    public function __construct(
+        public int $found,
+        public int $updated,
+        public int $created,
+        public int $sampled,
+        public int $requests,
+        /** Buckets Steam would not finish handing over. Anything above zero is a gap. */
+        public int $truncated,
+    ) {}
+}

@@ -25,6 +25,18 @@ final readonly class DiscoveredServer
         public ?string $version,
         public ?Carbon $wipedAt,
         public ?int $playersQueued,
+        /*
+         * The three that used to be dropped on the floor.
+         *
+         * All of them ride along in the same response — `steamid`, `bots`,
+         * `secure` — and every one of them was being paid for a second time
+         * with a UDP packet per server. A2S returns the Steam id in its extra
+         * data block and the bot count and anti-cheat flag in the info reply;
+         * nothing about them is more true for having been asked directly.
+         */
+        public ?string $steamId = null,
+        public ?int $bots = null,
+        public ?bool $vacEnabled = null,
     ) {}
 
     public static function fromApi(array $row): ?self
@@ -59,6 +71,9 @@ final readonly class DiscoveredServer
             version: self::clean($row['version'] ?? null),
             wipedAt: $tags['wiped_at'],
             playersQueued: $tags['queued'],
+            steamId: self::clean($row['steamid'] ?? null),
+            bots: isset($row['bots']) ? max(0, (int) $row['bots']) : null,
+            vacEnabled: isset($row['secure']) ? (bool) $row['secure'] : null,
         );
     }
 
