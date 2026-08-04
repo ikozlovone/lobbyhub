@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServerController;
 use App\Http\Controllers\Api\ServerHistoryController;
 use App\Http\Controllers\Api\ServerSubmissionController;
+use App\Http\Controllers\Api\SitemapController;
 use App\Http\Controllers\Api\VoteController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -56,6 +57,15 @@ Route::name('api.')->group(function () {
     Route::post('servers/{server}/votes/claim', [VoteController::class, 'claim'])->name('servers.votes.claim');
 
     Route::get('search', SearchController::class)->name('search');
+
+    /*
+     * Every server URL there is, for the frontend's sitemap.
+     *
+     * Apart from the listing above on purpose: that one is capped at ten
+     * thousand rows by its own pagination limits, which is correct for
+     * something a person browses and useless for an enumeration.
+     */
+    Route::get('sitemap/servers', [SitemapController::class, 'servers'])->name('sitemap.servers');
 
     /*
     |----------------------------------------------------------------------

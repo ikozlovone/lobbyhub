@@ -1,20 +1,26 @@
 import type { MetadataRoute } from 'next'
-import { getGame, getGames } from '@/lib/data'
+import { getSitemapCatalog } from '@/lib/data'
 import { GAME_INDEX_THRESHOLD, INDEX_THRESHOLD } from '@/lib/seo'
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
 /**
- * Facet pages below the index threshold are deliberately absent: a sitemap that
- * lists thousands of near-empty pages invites exactly the crawl that devalues
- * the domain. They stay reachable through the facet navigation.
+ * Everything the site has except the servers themselves, which are their own
+ * files under /servers/sitemap — there are tens of thousands of those and they
+ * have to be chunked. robots.txt names all of them.
  *
- * Server pages are not here yet — at catalog scale they need generateSitemaps()
- * to chunk them under the 50k-URL limit, which is a job for when there are more
- * than a handful of them.
+ * One rule decides what is in here: a URL belongs in a sitemap only if it is
+ * indexable. Submitting a page that carries `noindex` is a contradiction — the
+ * file says "crawl this and index it", the page says the opposite — so the
+ * thresholds below are the same ones robotsFor() applies to the pages
+ * themselves, and /favorites and the auth callback are absent because they set
+ * noindex on themselves.
+ *
+ * The whole thing is one cached read. See SITEMAP_CACHE for why this is the one
+ * place on the site that caches hard.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const games = await getGames()
+  const catalog = await getSitemapCatalog()
 
   const entries: MetadataRoute.Sitemap = [
     { url: SITE, changeFrequency: 'hourly', priority: 1 },
@@ -31,10 +37,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
   ]
 
-  for (const game of games) {
+  for (const game of catalog) {
     // A listed game with no servers yet is a thin page, exactly like an empty
     // facet — browsable, but not something to invite a crawler to.
-    if (game.counters.servers < GAME_INDEX_THRESHOLD) continue
+    if (game.servers < GAME_INDEX_THRESHOLD) continue
 
     entries.push({
       url: `${SITE}/games/${game.slug}`,
@@ -42,21 +48,33 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     })
 
-    const detail = await getGame(game.slug)
-    if (!detail) continue
+    /*
+     * The per-game form, which was missing.
+     *
+     * It is a real indexable page with its own title and canonical, and it is
+     * the one people arrive at from outside — "add my rust server" is a search
+     * somebody makes, and it should land on the Rust form rather than on the
+     * game picker. Weekly, because nothing on it moves except the rail of
+     * latest additions down the side.
+     */
+    entries.push({
+      url: `${SITE}/games/${game.slug}/add-server`,
+      changeFrequency: 'weekly',
+      priority: 0.5,
+    })
 
     const facets = [
-      ...detail.facets.modes.map((mode) => ({
+      ...game.modes.map((mode) => ({
         path: `/games/${game.slug}/${mode.slug}`,
-        count: mode.servers_count,
+        count: mode.count,
       })),
-      ...detail.facets.versions.map((version) => ({
+      ...game.versions.map((version) => ({
         path: `/games/${game.slug}/version/${version.slug}`,
-        count: version.servers_count,
+        count: version.count,
       })),
-      ...detail.facets.countries.map((country) => ({
+      ...game.countries.map((country) => ({
         path: `/games/${game.slug}/country/${country.slug}`,
-        count: country.servers_count,
+        count: country.count,
       })),
     ]
 

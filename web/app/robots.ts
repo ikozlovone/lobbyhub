@@ -1,8 +1,25 @@
 import type { MetadataRoute } from 'next'
+import { countServerSitemaps } from '@/lib/data'
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
-export default function robots(): MetadataRoute.Robots {
+/**
+ * Names every sitemap, because there is more than one and nothing else points
+ * at the rest.
+ *
+ * The servers are chunked into files of their own — see app/servers/sitemap.ts
+ * — and Next writes no index tying them together. robots.txt is the index:
+ * several `Sitemap:` lines is what the protocol allows and what the engines
+ * read, and it is the file they fetch first regardless.
+ *
+ * Async, and therefore counting the chunks on every request. That is one small
+ * cached read; getting it wrong the other way would mean a robots.txt that
+ * names two files while the catalog has grown into three, with the servers in
+ * the third submitted nowhere at all.
+ */
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const chunks = await countServerSitemaps()
+
   return {
     rules: {
       userAgent: '*',
@@ -10,6 +27,9 @@ export default function robots(): MetadataRoute.Robots {
       // Sorted and paginated variants are the same listings in another order.
       disallow: ['/*?sort=', '/*?page='],
     },
-    sitemap: `${SITE}/sitemap.xml`,
+    sitemap: [
+      `${SITE}/sitemap.xml`,
+      ...Array.from({ length: chunks }, (_, id) => `${SITE}/servers/sitemap/${id}.xml`),
+    ],
   }
 }

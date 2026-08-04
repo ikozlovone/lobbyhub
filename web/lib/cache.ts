@@ -28,3 +28,23 @@ export const CATALOG_CACHE = {
   /** How long a copy nobody has asked for is still worth serving. */
   expire: 604_800,
 } as const
+
+/**
+ * The sitemap, which is the one thing here that should be cached hard.
+ *
+ * Nothing else on the site is built from a walk over the whole catalog: every
+ * game with its facets, and every server there is, in one answer. Rebuilding
+ * that per request would be the most expensive thing the frontend does, on
+ * behalf of the only visitor who does not mind waiting and does not come back
+ * for an hour anyway.
+ *
+ * And there is nothing to gain by being quicker. A server added a minute ago
+ * appears in the listings immediately, which is how anyone actually finds it; a
+ * crawler reads this file on its own schedule, measured in hours at best. An
+ * hour late here costs nothing that a fresh copy would have bought.
+ */
+export const SITEMAP_CACHE = {
+  stale: 3_600,
+  revalidate: 3_600,
+  expire: 604_800,
+} as const

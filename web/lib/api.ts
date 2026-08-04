@@ -452,6 +452,27 @@ export async function submitServer(
 }
 
 /**
+ * One server as the sitemap needs it: where it is, and when what the page says
+ * about it last changed. See the API's SitemapController for why `lastmod` is
+ * not the last time we queried the thing.
+ */
+export type SitemapServer = { slug: string; lastmod: string | null }
+
+/**
+ * A page of every server URL there is.
+ *
+ * Its own endpoint rather than `fetchCatalogServers`, which cannot answer this:
+ * the listing is capped at a hundred pages of a hundred rows, so a sitemap
+ * built on it would stop at ten thousand servers without saying so.
+ */
+export async function fetchSitemapServers(page: number, perPage: number, init?: RequestInit) {
+  return get<Paginated<SitemapServer>>(
+    `/sitemap/servers?page=${page}&per_page=${perPage}`,
+    init,
+  )
+}
+
+/**
  * The live half of the page. Called from the browser on an interval, so it must
  * never be cached — by Next, by the browser, or by a CDN in between.
  */

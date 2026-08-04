@@ -1,6 +1,6 @@
 import { cache } from 'react'
 import { cacheLife, cacheTag } from 'next/cache'
-import { CATALOG_CACHE } from './cache'
+import { CATALOG_CACHE, SITEMAP_CACHE } from './cache'
 import {
   SERVER_API_URL,
   fetchCatalogServers,
@@ -10,7 +10,9 @@ import {
   fetchRecentVotes,
   fetchServer,
   fetchServers,
+  fetchSitemapServers,
   type CatalogFilters,
+  type Facet,
   type Server,
   type ServerFilters,
 } from './api'
@@ -193,3 +195,92 @@ export const getServer = cache(async (slug: string) => fetchServer(slug, FRESH))
 export const getHistory = cache(async (slug: string, range: string) =>
   fetchHistory(slug, range, FRESH),
 )
+
+/* ── The sitemap, which is cached on purpose ───────────────────────────── */
+
+/**
+ * How many server URLs go in one sitemap file.
+ *
+ * The protocol allows fifty thousand, and this is deliberately under it. Half
+ * the ceiling costs one extra file per fifty thousand servers and buys two
+ * things: room for the entry to grow — an image or a video per server would
+ * double its size, not its count — and a response the frontend assembles from
+ * one API answer it can comfortably hold.
+ */
+export const SERVER_SITEMAP_CHUNK = 25_000
+
+/** Only what the sitemap prints. The rest of a GameDetail is a large thing to cache. */
+export type SitemapGame = {
+  slug: string
+  servers: number
+  modes: { slug: string; count: number }[]
+  versions: { slug: string; count: number }[]
+  countries: { slug: string; count: number }[]
+}
+
+/**
+ * Every game and every facet under it, in one cached read.
+ *
+ * A walk over the catalog: one request for the list and one per game for its
+ * facets. Sequential rather than at once — this is forty-odd requests, and
+ * firing them together at an API that is also serving visitors buys a second
+ * of latency on a file nobody is waiting for.
+ *
+ * The facets are trimmed to slug and count here rather than in the caller,
+ * because everything not trimmed is stored: `facets.maps` alone runs to
+ * hundreds of entries per game and no route serves it.
+ */
+export async function getSitemapCatalog(): Promise<SitemapGame[]> {
+  'use cache'
+  cacheLife(SITEMAP_CACHE)
+  cacheTag('games', 'sitemap')
+
+  const games = await fetchGames()
+  const catalog: SitemapGame[] = []
+
+  for (const game of games) {
+    const detail = await fetchGame(game.slug)
+
+    if (!detail) continue
+
+    const trim = (facets: Facet[]) =>
+      facets.map((facet) => ({ slug: facet.slug, count: facet.servers_count }))
+
+    catalog.push({
+      slug: detail.slug,
+      servers: detail.counters.servers,
+      modes: trim(detail.facets.modes),
+      versions: trim(detail.facets.versions),
+      countries: trim(detail.facets.countries),
+    })
+  }
+
+  return catalog
+}
+
+/** One file's worth of server URLs. `page` is one-based, as the API counts. */
+export async function getSitemapServers(page: number) {
+  'use cache'
+  cacheLife(SITEMAP_CACHE)
+  cacheTag('servers', 'sitemap')
+
+  return fetchSitemapServers(page, SERVER_SITEMAP_CHUNK)
+}
+
+/**
+ * How many files the servers take.
+ *
+ * Asks for a single row and reads the total off the pagination, so the count
+ * costs one small query rather than a walk. At least one either way: a sitemap
+ * index pointing at nothing is harder to diagnose than an empty sitemap, and a
+ * catalog with no servers in it is a state this site starts in.
+ */
+export async function countServerSitemaps(): Promise<number> {
+  'use cache'
+  cacheLife(SITEMAP_CACHE)
+  cacheTag('servers', 'sitemap')
+
+  const { meta } = await fetchSitemapServers(1, 1)
+
+  return Math.max(1, Math.ceil(meta.total / SERVER_SITEMAP_CHUNK))
+}
