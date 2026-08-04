@@ -37,9 +37,18 @@ class SyncSteamGame implements ShouldBeUnique, ShouldQueue
      */
     public int $timeout = 900;
 
+    /**
+     * Its own queue, ahead of the per-server queries.
+     *
+     * Sharing one took the monitor down: the database driver hands out jobs in
+     * id order, the dispatcher can add two thousand a minute, and a sweep
+     * queued behind a hundred thousand of them was a day and a half from
+     * running. Nothing then refreshed `steam_seen_at`, so every server fell to
+     * the poller and made the queue longer still.
+     */
     public function __construct(public Game $game, public bool $populatedOnly = false)
     {
-        $this->onQueue(config('monitoring.queue'));
+        $this->onQueue(config('monitoring.steam_queue'));
     }
 
     /**

@@ -14,7 +14,7 @@
         <string>/Applications/ServBay/script/alias/php</string>
         <string>/Users/ivankozlov/code/lobbyhub/artisan</string>
         <string>queue:work</string>
-        <string>--queue=monitoring</string>
+        <string>--queue=steam,monitoring</string>
         <string>--tries=1</string>
         <string>--sleep=1</string>
         <string>--max-time=3600</string>

@@ -79,18 +79,53 @@ return [
     /**
      * How long a server seen in Steam's own list is left alone by the poller.
      *
-     * `steam:sync` reads every registered Source server in a handful of
-     * requests and writes the same measurements a query would have produced, so
-     * anything it touched needs no packet. Three sweep intervals rather than
-     * one: a cycle that fails or runs long must not dump twenty thousand
-     * servers back onto the queue, and the cost of waiting is a snapshot that
-     * is fifteen minutes old at worst before the poller takes over again.
+     * Two windows, because there are two passes and one number cannot serve
+     * both. A server with players on it is read every five minutes by the
+     * occupied pass, and its disappearance is worth noticing quickly — that is
+     * a busy server going down. An empty one is only in the half-hourly full
+     * pass, sits on the hour-long tier, and nobody is waiting on the news.
      *
-     * Raising it past the point where the sweep is actually running means
-     * offline Source servers stay marked online for that long — absence from
-     * Steam is only noticed by the poller this gates.
+     * Each is about twice the interval of the pass that refreshes it, so a
+     * cycle running long does not dump the catalog back onto the queue.
+     *
+     * Getting this wrong is not subtle: these were one number at 900 seconds
+     * while the full pass ran every 1800, so every empty server in the catalog
+     * — a hundred thousand of them — was legally uncovered for half of every
+     * cycle and fell to the poller, which could reach three thousand an hour.
+     *
+     * The cost of raising either is the same: absence from Steam is what tells
+     * us a server is gone, and only the poller this gates can confirm it.
      */
-    'steam_trust_for' => (int) env('MONITORING_STEAM_TRUST_FOR', 900),
+    'steam_trust_populated' => (int) env('MONITORING_STEAM_TRUST_POPULATED', 900),
+
+    'steam_trust_quiet' => (int) env('MONITORING_STEAM_TRUST_QUIET', 3600),
+
+    /**
+     * The queue the Steam sweeps go to, kept apart from the per-server queries.
+     *
+     * Not tidiness — the failure it prevents took the monitor down. Both job
+     * kinds shared one queue, the database driver takes jobs in id order, and
+     * the dispatcher can add two thousand queries a minute. Sweep jobs landed
+     * behind a hundred thousand of them and were thirty hours from running;
+     * without sweeps every server fell to the poller, which filled the queue
+     * further. A worker reading `steam,monitoring` takes a sweep first however
+     * deep the other queue is — see deploy/systemd/lobbyhub-worker@.service.
+     */
+    'steam_queue' => env('MONITORING_STEAM_QUEUE', 'steam'),
+
+    /**
+     * How deep the query queue may get before the dispatcher stops adding.
+     *
+     * A backlog this size is not work waiting to be done, it is a statement
+     * that the workers cannot keep up — and every further batch makes the
+     * queue longer without a single extra server being reached. Left
+     * unbounded it grew to a hundred thousand, at which point anything queued
+     * behind it, sweeps included, was effectively lost.
+     *
+     * Skipping a run costs nothing: the servers stay due and are picked up as
+     * soon as there is room.
+     */
+    'max_queue_depth' => (int) env('MONITORING_MAX_QUEUE_DEPTH', 10000),
 
     /**
      * How many rows in one Steam response count as a truncated answer.

@@ -10,6 +10,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 
 class DispatchServerQueries extends Command
 {
@@ -24,6 +25,12 @@ class DispatchServerQueries extends Command
     {
         $single = (bool) $this->option('server');
         $limit = (int) ($this->option('limit') ?: config('monitoring.batch_size'));
+
+        // A named server is somebody debugging one address, and waiting on the
+        // backlog is not what they asked for.
+        if (! $single && $this->queueIsFull()) {
+            return self::SUCCESS;
+        }
 
         $servers = $single
             ? Server::query()->where('slug', $this->option('server'))->get()
@@ -155,14 +162,68 @@ class DispatchServerQueries extends Command
      */
     private function due(): Builder
     {
-        $trustFor = (int) config('monitoring.steam_trust_for');
+        /*
+         * Two windows, matched to the two passes.
+         *
+         * A server with players is in the five-minute occupied pass, so it is
+         * trusted briefly and its disappearance — a busy server going down —
+         * is noticed within about ten minutes. An empty one is only in the
+         * half-hourly full pass and sits on the hour-long tier, so it is
+         * trusted for an hour.
+         *
+         * One number could not do both, and the number chosen was shorter than
+         * the pass that refreshed it: every empty server in the catalog was
+         * uncovered for half of each cycle and fell to this query.
+         */
+        $populated = now()->subSeconds((int) config('monitoring.steam_trust_populated'));
+        $quiet = now()->subSeconds((int) config('monitoring.steam_trust_quiet'));
 
         return Server::query()
             ->active()
             ->where('next_query_at', '<=', now())
             ->where(fn (Builder $query) => $query
                 ->whereNull('steam_seen_at')
-                ->orWhere('steam_seen_at', '<', now()->subSeconds($trustFor)));
+                ->orWhere(fn (Builder $busy) => $busy
+                    ->where('players_online', '>', 0)
+                    ->where('steam_seen_at', '<', $populated))
+                ->orWhere(fn (Builder $empty) => $empty
+                    ->where('players_online', '=', 0)
+                    ->where('steam_seen_at', '<', $quiet)));
+    }
+
+    /**
+     * Whether there is room to add to the queue at all.
+     *
+     * A backlog past this size is not work waiting to be done, it is the
+     * workers saying they cannot keep up — and another batch on top reaches no
+     * server it would not have reached anyway. Left unbounded it grew to a
+     * hundred thousand, and everything queued behind it was lost, sweeps
+     * included.
+     *
+     * Nothing is dropped by stopping: the servers stay due, and the next run
+     * with room takes them.
+     */
+    private function queueIsFull(): bool
+    {
+        $ceiling = (int) config('monitoring.max_queue_depth');
+
+        if ($ceiling <= 0) {
+            return false;
+        }
+
+        $depth = Queue::size(config('monitoring.queue'));
+
+        if ($depth < $ceiling) {
+            return false;
+        }
+
+        $message = "Monitoring queue is {$depth} deep, at or past the {$ceiling} ceiling — "
+            .'nothing queued this run. The workers are behind, not the dispatcher.';
+
+        $this->warn($message);
+        Log::warning($message, ['depth' => $depth, 'ceiling' => $ceiling]);
+
+        return true;
     }
 
     /**

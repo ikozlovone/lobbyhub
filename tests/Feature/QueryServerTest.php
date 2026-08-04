@@ -563,12 +563,62 @@ class QueryServerTest extends TestCase
     {
         $this->minecraftServer([
             'next_query_at' => now()->subHour(),
-            'steam_seen_at' => now()->subSeconds((int) config('monitoring.steam_trust_for') + 60),
+            'steam_seen_at' => now()->subSeconds((int) config('monitoring.steam_trust_quiet') + 60),
+            'players_online' => 0,
         ]);
 
         Queue::fake();
 
         $this->artisan('servers:query')->assertSuccessful();
+
+        Queue::assertPushed(QueryServer::class, 1);
+    }
+
+    /**
+     * An empty server is only in the half-hourly full pass, so it has to be
+     * trusted for longer than one that the five-minute occupied pass covers.
+     *
+     * These were a single window of 900 seconds against a pass running every
+     * 1800, which meant every empty server in the catalog was uncovered for
+     * half of each cycle. At a hundred thousand of them that was the whole
+     * catalog landing on a poller doing three thousand an hour.
+     */
+    public function test_an_empty_server_is_trusted_for_longer_than_a_busy_one(): void
+    {
+        $seenAt = now()->subSeconds((int) config('monitoring.steam_trust_populated') + 60);
+
+        $this->minecraftServer(['next_query_at' => now()->subHour(), 'steam_seen_at' => $seenAt, 'players_online' => 0]);
+        $busy = $this->minecraftServer(['next_query_at' => now()->subHour(), 'steam_seen_at' => $seenAt, 'players_online' => 40]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->assertSuccessful();
+
+        // Only the busy one: the empty one is still inside its own window.
+        Queue::assertPushed(QueryServer::class, 1);
+        Queue::assertPushed(QueryServer::class, fn (QueryServer $job) => $job->server->is($busy));
+    }
+
+    /**
+     * A backlog past the ceiling is the workers saying they cannot keep up, and
+     * another batch on top reaches nothing new. Unbounded it grew to a hundred
+     * thousand, and everything queued behind it — the Steam sweeps that would
+     * have taken most of the catalog off this queue — was a day and a half from
+     * running.
+     */
+    public function test_the_dispatcher_stops_adding_to_a_queue_that_is_already_full(): void
+    {
+        $this->minecraftServer(['next_query_at' => now()->subHour()]);
+
+        config(['monitoring.max_queue_depth' => 1]);
+
+        Queue::fake();
+        // One job already waiting is the ceiling here.
+        QueryServer::dispatch($this->minecraftServer());
+
+        $this->artisan('servers:query')
+            ->expectsOutputToContain('at or past the 1 ceiling')
+            ->assertSuccessful();
 
         Queue::assertPushed(QueryServer::class, 1);
     }

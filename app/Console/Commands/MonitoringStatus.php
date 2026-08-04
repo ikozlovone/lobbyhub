@@ -40,8 +40,17 @@ class MonitoringStatus extends Command
          * supposedly running, the sweep is the thing to look at, not the
          * workers.
          */
-        $trustFor = (int) config('monitoring.steam_trust_for');
-        $covered = (clone $active)->where('steam_seen_at', '>=', now()->subSeconds($trustFor))->count();
+        // The same two windows the dispatcher applies, or this would report a
+        // coverage the poller does not agree with.
+        $populated = now()->subSeconds((int) config('monitoring.steam_trust_populated'));
+        $quiet = now()->subSeconds((int) config('monitoring.steam_trust_quiet'));
+
+        $covered = (clone $active)
+            ->whereNotNull('steam_seen_at')
+            ->where(fn ($query) => $query
+                ->where(fn ($busy) => $busy->where('players_online', '>', 0)->where('steam_seen_at', '>=', $populated))
+                ->orWhere(fn ($empty) => $empty->where('players_online', '=', 0)->where('steam_seen_at', '>=', $quiet)))
+            ->count();
 
         $this->line('');
         $this->components->twoColumnDetail('<fg=gray>source</>', '<fg=gray>steam sweep</>');
@@ -144,10 +153,22 @@ class MonitoringStatus extends Command
             return;
         }
 
-        $pending = DB::table('jobs')->where('queue', config('monitoring.queue'))->count();
+        $queries = DB::table('jobs')->where('queue', config('monitoring.queue'))->count();
+        $sweeps = DB::table('jobs')->where('queue', config('monitoring.steam_queue'))->count();
+        $ceiling = (int) config('monitoring.max_queue_depth');
 
         $this->line('');
         $this->components->twoColumnDetail('<fg=gray>queue</>', '');
-        $this->components->twoColumnDetail('  pending jobs', (string) $pending);
+        $this->components->twoColumnDetail(
+            '  per-server queries',
+            $ceiling > 0 && $queries >= $ceiling
+                // The dispatcher has stopped adding, which is a thing to know
+                // before concluding that nothing is due.
+                ? "<fg=yellow>{$queries} — at the ceiling, dispatcher paused</>"
+                : (string) $queries,
+        );
+        // Its own line because it has its own queue, and because a number that
+        // sits still here is the sweep not running at all.
+        $this->components->twoColumnDetail('  steam sweeps', (string) $sweeps);
     }
 }

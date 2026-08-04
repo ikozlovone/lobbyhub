@@ -27,7 +27,17 @@ User=www-data
 # read-only and the next deploy would stall on files it cannot replace.
 UMask=0002
 WorkingDirectory=/var/www/lobbyhub
-ExecStart=/usr/bin/php artisan queue:work --queue=monitoring --tries=1 --sleep=1 --max-time=3600
+# Two queues, in priority order, and the order is the whole point. Laravel takes
+# the leftmost queue that has anything in it, so a Steam sweep always goes ahead
+# of the per-server queries however many of those are waiting.
+#
+# Sharing one queue took the monitor down. The dispatcher can add two thousand
+# queries a minute, the database driver hands jobs out in id order, and a sweep
+# queued behind a hundred thousand of them was thirty hours from running. With
+# no sweeps nothing refreshed the servers' coverage, so all of them fell to the
+# poller and made the queue longer — with the catalog at 127 000 that settled at
+# 1% of the intended cadence.
+ExecStart=/usr/bin/php artisan queue:work --queue=steam,monitoring --tries=1 --sleep=1 --max-time=3600
 Restart=always
 RestartSec=2
 
