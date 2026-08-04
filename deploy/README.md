@@ -147,7 +147,7 @@ FRONTEND_REVALIDATE_SECRET=<openssl rand -hex 16>
 
 ASSET_URL=https://api.lobbyhub.gg          # see section 11: artwork URLs
 
-STEAM_API_KEY=...                        # discovery, and Sign in with Steam
+STEAM_API_KEY=...                        # the server sweep, and Sign in with Steam
 DISCORD_CLIENT_ID=... DISCORD_CLIENT_SECRET=...
 GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=...
 ```
@@ -417,11 +417,13 @@ journalctl -u lobbyhub-worker@1 -n 50
 journalctl -u lobbyhub-web -n 50
 ```
 
-Discovery is deliberately not on the timetable — one sweep can add thousands of
-servers, which is a decision about volume rather than background routine:
+Filling the catalog is no longer a decision anyone makes by hand. `steam:sync`
+runs on the timetable and imports every Source server Steam lists, which is
+hundreds of thousands rather than the thousands the old manual import added. To
+see what one game holds before it lands, run a single game inline:
 
 ```sh
-sudo -u deploy -H php artisan discovery:steam --help
+sudo -u deploy -H php artisan steam:sync --game=counter-strike-2 --sync
 ```
 
 ## Deploying again

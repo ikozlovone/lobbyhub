@@ -171,8 +171,24 @@ class SteamCatalogSync
 
                     $keyed[$row->host.':'.$row->port] ??= $entry;
 
-                    if ($row->ip_address !== null && $row->game_port !== null) {
-                        $keyed[$row->ip_address.':'.$row->game_port] ??= $entry;
+                    if ($row->ip_address !== null) {
+                        /*
+                         * Both ports, because the row may only have one of them.
+                         *
+                         * `game_port` is written from the extra data block of an
+                         * A2S reply, and not every server sends it — so a server
+                         * somebody submitted by domain can have a resolved IP and
+                         * no game port at all. Steam then reports an address that
+                         * matches neither the host nor the pair below it, and the
+                         * sweep lists the same machine a second time. `port` is
+                         * what the owner typed as the connect port, which is what
+                         * Steam calls `gameport`.
+                         */
+                        $keyed[$row->ip_address.':'.$row->port] ??= $entry;
+
+                        if ($row->game_port !== null) {
+                            $keyed[$row->ip_address.':'.$row->game_port] ??= $entry;
+                        }
                     }
                 }
             });

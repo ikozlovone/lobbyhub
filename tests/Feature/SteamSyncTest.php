@@ -6,6 +6,7 @@ use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
 use App\Models\ServerStat;
+use App\Services\Discovery\DiscoveredServer;
 use App\Services\Discovery\SteamCatalogSync;
 use App\Services\Discovery\SteamServerSweep;
 use Database\Seeders\CountrySeeder;
@@ -218,6 +219,72 @@ class SteamSyncTest extends TestCase
         $this->assertSame(0, $report->created);
         $this->assertSame(0, $report->updated);
         $this->assertSame(0, Server::count());
+    }
+
+    /**
+     * The API's own `players` field disagrees with the `cp` tag on roughly one
+     * server in six — seen live as `players: 4` against `cp3` — and the tag is
+     * the one A2S would have returned.
+     */
+    public function test_it_trusts_the_tag_counts_over_the_api_field(): void
+    {
+        $found = DiscoveredServer::fromApi([
+            'addr' => '1.2.3.4:28017',
+            'gameport' => 28015,
+            'players' => 74,
+            'name' => 'Rust',
+            'gametype' => 'mp300,cp72,qp5,born1785121428,gmrust',
+        ]);
+
+        $this->assertSame(72, $found->playersOnline);
+        $this->assertSame(300, $found->playersMax);
+        $this->assertSame(5, $found->playersQueued);
+        $this->assertNotNull($found->wipedAt);
+    }
+
+    /** A row we cannot address is dropped rather than stored as a broken server. */
+    public function test_it_skips_rows_with_an_unusable_address(): void
+    {
+        $this->assertNull(DiscoveredServer::fromApi(['addr' => 'not-an-address']));
+        $this->assertNull(DiscoveredServer::fromApi(['addr' => 'example.com:28015']));
+        $this->assertNull(DiscoveredServer::fromApi([]));
+    }
+
+    public function test_it_fails_loudly_without_an_api_key(): void
+    {
+        config(['services.steam.key' => '', 'services.steam.keys' => []]);
+
+        $this->expectExceptionMessage('STEAM_API_KEY is not set');
+
+        $this->sync();
+    }
+
+    /**
+     * An owner who typed a domain, not an IP.
+     *
+     * Steam reports an address, so `host` never matches — the row is found by
+     * what the monitor resolved instead. Without that the sweep would list the
+     * same server a second time under its IP, which is the shape of duplicate
+     * this whole matching step exists to prevent.
+     */
+    public function test_it_matches_a_server_submitted_by_domain(): void
+    {
+        $server = Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => 'cs.example.com',
+            'port' => 27015,
+            'ip_address' => '1.1.1.1',
+            'game_port' => null,
+        ]);
+
+        $this->fakeSteam(['' => [$this->row('1.1.1.1', 27015, players: 9)]]);
+
+        $report = $this->sync();
+
+        $this->assertSame(0, $report->created);
+        $this->assertSame(1, $report->updated);
+        $this->assertSame(9, $server->refresh()->players_online);
+        $this->assertSame(1, Server::count());
     }
 
     /** As many rows as it takes for a response to read as truncated. */
