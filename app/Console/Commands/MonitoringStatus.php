@@ -92,13 +92,7 @@ class MonitoringStatus extends Command
         $this->components->twoColumnDetail('  batch size', (string) config('monitoring.batch_size'));
 
         // Actual versus intended cadence — the number that reveals a silent slowdown.
-        $expected = 0.0;
-        (clone $active)->select(['id', 'players_online', 'promoted_until'])
-            ->chunkById(1000, function ($chunk) use (&$expected, $schedule) {
-                foreach ($chunk as $server) {
-                    $expected += $schedule->expectedHourlyQueries($server);
-                }
-            });
+        $expected = $schedule->expectedHourlyQueriesForActive();
 
         $since = now()->subHour();
         $actual = ServerStat::where('recorded_at', '>=', $since)->count();

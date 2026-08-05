@@ -45,4 +45,38 @@ class PollingSchedule
     {
         return 3600 / max(1, $this->intervalFor($server));
     }
+
+    /*
+     * The same figure for every active server at once, done in SQL.
+     *
+     * The naive form — chunk through servers, ask intervalFor() for each — is
+     * one round trip per thousand rows and the same number of PHP iterations,
+     * and at 23k servers ran for 13 seconds every time the admin page was
+     * opened. The tiers are just thresholds, so the whole thing folds into a
+     * single CASE. The branch order matches intervalFor(): first match wins in
+     * PHP, and Postgres evaluates CASE branches top-down the same way, so a
+     * promoted server hits the promoted branch even if its player count would
+     * qualify for a slower tier.
+     */
+    public function expectedHourlyQueriesForActive(): float
+    {
+        $promoted = max(1, (int) config('monitoring.promoted_interval'));
+        $default = max(1, (int) config('monitoring.interval'));
+
+        $cases = collect(config('monitoring.tiers', []))
+            ->map(fn (array $tier) => sprintf(
+                'when players_online >= %d then 3600.0 / %d',
+                (int) $tier['min_players'],
+                max(1, (int) $tier['interval']),
+            ))
+            ->prepend(sprintf(
+                'when promoted_until is not null and promoted_until > now() then 3600.0 / %d',
+                $promoted,
+            ))
+            ->implode(' ');
+
+        return (float) Server::query()->active()
+            ->selectRaw("coalesce(sum(case {$cases} else 3600.0 / {$default} end), 0) as expected")
+            ->value('expected');
+    }
 }

@@ -63,13 +63,7 @@ class MonitoringReport
     {
         $active = Server::query()->active();
 
-        $expected = 0.0;
-        (clone $active)->select(['id', 'players_online', 'promoted_until'])
-            ->chunkById(1000, function (Collection $chunk) use (&$expected) {
-                foreach ($chunk as $server) {
-                    $expected += $this->schedule->expectedHourlyQueries($server);
-                }
-            });
+        $expected = $this->schedule->expectedHourlyQueriesForActive();
 
         $since = now()->subHour();
         $actual = ServerStat::where('recorded_at', '>=', $since)->count();
