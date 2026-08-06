@@ -12,8 +12,20 @@ use Illuminate\Support\Facades\Cache;
 
 class GameController extends Controller
 {
-    /** Counters move every few minutes at most, so a short cache is invisible. */
-    private const CACHE_TTL = 60;
+    /*
+     * Facets, not counters — that is what makes the ceiling worth raising.
+     *
+     * The live numbers people watch (players online, whether a server is up)
+     * ride on their own live layer on every page, so a ten-minute cache here
+     * does not stale them. What is cached here are the chip lists — map,
+     * country, mode, version and status splits — which change when servers
+     * come and go, not by the second, and can cost seconds to recompute for a
+     * game with a hundred thousand rows. Sixty seconds meant every visitor
+     * after a minute of quiet paid the whole bill; ten minutes leaves the hit
+     * to deploys and cache flushes, which is what an admin adjusting content
+     * already expects.
+     */
+    private const CACHE_TTL = 600;
 
     /**
      * Cached values are always plain arrays. Putting Eloquent objects in the
