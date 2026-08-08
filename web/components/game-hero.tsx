@@ -15,11 +15,19 @@ export function GameHero({
   game,
   heading,
   crumb,
+  atGameRoot,
 }: {
   game: GameDetail
   heading: string
   /** The last breadcrumb step. Plain text: it is the page you are already on. */
   crumb: string
+  /**
+   * Whether this is the game's own listing rather than a facet under it. The
+   * breadcrumb's game step then points at the page it is drawn on, so it is
+   * text here too — a link back to where you already are is noise to a reader
+   * and a full prefetch of the open route to the router.
+   */
+  atGameRoot: boolean
 }) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-line bg-surface">
@@ -43,14 +51,27 @@ export function GameHero({
       />
 
       <div className="relative flex flex-col gap-6 p-5 sm:p-6">
+        {/* Nothing in here prefetches. Cache Components fetch a warmed route a
+            segment at a time, so each of these links left on its default costs
+            four requests for a page the visitor is not on their way to — and
+            the two destinations are a click away from every page on the site
+            anyway. See the same note in server-section.tsx. */}
         <nav aria-label="Breadcrumb" className="text-xs text-subtle">
-          <Link href="/" className="transition-colors hover:text-fg">
+          <Link href="/" prefetch={false} className="transition-colors hover:text-fg">
             LobbyHub
           </Link>
           <span className="mx-1.5">/</span>
-          <Link href={`/games/${game.slug}`} className="transition-colors hover:text-fg">
-            {game.name}
-          </Link>
+          {atGameRoot ? (
+            <span className="text-muted">{game.name}</span>
+          ) : (
+            <Link
+              href={`/games/${game.slug}`}
+              prefetch={false}
+              className="transition-colors hover:text-fg"
+            >
+              {game.name}
+            </Link>
+          )}
           <span className="mx-1.5">/</span>
           <span className="text-muted">{crumb}</span>
         </nav>
@@ -79,6 +100,7 @@ export function GameHero({
           <div className="flex items-center gap-2">
             <Link
               href={`/games/${game.slug}/add-server`}
+              prefetch={false}
               className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
             >
               <Icon.plus />

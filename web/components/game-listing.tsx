@@ -92,7 +92,17 @@ async function Hero({ gameSlug, describe }: { gameSlug: string; describe: Descri
 
   if (!game || !described) notFound()
 
-  return <GameHero game={game} heading={described.heading} crumb={described.crumb} />
+  return (
+    <GameHero
+      game={game}
+      heading={described.heading}
+      crumb={described.crumb}
+      // A facet label is what a facet route has and the game's own page does
+      // not — the same test line 132 uses to decide whether the description
+      // belongs on this page.
+      atGameRoot={!described.facetLabel}
+    />
+  )
 }
 
 async function Listing({
