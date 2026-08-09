@@ -124,6 +124,78 @@ class CatalogApiTest extends TestCase
         $this->assertSame(['paid', 'busy', 'quiet'], $slugs);
     }
 
+    /**
+     * Promotion is a separate query now, not a term in the ORDER BY, so the
+     * thing to prove is that the two halves still add up to one list: the
+     * promoted server appears at the top and nowhere else, and the count above
+     * the table has not gained a row.
+     */
+    public function test_a_promoted_server_is_lifted_out_of_its_own_place_not_copied(): void
+    {
+        $this->minecraftServer(['slug' => 'busy', 'players_online' => 500]);
+        $this->minecraftServer(['slug' => 'quiet', 'players_online' => 5]);
+        $this->minecraftServer(['slug' => 'paid', 'players_online' => 50, 'promoted_until' => now()->addMonth()]);
+
+        $response = $this->getJson('/api/games/minecraft/servers')->assertOk();
+
+        $this->assertSame(['paid', 'busy', 'quiet'], array_column($response->json('data'), 'slug'));
+        $this->assertSame(3, $response->json('meta.total'));
+    }
+
+    /**
+     * The head has to be paid for out of the first page's budget, or every page
+     * after it is off by the number of promoted servers — a row shown twice at
+     * one boundary and another never shown at all.
+     */
+    public function test_the_pages_after_the_first_neither_repeat_nor_skip_a_row(): void
+    {
+        $this->minecraftServer(['slug' => 'paid', 'players_online' => 1, 'promoted_until' => now()->addMonth()]);
+
+        foreach ([500, 400, 300, 200] as $index => $players) {
+            $this->minecraftServer(['slug' => "free-{$index}", 'players_online' => $players]);
+        }
+
+        $first = $this->getJson('/api/games/minecraft/servers?per_page=3')->assertOk();
+        $second = $this->getJson('/api/games/minecraft/servers?per_page=3&page=2')->assertOk();
+
+        $this->assertSame(['paid', 'free-0', 'free-1'], array_column($first->json('data'), 'slug'));
+        $this->assertSame(['free-2', 'free-3'], array_column($second->json('data'), 'slug'));
+
+        $this->assertSame(5, $first->json('meta.total'));
+        $this->assertSame(2, $first->json('meta.last_page'));
+    }
+
+    /** A placement buys the top of a listing, not an exemption from its chips. */
+    public function test_a_promoted_server_still_has_to_match_the_filters(): void
+    {
+        $this->minecraftServer([
+            'slug' => 'paid',
+            'status' => ServerStatus::Offline,
+            'players_online' => 0,
+            'promoted_until' => now()->addMonth(),
+        ]);
+        $this->minecraftServer(['slug' => 'busy', 'players_online' => 10]);
+
+        $slugs = collect($this->getJson('/api/games/minecraft/servers?status=online')->assertOk()->json('data'))
+            ->pluck('slug')
+            ->all();
+
+        $this->assertSame(['busy'], $slugs);
+    }
+
+    /** An expired placement is an ordinary server again. */
+    public function test_a_placement_that_has_run_out_no_longer_lifts_anything(): void
+    {
+        $this->minecraftServer(['slug' => 'lapsed', 'players_online' => 5, 'promoted_until' => now()->subDay()]);
+        $this->minecraftServer(['slug' => 'busy', 'players_online' => 500]);
+
+        $slugs = collect($this->getJson('/api/games/minecraft/servers')->assertOk()->json('data'))
+            ->pluck('slug')
+            ->all();
+
+        $this->assertSame(['busy', 'lapsed'], $slugs);
+    }
+
     public function test_it_filters_by_mode_version_and_country(): void
     {
         $minecraft = Game::where('slug', 'minecraft')->firstOrFail();

@@ -7,12 +7,21 @@ use App\Models\Game;
 use App\Models\Server;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
 
 class ServerListing
 {
-    /** Only these are accepted, and each maps onto an existing index. */
+    /**
+     * Only these are accepted.
+     *
+     * `players` and `rank` are the two that carry the traffic and the two that
+     * have a partial index behind them; the rest still sort the game out of the
+     * heap. That is deliberate — see the migration — and the moment one of them
+     * shows up in the slow log it wants an index of its own, not a rewrite.
+     */
     private const SORTS = [
         'players' => ['players_online', 'desc'],
         'rank' => ['rank_score', 'desc'],
@@ -46,23 +55,93 @@ class ServerListing
      */
     private const MAX_MAP_FACETS = 40;
 
+    /**
+     * How many promoted servers a listing will lift to the front.
+     *
+     * Placements sell in ones and twos, so this is a ceiling nobody is near
+     * rather than a policy. Past it, a promoted server simply keeps its own
+     * place in the listing instead of being pinned: worth less than it paid
+     * for, but the alternative — an unbounded head — is a page whose length
+     * depends on how much was sold that week.
+     */
+    private const MAX_PROMOTED = 50;
+
+    /**
+     * The listing, as pages.
+     *
+     * Two queries rather than one, because promotion cannot be part of the
+     * order. "Above everything else" is `promoted_until > now()`, an expression
+     * over a clock, and an expression cannot be indexed; as the leading sort
+     * key it forced the whole game out of the heap and through a sort for every
+     * twenty-five rows shown — 368 ms and 283 MB of reads on Rust. See
+     * 2026_08_09_120000_add_listing_indexes_to_servers.
+     *
+     * So the pinned servers are fetched on their own — a handful of rows off a
+     * tiny index — and the listing beneath them is ordered by columns an index
+     * can hold. The two are then treated as one long list and cut into pages
+     * here, which keeps `total` honest and the offsets of page two onwards
+     * where they were.
+     */
     public function paginate(?Game $game, array $filters): LengthAwarePaginator
     {
         $perPage = min(max((int) ($filters['per_page'] ?? 24), 1), 100);
+        $page = Paginator::resolveCurrentPage();
 
-        return $this->query($game, $filters)
-            ->paginate($perPage)
-            ->appends($filters);
+        $pinned = $this->pinned($game, $filters);
+        $rest = $this->query($game, $filters);
+
+        // Pinned rows are removed from the listing by id, not by repeating the
+        // promoted condition: past MAX_PROMOTED the rest are not pinned, and
+        // filtering them out by condition would drop them from the site.
+        if ($pinned->isNotEmpty()) {
+            $rest->whereIntegerNotInRaw('id', $pinned->modelKeys());
+        }
+
+        $total = $pinned->count() + $rest->toBase()->getCountForPagination();
+
+        $offset = ($page - 1) * $perPage;
+
+        $head = $pinned->slice($offset, $perPage)->values();
+        $tail = $head->count() < $perPage
+            ? $rest->offset(max(0, $offset - $pinned->count()))
+                ->limit($perPage - $head->count())
+                ->get()
+            : new Collection;
+
+        return (new Paginator($head->concat($tail), $total, $perPage, $page, [
+            'path' => Paginator::resolveCurrentPath(),
+            'pageName' => 'page',
+        ]))->appends($filters);
     }
 
     /**
-     * A null $game widens the same listing to the whole catalog.
+     * The promoted servers this listing puts at the front.
      *
-     * The home page needs "the busiest servers we know of", not "the busiest
-     * servers in one game" — and building that from one request per game would
-     * be 46 round trips today and worse with every game added. Everything else
-     * about the query is identical, which is why this is a nullable argument
-     * rather than a second listing that would drift out of step with this one.
+     * The same filters as the listing, so a promoted server that does not match
+     * the chips is not smuggled past them, and the same sort, so two of them
+     * come out in a sensible order relative to each other.
+     */
+    private function pinned(?Game $game, array $filters): Collection
+    {
+        return $this->query($game, $filters)
+            ->promoted()
+            ->limit(self::MAX_PROMOTED)
+            ->get();
+    }
+
+    /**
+     * The listing, filtered and ordered, without the promoted head.
+     *
+     * A null $game widens the same listing to the whole catalog. The home page
+     * needs "the busiest servers we know of", not "the busiest servers in one
+     * game" — and building that from one request per game would be 46 round
+     * trips today and worse with every game added. Everything else about the
+     * query is identical, which is why this is a nullable argument rather than
+     * a second listing that would drift out of step with this one.
+     *
+     * Promotion is not applied here; paginate() adds it. Ordering by it is what
+     * made this query read the whole game, and the same builder is what fetches
+     * the promoted rows themselves.
      */
     public function query(?Game $game, array $filters): Builder
     {
@@ -79,9 +158,6 @@ class ServerListing
             // "Connect" button can be a steam:// link.
             $query->with('game:id,slug,name,query_protocol');
         }
-
-        // Promoted servers ride above the sort — that is what the placement buys.
-        $query->orderByRaw('case when promoted_until > ? then 0 else 1 end', [now()]);
 
         [$column, $direction] = self::SORTS[$filters['sort'] ?? 'players'] ?? self::SORTS['players'];
         $query->orderBy($column, $direction);
