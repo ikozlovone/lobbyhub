@@ -17,8 +17,9 @@ Five processes end up running:
 
 ```sh
 sudo apt update
-sudo apt install -y nginx postgresql git unzip curl \
-  php8.4-fpm php8.4-cli php8.4-pgsql php8.4-mbstring php8.4-xml php8.4-curl php8.4-zip php8.4-bcmath
+sudo apt install -y nginx postgresql redis-server git unzip curl \
+  php8.4-fpm php8.4-cli php8.4-pgsql php8.4-mbstring php8.4-xml php8.4-curl php8.4-zip php8.4-bcmath \
+  php8.4-redis
 
 # Composer
 curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -34,6 +35,39 @@ If PHP 8.4 is not in your distro's archive, add `ppa:ondrej/php` (Ubuntu) or
 The server queries game servers over raw UDP and TCP streams, which is plain PHP
 — no `ext-sockets`, and nothing to open outbound in the firewall beyond the
 default allow-all for outgoing traffic.
+
+### Redis
+
+Redis holds the cache: API payloads, the A2S challenge cache, and every lock the
+monitor relies on — see section 8. Two settings in `/etc/redis/redis.conf`, and
+both of them matter more than they look:
+
+```ini
+maxmemory 512mb
+maxmemory-policy allkeys-lru
+
+# It is a cache. Nothing in it needs to survive a restart, and the fork a
+# snapshot takes is a latency spike paid for nothing.
+save ""
+appendonly no
+```
+
+The default is `maxmemory 0` with `maxmemory-policy noeviction`: no ceiling, and
+on reaching one, writes fail rather than anything being dropped. That is the
+right default for a Redis holding data somebody needs and the wrong one for a
+cache, where the failure mode is the box running out of memory and then every
+`Cache::put` in the application throwing.
+
+`allkeys-lru` is only safe because this instance holds nothing but cache. If you
+ever move the queue onto it, that policy is free to evict queued jobs — and the
+queue is deliberately not on Redis, for reasons in section 19.5 of
+`Мониторинг.md`. Keep them apart.
+
+```sh
+sudo systemctl enable --now redis-server
+redis-cli ping          # PONG
+redis-cli info keyspace # which indices are in use — see section 4
+```
 
 ## 2. Database
 
@@ -141,6 +175,10 @@ DB_DATABASE=lobbyhub
 DB_USERNAME=lobbyhub
 DB_PASSWORD=the-one-you-picked
 
+CACHE_STORE=redis
+REDIS_DB=3                               # not 0 and 1 — read the note below
+REDIS_CACHE_DB=4
+
 FRONTEND_ORIGINS=https://lobbyhub.gg
 FRONTEND_REVALIDATE_URL=http://127.0.0.1:3000/api/revalidate
 FRONTEND_REVALIDATE_SECRET=<openssl rand -hex 16>
@@ -151,6 +189,14 @@ STEAM_API_KEY=...                        # the server sweep, and Sign in with St
 DISCORD_CLIENT_ID=... DISCORD_CLIENT_SECRET=...
 GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=...
 ```
+
+**Pick the Redis indices deliberately.** `cache:clear` is `FLUSHDB` — it empties
+the whole index, not the keys carrying our prefix, and `CACHE_PREFIX` protects
+nothing from it. Laravel defaults to index 0 for the general connection and 1
+for the cache; on a box where Redis serves anything else, that is somebody
+else's data. Run `redis-cli info keyspace`, take two indices it does not list,
+and write them down here. If Redis is dedicated to this app, the defaults are
+fine and this is one less thing to remember.
 
 **Mail is not optional here.** `MAIL_MAILER` defaults to `log`, which writes the
 sign-in code to `storage/logs` instead of sending it — nobody can sign in.
@@ -304,6 +350,55 @@ servers and stop climbing on its own. Watch **stalest reading** rather than
 the dispatcher moves whether or not anything reached the server, so during a
 backlog it reports work as done that has not happened. The first is measured
 from the last actual answer, which is what the site is showing.
+
+### Changing the cache store
+
+Moving `CACHE_STORE` — database to Redis, one Redis index to another — is not an
+`.env` edit. The locks that keep the monitor honest live in the cache store, so
+pointing the app at an empty one makes every lock currently held invisible:
+
+* a queued `QueryServer` holds a uniqueness lock, and without it the dispatcher
+  will queue a second copy of every query already waiting — the exact failure
+  the lock exists to prevent, arriving as a queue that doubles on its own;
+* `withoutOverlapping()` mutexes go the same way, so a `steam:sync` that is
+  mid-pass can be started again beside itself.
+
+So it is the queue-flush procedure with the store swapped in the middle:
+
+```sh
+# 1. Stop both sides. Nothing may take a lock while the store is changing.
+sudo systemctl stop lobbyhub-scheduler
+sudo systemctl stop 'lobbyhub-worker@*'
+
+# 2. Let the queue drain to nothing, or throw it away. monitoring:unlock in the
+#    next step refuses to run while queries are still queued, and it is right to.
+sudo -u deploy -H php artisan queue:clear database --queue=monitoring --force
+
+# 3. Release the locks while the app can still see them — on the OLD store.
+sudo -u deploy -H php artisan monitoring:unlock
+
+# 4. Now edit .env, and rebuild the config cache: a cached config pins whatever
+#    .env said when it was written, so skipping this changes nothing at all.
+sudo -u deploy -H php artisan config:cache
+
+# 5. Start again, and watch the first pass.
+sudo systemctl start lobbyhub-scheduler
+sudo systemctl start 'lobbyhub-worker@1'
+sudo -u deploy -H php artisan monitoring:status
+```
+
+Step 3 before step 4, not after. Afterwards the locks are in a store the app is
+no longer reading, and `monitoring:unlock` would walk the catalog releasing
+nothing while the stale rows sit in the old one until they expire.
+
+What is lost in the swap is cache, and all of it is meant to be lost: the API
+payload caches rebuild on the first request, the A2S challenge cache re-handshakes
+once per server, and any sign-in that was mid-redirect through Google or Discord
+fails and has to be started again. That last one is the only visible casualty, so
+prefer a quiet hour.
+
+Old rows in the `cache` table are not read again by anything. They can be left to
+rot or dropped with `truncate cache, cache_locks;` once the new store is serving.
 
 ## 9. nginx, Cloudflare, firewall
 

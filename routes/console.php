@@ -60,3 +60,16 @@ Schedule::command('counters:refresh')
 Schedule::command('stats:rollup --days=2')
     ->hourly()
     ->withoutOverlapping();
+
+/*
+ * Tagged cache entries expire on their own; the sets that remember which keys
+ * carried a tag do not. Redis is the only store where tags work at all, and it
+ * is the only store this command runs against — on anything else it is a no-op,
+ * so the schedule does not have to know what CACHE_STORE says.
+ *
+ * Nightly because it is a scan, and what it reclaims is bookkeeping rather than
+ * the payloads themselves.
+ */
+Schedule::command('cache:prune-stale-tags')
+    ->dailyAt('04:10')
+    ->withoutOverlapping();
