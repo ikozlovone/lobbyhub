@@ -29,9 +29,16 @@ return new class extends Migration
      * query's WHERE clause implies the predicate; anything less faithful and
      * the planner picks the full-table path and the index is dead weight on
      * disk.
+     *
+     * Skipped on anything but Postgres: a tuning index nothing depends on, and
+     * sqlite — which the test suite runs on — has no CONCURRENTLY.
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement(
             'create index concurrently if not exists servers_map_facet_idx '
             ."on servers (game_id, map) "
@@ -53,6 +60,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement('drop index concurrently if exists servers_map_facet_idx');
         DB::statement('drop index concurrently if exists servers_country_facet_idx');
     }

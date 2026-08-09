@@ -22,9 +22,18 @@ return new class extends Migration
      * by time, with the two columns aggregation needs already inside the
      * index. Offline samples do not carry a latency and would not answer
      * "which servers are slowest" anyway, so their absence is not a loss.
+     *
+     * Skipped on anything but Postgres. This is a tuning index and nothing
+     * depends on its existence; the test suite runs on sqlite, which has no
+     * CONCURRENTLY and no INCLUDE, and until this guard existed the statement
+     * threw in every test's migration step.
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement(
             'create index concurrently if not exists server_stats_online_recent_idx '
             .'on server_stats (recorded_at, server_id) include (latency_ms) '
@@ -34,6 +43,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement('drop index concurrently if exists server_stats_online_recent_idx');
     }
 };

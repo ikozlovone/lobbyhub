@@ -69,14 +69,17 @@ class PollingSchedule
                 (int) $tier['min_players'],
                 max(1, (int) $tier['interval']),
             ))
+            // Bound rather than SQL's own now(): the branch is prepended, so its
+            // placeholder is the first in the finished string. sqlite has no
+            // now() and the admin page 500'd on it under test.
             ->prepend(sprintf(
-                'when promoted_until is not null and promoted_until > now() then 3600.0 / %d',
+                'when promoted_until is not null and promoted_until > ? then 3600.0 / %d',
                 $promoted,
             ))
             ->implode(' ');
 
         return (float) Server::query()->active()
-            ->selectRaw("coalesce(sum(case {$cases} else 3600.0 / {$default} end), 0) as expected")
+            ->selectRaw("coalesce(sum(case {$cases} else 3600.0 / {$default} end), 0) as expected", [now()])
             ->value('expected');
     }
 }
