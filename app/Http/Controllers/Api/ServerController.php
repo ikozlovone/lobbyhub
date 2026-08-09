@@ -8,6 +8,7 @@ use App\Http\Resources\ServerResource;
 use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
+use App\Services\Catalog\ListingCache;
 use App\Services\Catalog\ServerListing;
 use App\Services\Monitoring\ServerQueryManager;
 use Illuminate\Http\JsonResponse;
@@ -32,8 +33,12 @@ class ServerController extends Controller
      */
     private const REFRESH_COOLDOWN = 60;
 
-    public function index(Request $request, Game $game, ServerListing $listing): JsonResponse
-    {
+    public function index(
+        Request $request,
+        Game $game,
+        ServerListing $listing,
+        ListingCache $cache,
+    ): JsonResponse {
         abort_unless($game->is_active, 404);
 
         $filters = $request->validate([
@@ -50,9 +55,13 @@ class ServerController extends Controller
             'page' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_PAGE],
         ]);
 
-        $servers = $listing->paginate($game, $filters);
-
-        return ServerResource::collection($servers)->response();
+        return response()->json($cache->remember(
+            $game,
+            $filters,
+            fn () => ServerResource::collection($listing->paginate($game, $filters))
+                ->response()
+                ->getData(true),
+        ));
     }
 
     /**
@@ -67,7 +76,7 @@ class ServerController extends Controller
      * six to twelve rows, and a crawlable, deep, cross-game listing is exactly
      * the thin near-duplicate index the per-game one already caps.
      */
-    public function catalog(Request $request, ServerListing $listing): JsonResponse
+    public function catalog(Request $request, ServerListing $listing, ListingCache $cache): JsonResponse
     {
         $filters = $request->validate([
             'game' => ['sometimes', 'string', 'max:64'],
@@ -81,9 +90,13 @@ class ServerController extends Controller
             'page' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_PAGE],
         ]);
 
-        $servers = $listing->paginate(null, $filters);
-
-        return ServerResource::collection($servers)->response();
+        return response()->json($cache->remember(
+            null,
+            $filters,
+            fn () => ServerResource::collection($listing->paginate(null, $filters))
+                ->response()
+                ->getData(true),
+        ));
     }
 
     public function show(Server $server): JsonResponse

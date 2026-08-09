@@ -24,7 +24,10 @@ use Illuminate\Support\Facades\DB;
  */
 class CatalogCounters
 {
-    public function __construct(private readonly FrontendCache $frontend) {}
+    public function __construct(
+        private readonly FrontendCache $frontend,
+        private readonly ListingCache $listings,
+    ) {}
 
     /**
      * @return array<string, int> how many rows of each table hold servers
@@ -45,6 +48,20 @@ class CatalogCounters
         // alone would mean the work above is invisible for another minute, which
         // is the whole complaint this method exists to answer.
         $this->flushApiCache();
+
+        /*
+         * The listings of the games that changed shape.
+         *
+         * `$gained` is games whose server count moved, which is exactly the
+         * change a window cannot cover politely: somebody filled in the add
+         * form and came back to find their server, and a minute of being told
+         * it is not there reads as the form having failed. Everything else a
+         * listing shows — players, status, votes, rank — moves on its own
+         * schedule and is left to the window; purging over those would mean
+         * nothing was ever cached at all, which is the same argument republish()
+         * makes about the navigation rail below.
+         */
+        $this->listings->forget($gained);
 
         $this->republish($gained);
 
