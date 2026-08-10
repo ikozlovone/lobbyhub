@@ -56,6 +56,18 @@ Schedule::command('counters:refresh')
     ->everyMinute()
     ->withoutOverlapping();
 
+/*
+ * Facets — the chip counts on a game's page — are heavier than counters (five
+ * aggregates per game, three of them linear in the game's size) and change
+ * more slowly than what visitors watch. Five minutes puts them halfway inside
+ * the ListingCache window they used to live in, so nothing ever sees a game
+ * with facets more stale than that, and the cold Postgres pass a first
+ * visitor used to pay is gone: the controller reads a JSON column.
+ */
+Schedule::command('facets:refresh')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
 // Re-rolls today (partial) and yesterday, so graphs stay current intraday.
 Schedule::command('stats:rollup --days=2')
     ->hourly()

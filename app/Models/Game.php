@@ -16,10 +16,12 @@ class Game extends Model
         return [
             'aliases' => 'array',
             'links' => 'array',
+            'facets' => 'array',
             'query_protocol' => QueryProtocol::class,
             'is_active' => 'boolean',
             'has_versions' => 'boolean',
             'stats_synced_at' => 'datetime',
+            'facets_synced_at' => 'datetime',
         ];
     }
 

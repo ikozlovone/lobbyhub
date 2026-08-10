@@ -60,8 +60,15 @@ class CatalogCounters
          * schedule and is left to the window; purging over those would mean
          * nothing was ever cached at all, which is the same argument republish()
          * makes about the navigation rail below.
+         *
+         * The precomputed facets on each game row are cleared too, for the
+         * same reason: GameController::show reads them ahead of the cache and
+         * would otherwise pin a stale answer past every forget() below. The
+         * next visitor falls through to the Redis fallback, which recomputes
+         * once, and `facets:refresh` writes the column back on its next tick.
          */
         $this->listings->forget($gained);
+        $this->clearPrecomputedFacets($gained);
 
         $this->republish($gained);
 
@@ -227,5 +234,28 @@ class CatalogCounters
     private function flushApiCache(): void
     {
         Cache::forget('api:games');
+    }
+
+    /**
+     * Drop the precomputed `games.facets` column for slugs whose shape moved.
+     *
+     * The column is the fast path in `GameController::show`, and it wins over
+     * the Redis fallback we just invalidated — so without clearing it too, a
+     * server added a moment ago would be reflected in the listings and hidden
+     * from the chip counts until `facets:refresh` next ran, up to five minutes
+     * later. Setting to null hands the next request to the Redis layer, which
+     * recomputes once and caches the fresh answer.
+     *
+     * @param  list<string>  $slugs
+     */
+    private function clearPrecomputedFacets(array $slugs): void
+    {
+        if ($slugs === []) {
+            return;
+        }
+
+        DB::table('games')
+            ->whereIn('slug', $slugs)
+            ->update(['facets' => null, 'facets_synced_at' => null]);
     }
 }

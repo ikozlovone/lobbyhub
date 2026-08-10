@@ -48,20 +48,26 @@ class GameController extends Controller
     /**
      * The game, and the facet counts its page filters by.
      *
-     * Only the facets are cached. The game's own fields — including the three
-     * counters, which is why this payload used to be thrown away every minute —
-     * come off a row the router has already loaded, so reading them per request
-     * costs nothing and keeps them as current as `counters:refresh` left them.
-     * The facets are the expensive half and live in ListingCache, which drops
-     * them on the same event that drops the listings.
+     * Facets are read straight off the game row when the scheduled
+     * `facets:refresh` has left them there, which is the common case: two
+     * caches in front of this endpoint already mask most of the cost, but
+     * between them lies a moment when both have expired and the next visitor
+     * pays the whole aggregate on cold Postgres. The column removes that
+     * moment. The Redis fallback stays for the sliver of the day when the
+     * schedule has not caught a game — right after a game is added, right
+     * after a server changes shape and the column is cleared — and computes
+     * once, caches, then the next schedule tick fills the column again.
      */
     public function show(Request $request, Game $game, ServerListing $listing, ListingCache $cache): JsonResponse
     {
         abort_unless($game->is_active, 404);
 
+        $facets = $game->facets
+            ?? $cache->facets($game, fn () => $listing->facets($game));
+
         return response()->json([
             'data' => (new GameResource($game))->toArray($request) + [
-                'facets' => $cache->facets($game, fn () => $listing->facets($game)),
+                'facets' => $facets,
             ],
         ]);
     }
