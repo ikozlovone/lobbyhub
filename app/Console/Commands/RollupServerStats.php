@@ -98,29 +98,38 @@ class RollupServerStats extends Command
     /**
      * servers.uptime_percent is a rolling window over the daily rollups,
      * weighted by sample count so partially-monitored days don't skew it.
+     *
+     * One statement, because there is nothing here PHP was needed for: the
+     * figure is an aggregate of two columns and a division. It used to read the
+     * aggregate and then write it back a row at a time — 314 updates for 322
+     * servers, and linear in the catalog, so every hour at a few hundred
+     * thousand servers meant a few hundred thousand single-row updates against
+     * the database the monitor is already busy with.
+     *
+     * Servers with no samples in the window are left alone rather than zeroed,
+     * which is what the `having` did before and still does: no measurements is
+     * not the same fact as no uptime, and a server that has been quiet for a
+     * month should keep the last figure anyone measured.
      */
     private function refreshUptime(int $windowDays): void
     {
         $since = now()->subDays(max(1, $windowDays))->startOfDay()->toDateString();
 
-        ServerDailyStat::query()
-            ->selectRaw('server_id')
-            ->selectRaw('sum(online_samples_count) as online_samples')
-            ->selectRaw('sum(samples_count) as samples')
-            ->where('date', '>=', $since)
-            ->groupBy('server_id')
-            ->havingRaw('sum(samples_count) > 0')
-            ->orderBy('server_id')
-            ->chunk(self::CHUNK, function ($rows) {
-                foreach ($rows as $row) {
-                    DB::table('servers')
-                        ->where('id', $row->server_id)
-                        ->update([
-                            'uptime_percent' => round($row->online_samples * 100 / $row->samples, 2),
-                        ]);
-                }
-            });
+        $updated = DB::update(<<<'SQL'
+            update "servers"
+            set "uptime_percent" = round(v."online_samples" * 100.0 / v."samples", 2)
+            from (
+                select "server_id",
+                       sum("online_samples_count") as "online_samples",
+                       sum("samples_count") as "samples"
+                from "server_daily_stats"
+                where "date" >= ?
+                group by "server_id"
+                having sum("samples_count") > 0
+            ) as v
+            where "servers"."id" = v."server_id"
+        SQL, [$since]);
 
-        $this->info("uptime refreshed over a {$windowDays}-day window");
+        $this->info("uptime refreshed for {$updated} server(s) over a {$windowDays}-day window");
     }
 }

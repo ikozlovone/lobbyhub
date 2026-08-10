@@ -37,11 +37,31 @@ class ServerRanking
     }
 
     /**
+     * How many servers are read at a time, and how many are written at a time.
+     *
+     * The write batch is the smaller of the two because the statement below
+     * compiles to one compound select per row, and SQLite — which the suite
+     * runs on — refuses past five hundred of them. Same number, same reason, as
+     * SteamCatalogSync.
+     */
+    private const READ_CHUNK = 500;
+
+    private const WRITE_CHUNK = 200;
+
+    /**
      * Recompute every active server in one pass.
      *
      * Aggregates are collected up front rather than per server: this runs on a
      * schedule over the whole catalog, and a query per server would turn a
      * cheap job into a slow one the moment discovery fills the table.
+     *
+     * The writes are batched for the same reason the reads are. They were not,
+     * and the skip below hides less than it looks: `rank_score` is mostly a
+     * function of average players, which moves, so almost every server is
+     * genuinely different a quarter of an hour later — 314 of 322 in a local
+     * run. At a few hundred thousand servers that is the same number of
+     * single-row updates every fifteen minutes, which is a write rate on the
+     * order of the whole monitor's, spent on bookkeeping.
      *
      * @return int servers updated
      */
@@ -71,7 +91,9 @@ class ServerRanking
         Server::query()
             ->active()
             ->select(['id', 'uptime_percent', 'promoted_until', 'rank_score', 'votes_count'])
-            ->chunkById(500, function ($servers) use ($recentVotes, $allVotes, $averagePlayers, &$updated) {
+            ->chunkById(self::READ_CHUNK, function ($servers) use ($recentVotes, $allVotes, $averagePlayers, &$updated) {
+                $changed = [];
+
                 foreach ($servers as $server) {
                     $score = $this->points(
                         recentVotes: (int) ($recentVotes[$server->id] ?? 0),
@@ -82,19 +104,75 @@ class ServerRanking
 
                     $votes = (int) ($allVotes[$server->id] ?? 0);
 
+                    // Still worth asking. A row that would be written back
+                    // unchanged is a dead tuple and an index update for nothing,
+                    // and a catalog nobody has voted on all quarter is mostly
+                    // these.
                     if ($score === $server->rank_score && $votes === $server->votes_count) {
                         continue;
                     }
 
-                    DB::table('servers')
-                        ->where('id', $server->id)
-                        ->update(['rank_score' => $score, 'votes_count' => $votes]);
-
-                    $updated++;
+                    $changed[] = ['id' => $server->id, 'rank_score' => $score, 'votes_count' => $votes];
                 }
+
+                $updated += $this->write($changed);
             });
 
         return $updated;
+    }
+
+    /**
+     * Write the scores this pass worked out, a batch at a time.
+     *
+     * Joining against a list of literals rather than an upsert, and `select …
+     * union all select …` rather than a `values` list: the long version of both
+     * reasons is on SteamCatalogSync::updateChunk, which does the same thing for
+     * the same two engines. Short version — an upsert is checked against the row
+     * it *proposes* to insert, so a payload of three columns aimed at an
+     * existing id fails on the not-null columns it never meant to touch; and
+     * only Postgres accepts a `values` list with column aliases, while the test
+     * suite runs on SQLite.
+     *
+     * @param  list<array{id: int, rank_score: int, votes_count: int}>  $rows
+     * @return int rows written
+     */
+    private function write(array $rows): int
+    {
+        if ($rows === []) {
+            return 0;
+        }
+
+        // Postgres cannot infer a bare placeholder's type in a select list and
+        // says so; the casts go on the first branch, which is the one it reads
+        // the shape from. SQLite has no such syntax at all.
+        $casts = DB::connection()->getDriverName() === 'pgsql'
+            ? ['::bigint', '::integer', '::integer']
+            : ['', '', ''];
+
+        foreach (array_chunk($rows, self::WRITE_CHUNK) as $chunk) {
+            $branches = [];
+            $bindings = [];
+
+            foreach ($chunk as $index => $row) {
+                $branches[] = $index === 0
+                    ? sprintf(
+                        'select ?%s as "id", ?%s as "rank_score", ?%s as "votes_count"',
+                        ...$casts,
+                    )
+                    : 'select ?, ?, ?';
+
+                array_push($bindings, $row['id'], $row['rank_score'], $row['votes_count']);
+            }
+
+            DB::update(
+                'update "servers" set "rank_score" = v."rank_score", "votes_count" = v."votes_count"'
+                .' from ('.implode(' union all ', $branches).') as v'
+                .' where "servers"."id" = v."id"',
+                $bindings,
+            );
+        }
+
+        return count($rows);
     }
 
     /**
