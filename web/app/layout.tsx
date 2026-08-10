@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
+import { GoogleAnalytics } from '@next/third-parties/google'
 import { Inter, JetBrains_Mono, Orbitron } from 'next/font/google'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { AuthProvider } from '@/components/auth/auth-provider'
 import { UserMenu } from '@/components/auth/user-menu'
-import { ConsentProvider, ConsentSettingsButton } from '@/components/consent-provider'
+import { ConsentGate, ConsentProvider, ConsentSettingsButton } from '@/components/consent-provider'
 import { FavoritesProvider } from '@/components/favorites-provider'
 import { Icon } from '@/components/icons'
 import { MobileNav } from '@/components/mobile-nav'
@@ -26,6 +27,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-mono-code' })
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
@@ -196,6 +198,17 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           </AuthProvider>
           </ConsentProvider>
         </ToastProvider>
+
+        {/* Google Analytics is loaded only after the visitor has allowed
+            'analytics' — ConsentGate renders nothing until then, so no request
+            is made to googletagmanager.com and no cookie is set. Withdrawing
+            consent from the footer unmounts the component and no further
+            events are sent. */}
+        {GA_ID && (
+          <ConsentGate category="analytics">
+            <GoogleAnalytics gaId={GA_ID} />
+          </ConsentGate>
+        )}
       </body>
     </html>
   )
