@@ -4,6 +4,7 @@ namespace App\Services\Catalog;
 
 use App\Models\Game;
 use Closure;
+use Illuminate\Cache\TaggableStore;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\Cache;
 
@@ -47,7 +48,7 @@ class ListingCache
      */
     public function remember(?Game $game, array $filters, Closure $build): array
     {
-        if (! $this->cacheable($filters)) {
+        if (! $this->taggable() || ! $this->cacheable($filters)) {
             return $build();
         }
 
@@ -67,7 +68,7 @@ class ListingCache
      */
     public function forget(array $slugs): void
     {
-        if ($slugs === []) {
+        if ($slugs === [] || ! $this->taggable()) {
             return;
         }
 
@@ -78,7 +79,30 @@ class ListingCache
     /** Everything, for when the shape of the payload itself has changed. */
     public function flush(): void
     {
+        if (! $this->taggable()) {
+            return;
+        }
+
         Cache::tags([self::TAG])->flush();
+    }
+
+    /**
+     * Nothing is cached unless the store can be invalidated.
+     *
+     * `Cache::tags()` throws outright on the file and database stores, so
+     * without this the listing endpoints — the two busiest the API has — answer
+     * 500 the moment CACHE_STORE names one of them. That is a plausible thing
+     * for it to name: rolling the store back is one line in `.env`, and the
+     * whole point of a rollback is that it cannot make things worse.
+     *
+     * Degrading to no cache is the right failure. An untagged cache is not:
+     * `CatalogCounters::refresh()` would have no way to drop a listing, and a
+     * server somebody added would stay missing for the length of the window
+     * rather than appearing when they came back to look.
+     */
+    private function taggable(): bool
+    {
+        return Cache::getStore() instanceof TaggableStore;
     }
 
     /**

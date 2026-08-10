@@ -153,6 +153,29 @@ class ListingCacheTest extends TestCase
     }
 
     /**
+     * A store that cannot be invalidated is not used at all.
+     *
+     * `Cache::tags()` throws on the database store, so without the guard this
+     * is a 500 on the busiest endpoint the API has — reachable by rolling
+     * CACHE_STORE back, which is exactly when nothing else should break.
+     */
+    public function test_a_store_without_tags_serves_the_listing_uncached(): void
+    {
+        config(['cache.default' => 'database']);
+
+        $this->server('minecraft', ['slug' => 'one', 'name' => 'Before']);
+
+        $this->getJson('/api/games/minecraft/servers')->assertOk();
+
+        Server::where('slug', 'one')->update(['name' => 'After']);
+
+        $this->assertSame(
+            'After',
+            $this->getJson('/api/games/minecraft/servers')->assertOk()->json('data.0.name'),
+        );
+    }
+
+    /**
      * Bring `games.servers_count` up to date before the cache is warmed.
      *
      * Without this the first refresh under test sees every game move from the
