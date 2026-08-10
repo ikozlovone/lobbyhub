@@ -355,41 +355,57 @@ from the last actual answer, which is what the site is showing.
 
 Moving `CACHE_STORE` — database to Redis, one Redis index to another — is not an
 `.env` edit. The locks that keep the monitor honest live in the cache store, so
-pointing the app at an empty one makes every lock currently held invisible:
+pointing the app at an empty one makes every lock currently held invisible: a
+queued `QueryServer` holds a uniqueness lock, and without it the dispatcher will
+queue a second copy of every query already waiting — the exact failure the lock
+exists to prevent, arriving as a queue that doubles on its own.
 
-* a queued `QueryServer` holds a uniqueness lock, and without it the dispatcher
-  will queue a second copy of every query already waiting — the exact failure
-  the lock exists to prevent, arriving as a queue that doubles on its own;
-* `withoutOverlapping()` mutexes go the same way, so a `steam:sync` that is
-  mid-pass can be started again beside itself.
+Which is why the queue is emptied first. Once it is, the locks left in the old
+store are orphans by definition, and the new store — empty — discards them for
+free.
 
-So it is the queue-flush procedure with the store swapped in the middle:
+**Moving *to* Redis on a server built before it was one of the packages: install
+the extension first.** `predis` is not in `composer.json`, so `phpredis` is the
+only client there is, and without it every request that touches the cache — which
+is every catalog endpoint — answers 500. With `APP_DEBUG=false` it answers a bare
+500, so the first sight of it is usually `npm run build` failing to collect page
+data against `/api/games`, several steps into a deploy that looked fine.
+
+```sh
+php -m | grep redis || sudo apt install -y php8.4-redis
+sudo systemctl reload php8.4-fpm   # the CLI picks it up on its own; FPM does not
+redis-cli ping
+redis-cli config get databases     # REDIS_DB and REDIS_CACHE_DB must be inside this
+```
 
 ```sh
 # 1. Stop both sides. Nothing may take a lock while the store is changing.
 sudo systemctl stop lobbyhub-scheduler
 sudo systemctl stop 'lobbyhub-worker@*'
 
-# 2. Let the queue drain to nothing, or throw it away. monitoring:unlock in the
-#    next step refuses to run while queries are still queued, and it is right to.
+# 2. Let the queue drain to nothing, or throw it away.
 sudo -u deploy -H php artisan queue:clear database --queue=monitoring --force
 
-# 3. Release the locks while the app can still see them — on the OLD store.
-sudo -u deploy -H php artisan monitoring:unlock
-
-# 4. Now edit .env, and rebuild the config cache: a cached config pins whatever
+# 3. Edit .env, then rebuild the config cache: a cached config pins whatever
 #    .env said when it was written, so skipping this changes nothing at all.
 sudo -u deploy -H php artisan config:cache
+sudo -u deploy -H php artisan about | grep -i cache   # the store that is live
 
-# 5. Start again, and watch the first pass.
+# 4. Start again, and watch the first pass.
 sudo systemctl start lobbyhub-scheduler
 sudo systemctl start 'lobbyhub-worker@1'
 sudo -u deploy -H php artisan monitoring:status
 ```
 
-Step 3 before step 4, not after. Afterwards the locks are in a store the app is
-no longer reading, and `monitoring:unlock` would walk the catalog releasing
-nothing while the stale rows sit in the old one until they expire.
+**`monitoring:unlock` is not part of this, and running it here is an expensive
+mistake.** It belongs to the procedure above, where the queue is emptied and the
+store is *kept* — there the locks survive the flush and something has to release
+them. Here the store is being abandoned, so they are already gone. What it costs
+to find that out the hard way: the command walks every row in `servers`,
+discovery candidates included, and spends two write statements per row on
+`cache_locks` — on a catalog of a few hundred thousand that is well over a
+million writes and upwards of a quarter of an hour, to release locks nobody was
+ever going to read again.
 
 What is lost in the swap is cache, and all of it is meant to be lost: the API
 payload caches rebuild on the first request, the A2S challenge cache re-handshakes
