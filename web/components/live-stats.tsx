@@ -4,41 +4,16 @@ import { useEffect, useRef, useState } from 'react'
 import type { Game } from '@/lib/api'
 
 /**
- * Catalog totals.
+ * Catalog totals, as they were when the page was rendered.
  *
- * The competitor labels these "Live" but renders them once with the page. Ours
- * actually refresh, and the numbers roll to their new value so a change is
- * visible rather than something you have to catch.
+ * These used to poll /api/games on a minute timer. They no longer do: the page
+ * itself is read per request, and the numbers behind it are rewritten by
+ * `counters:refresh` once a minute, so an arriving visitor already sees figures
+ * no older than that. The timer only helped somebody who left the tab open —
+ * and it cost every one of them a request a minute, plus one on load, against
+ * an endpoint the whole site shares.
  */
-const REFRESH_MS = 60_000
-
-export function LiveStats({ games: initial }: { games: Game[] }) {
-  const [games, setGames] = useState(initial)
-
-  useEffect(() => {
-    const refresh = async () => {
-      if (document.visibilityState !== 'visible') return
-
-      try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api'}/games`,
-          { cache: 'no-store' },
-        )
-        if (response.ok) setGames((await response.json()).data)
-      } catch {
-        // Keep the last good numbers rather than blanking the hero.
-      }
-    }
-
-    const timer = setInterval(refresh, REFRESH_MS)
-    document.addEventListener('visibilitychange', refresh)
-
-    return () => {
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', refresh)
-    }
-  }, [])
-
+export function LiveStats({ games }: { games: Game[] }) {
   const totals = games.reduce(
     (sum, game) => ({
       servers: sum.servers + game.counters.servers,

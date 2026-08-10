@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CachePublicReads;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +19,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // is defined as the `api` limiter in AppServiceProvider.
         $middleware->api(prepend: [
             ThrottleRequests::class.':api',
+        ]);
+
+        // Named rather than applied to the group: it belongs on the public
+        // reads one at a time, and the group also holds the routes it must
+        // never touch. See the class.
+        $middleware->alias([
+            'cache.public' => CachePublicReads::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

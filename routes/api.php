@@ -24,11 +24,38 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+/*
+ * `cache.public:N` is how long a shared cache — nginx in front of PHP, and
+ * Cloudflare in front of that — may keep the answer. It is on the public reads
+ * one at a time rather than on the group, because the group also holds the
+ * routes that must never be shared: anything behind a token, the vote status of
+ * whoever is asking, and `servers/live`.
+ *
+ * The windows follow how fast each thing actually moves. Games and their facets
+ * are rewritten once a minute by `counters:refresh`; a listing is already
+ * cached that long inside the app; history is measurements that only grow; the
+ * sitemap is an enumeration nobody reads twice in an hour.
+ *
+ * Search is left off deliberately. nginx keys its cache on the URL, so a free
+ * text parameter fills it with entries written once and never read — the same
+ * reason ListingCache does not cache `q` either.
+ */
 Route::name('api.')->group(function () {
-    Route::get('games', [GameController::class, 'index'])->name('games.index');
-    Route::get('games/{game}', [GameController::class, 'show'])->name('games.show');
-    Route::get('games/{game}/servers', [ServerController::class, 'index'])->name('games.servers');
-    Route::get('games/{game}/votes', [VoteController::class, 'recent'])->name('games.votes');
+    Route::get('games', [GameController::class, 'index'])
+        ->middleware('cache.public:60')
+        ->name('games.index');
+
+    Route::get('games/{game}', [GameController::class, 'show'])
+        ->middleware('cache.public:60')
+        ->name('games.show');
+
+    Route::get('games/{game}/servers', [ServerController::class, 'index'])
+        ->middleware('cache.public:60')
+        ->name('games.servers');
+
+    Route::get('games/{game}/votes', [VoteController::class, 'recent'])
+        ->middleware('cache.public:60')
+        ->name('games.votes');
 
     // Verification talks to the submitted address over the network, so this one
     // is throttled far below the read budget.
@@ -37,18 +64,24 @@ Route::name('api.')->group(function () {
         ->name('games.servers.store');
 
     // The catalog-wide listing the home page is built from.
-    Route::get('servers', [ServerController::class, 'catalog'])->name('servers.index');
+    Route::get('servers', [ServerController::class, 'catalog'])
+        ->middleware('cache.public:60')
+        ->name('servers.index');
 
     // Must precede servers/{server}, or "live" would be read as a slug.
     Route::get('servers/live', [ServerController::class, 'live'])->name('servers.live');
-    Route::get('servers/{server}', [ServerController::class, 'show'])->name('servers.show');
+    Route::get('servers/{server}', [ServerController::class, 'show'])
+        ->middleware('cache.public:60')
+        ->name('servers.show');
 
     // Makes us send a packet to somebody else's machine on demand, so it is
     // throttled like the submission form rather than like a read.
     Route::post('servers/{server}/refresh', [ServerController::class, 'refresh'])
         ->middleware('throttle:refreshes')
         ->name('servers.refresh');
-    Route::get('servers/{server}/history', [ServerHistoryController::class, 'show'])->name('servers.history');
+    Route::get('servers/{server}/history', [ServerHistoryController::class, 'show'])
+        ->middleware('cache.public:300')
+        ->name('servers.history');
 
     Route::get('servers/{server}/vote', [VoteController::class, 'status'])->name('servers.vote.status');
     Route::post('servers/{server}/vote', [VoteController::class, 'store'])
@@ -65,7 +98,9 @@ Route::name('api.')->group(function () {
      * thousand rows by its own pagination limits, which is correct for
      * something a person browses and useless for an enumeration.
      */
-    Route::get('sitemap/servers', [SitemapController::class, 'servers'])->name('sitemap.servers');
+    Route::get('sitemap/servers', [SitemapController::class, 'servers'])
+        ->middleware('cache.public:3600')
+        ->name('sitemap.servers');
 
     /*
     |----------------------------------------------------------------------

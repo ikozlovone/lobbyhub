@@ -30,8 +30,33 @@ sudo rm -f /etc/nginx/sites-enabled/default
 sudo install -m 0755 deploy/nginx/refresh-cloudflare-ips.sh /usr/local/sbin/
 sudo /usr/local/sbin/refresh-cloudflare-ips.sh          # writes conf.d/cloudflare.conf, reloads
 
+# Where the API's fastcgi cache lives. nginx creates the level directories
+# itself but not the root, and refuses to start without it.
+sudo install -d -o www-data -g www-data -m 0700 /var/cache/nginx/api
+
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+### The API's cache
+
+`conf.d/lobbyhub.conf` declares a `fastcgi_cache_path`, and
+`api.lobbyhub.gg.conf` puts the PHP location behind it. What is stored and for
+how long is decided by the application — the public read routes carry
+`Cache-Control: s-maxage=…` from the `CachePublicReads` middleware and
+everything else still says `no-cache, private`, which nginx honours by storing
+nothing. So the list of shareable routes lives in `routes/api.php` and is not
+repeated here.
+
+Every response says which it was:
+
+```sh
+curl -sI https://api.lobbyhub.gg/api/games | grep -i x-cache   # MISS, then HIT
+```
+
+`BYPASS` means one of the exclusions matched — a token on the request, a search
+term, or one of the paths in the `$api_uncacheable` map. Emptying it by hand is
+`sudo rm -rf /var/cache/nginx/api/*` followed by a reload; nothing needs it in
+normal operation, because the windows are a minute.
 
 Both files in `conf.d/` have to be there, and `nginx -t` names whichever is
 missing rather than saying so:
