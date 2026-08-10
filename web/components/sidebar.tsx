@@ -29,7 +29,6 @@ export async function Sidebar() {
               A neutral tile because it is a destination, not an action. */}
           <Link
             href="/games"
-            prefetch={false}
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded bg-line text-muted">
@@ -43,7 +42,6 @@ export async function Sidebar() {
         <li>
           <Link
             href="/add-server"
-            prefetch={false}
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded bg-brand/15 text-brand">
@@ -58,9 +56,11 @@ export async function Sidebar() {
           {/* Shown signed out too: the page it leads to is the sign-in form, and
               a menu entry that appears only once you are in is one nobody
               signed out ever discovers. */}
+          {/* Prefetched like the rest of the rail. This one reads the session,
+              so its shell carries session output and Next caches it per session
+              on the client — still one shell, not one per visit. */}
           <Link
             href="/favorites"
-            prefetch={false}
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
           >
             <span className="flex size-7 shrink-0 items-center justify-center rounded bg-accent/15 text-accent">
@@ -82,11 +82,10 @@ export async function Sidebar() {
             <li key={game.slug}>
               <Link
                 href={`/games/${game.slug}`}
-                // The menu lists every game and sits on every page, so warming
-                // it costs four requests per game on arrival — for one link the
-                // visitor might click. The page they land on is served from the
-                // shell cache anyway; the cold click is not worth the crowd.
-                prefetch={false}
+                // The menu lists every game and sits on every page. Warming it
+                // used to be four requests per game; they all point at the one
+                // /games/[game] route, so under Partial Prefetching the rail
+                // costs a single shell — see next.config.ts.
                 className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
               >
                 <Thumb game={game} />

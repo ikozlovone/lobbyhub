@@ -30,9 +30,9 @@ export function GameCard({
   return (
     <Link
       href={href}
-      // The catalog shows every game at once; warming all of them is the same
-      // crowd as the menu — see sidebar.tsx.
-      prefetch={false}
+      // Prefetched. The catalog shows every game at once, but they all lead to
+      // the one /games/[game] route, and Partial Prefetching warms that route's
+      // shell once however many cards point at it — see next.config.ts.
       className="group block h-full cursor-pointer overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-line-strong"
     >
       {/* Steam header art is 460x215; the ratio is reserved either way so a

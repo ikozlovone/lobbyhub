@@ -48,11 +48,8 @@ export function ServerSection({
         {viewAllHref && (
           <Link
             href={viewAllHref}
-            // Three of these point at /search from one page. Warm, that is four
-            // segment requests for a listing render nobody has asked for yet —
-            // and prefetch dedupes by href, so leaving one of the three on would
-            // pay the whole cost anyway. See the note in sidebar.tsx.
-            prefetch={false}
+            // Three of these point at /search from one page, and under Partial
+            // Prefetching that is one shell between them — see next.config.ts.
             className="shrink-0 text-sm font-medium text-brand transition-colors hover:underline"
           >
             {viewAllLabel}

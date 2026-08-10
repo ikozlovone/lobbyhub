@@ -51,24 +51,20 @@ export function GameHero({
       />
 
       <div className="relative flex flex-col gap-6 p-5 sm:p-6">
-        {/* Nothing in here prefetches. Cache Components fetch a warmed route a
-            segment at a time, so each of these links left on its default costs
-            four requests for a page the visitor is not on their way to — and
-            the two destinations are a click away from every page on the site
-            anyway. See the same note in server-section.tsx. */}
+        {/* Both of these prefetch, and cost nothing extra to: /games/[game] is
+            already warmed by the rail on every page, and the two shells are
+            shared with every other link pointing at them — see next.config.ts.
+            The game step is still text at the game root, which is about not
+            linking a reader to the page they are on rather than about cost. */}
         <nav aria-label="Breadcrumb" className="text-xs text-subtle">
-          <Link href="/" prefetch={false} className="transition-colors hover:text-fg">
+          <Link href="/" className="transition-colors hover:text-fg">
             LobbyHub
           </Link>
           <span className="mx-1.5">/</span>
           {atGameRoot ? (
             <span className="text-muted">{game.name}</span>
           ) : (
-            <Link
-              href={`/games/${game.slug}`}
-              prefetch={false}
-              className="transition-colors hover:text-fg"
-            >
+            <Link href={`/games/${game.slug}`} className="transition-colors hover:text-fg">
               {game.name}
             </Link>
           )}
@@ -100,7 +96,6 @@ export function GameHero({
           <div className="flex items-center gap-2">
             <Link
               href={`/games/${game.slug}/add-server`}
-              prefetch={false}
               className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-strong"
             >
               <Icon.plus />

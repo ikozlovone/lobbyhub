@@ -37,8 +37,7 @@ export function ServerCard({ server, steam }: { server: Server; steam: boolean }
         <div className="flex items-start justify-between gap-2">
           <Link
             href={`/servers/${server.slug}`}
-            // Same reasoning as the table — see server-table.tsx.
-            prefetch={false}
+            // Prefetched, same as the table — see server-table.tsx.
             className="line-clamp-2 font-medium transition-colors group-hover:text-brand"
           >
             {server.name}
@@ -60,7 +59,6 @@ export function ServerCard({ server, steam }: { server: Server; steam: boolean }
         {server.game && (
           <Link
             href={`/games/${server.game.slug}`}
-            prefetch={false}
             className="w-fit rounded-sm bg-surface-2 px-1.5 py-0.5 text-[11px] text-subtle transition-colors hover:text-fg"
           >
             {server.game.name}

@@ -88,7 +88,7 @@ async function Content({ params }: Props) {
                 {game.name}
               </Link>
               <span className="mx-1">/</span>
-              <Link href="/add-server" prefetch={false} className="hover:text-fg">
+              <Link href="/add-server" className="hover:text-fg">
                 Add server
               </Link>
             </nav>

@@ -16,6 +16,29 @@ const nextConfig: NextConfig = {
   // with live player counts on top.
   cacheComponents: true,
 
+  /*
+   * One prefetched App Shell per route, shared by every link pointing at it.
+   *
+   * This is what makes prefetching affordable here, and until 16.3.0 it was
+   * not. Before it, a prefetch was per *link*: the framework warmed each
+   * destination in full, a segment at a time, so a listing holding two dozen
+   * rows to /servers/[server] was two dozen route prefetches and nearer
+   * seventy requests — every one a render on our own server, because the
+   * frontend reads the catalog from it. That is why almost every Link in this
+   * app carried `prefetch={false}`, and why navigation waited for a full round
+   * trip on the click.
+   *
+   * With this on, those two dozen rows cost one shell. The shell holds the
+   * route's static and session output; what depends on the URL — params,
+   * searchParams, and the listing read behind them — streams in after
+   * navigation, from behind the Suspense boundaries that are already there for
+   * PPR. So the cost of warming a route no longer scales with how many links
+   * point at it, only with how many distinct routes a page can reach, which
+   * here is four or five.
+   *
+   * Requires cacheComponents, above; next build refuses the pair otherwise.
+   */
+  partialPrefetching: true,
 
   experimental: {
     // How long the router may reuse a segment it already has before asking the

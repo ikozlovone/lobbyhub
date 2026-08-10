@@ -44,7 +44,6 @@ export function PopularGamesSection({ games }: { games: Game[] }) {
 
         <Link
           href="/games"
-          prefetch={false}
           className="shrink-0 text-sm font-medium text-brand transition-colors hover:underline"
         >
           {HOME_COPY.games.viewAll}

@@ -112,12 +112,10 @@ function Row({
           <FavoriteButton slug={server.slug} name={server.name} className="shrink-0" />
           <Link
             href={`/servers/${server.slug}`}
-            // No prefetch. A listing holds two dozen of these and a visitor opens
-            // one of them: prefetching the rest is the page fetching itself two
-            // dozen times over, and since Next asks for each segment separately
-            // that is nearer seventy requests — every one a render on our own
-            // server, because the frontend reads the catalog from it.
-            prefetch={false}
+            // Prefetched, which it could not afford to be before Partial
+            // Prefetching: two dozen rows used to mean two dozen route
+            // prefetches. They share one /servers/[server] shell now, and the
+            // row the visitor opens streams its own data in. See next.config.ts.
             className="block min-w-0 flex-1 truncate font-medium transition-colors group-hover:text-brand"
           >
             {server.name}
