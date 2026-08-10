@@ -9,6 +9,7 @@ use App\Models\GameMode;
 use App\Models\GameVersion;
 use App\Services\Admin\GameArtwork;
 use App\Services\Catalog\FrontendCache;
+use App\Services\Catalog\ListingCache;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +34,10 @@ use Illuminate\Validation\ValidationException;
  */
 class GameController extends Controller
 {
-    public function __construct(private readonly FrontendCache $frontend) {}
+    public function __construct(
+        private readonly FrontendCache $frontend,
+        private readonly ListingCache $listings,
+    ) {}
 
     /**
      * Every game at once — the whole catalog is a few dozen rows, so paging it
@@ -189,7 +193,10 @@ class GameController extends Controller
     private function published(Game $game): void
     {
         Cache::forget('api:games');
-        Cache::forget("api:games:{$game->id}");
+
+        // An edit can add or rename a mode or a version, and those are facets.
+        // The game's own fields are read per request and need no telling.
+        $this->listings->forget([$game->slug]);
 
         $this->frontend->invalidate('games');
     }

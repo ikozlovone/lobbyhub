@@ -23,8 +23,15 @@
 export const CATALOG_CACHE = {
   /** The client router's own reuse window for this cached content. */
   stale: 300,
-  /** How often the catalog is refreshed in the background. */
-  revalidate: 60,
+  /**
+   * How often the catalog is refreshed in the background.
+   *
+   * Ten minutes, matching the API's own window for the same thing. What this
+   * holds is the rail: which games exist and which have servers. A game
+   * crossing from zero servers to one is the only change that shows here, and
+   * it is not a change anyone is watching for.
+   */
+  revalidate: 600,
   /** How long a copy nobody has asked for is still worth serving. */
   expire: 604_800,
 } as const

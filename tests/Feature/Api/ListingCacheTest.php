@@ -102,6 +102,49 @@ class ListingCacheTest extends TestCase
         $this->assertCount(2, $this->getJson('/api/servers')->assertOk()->json('data'));
     }
 
+    /**
+     * The two halves of a game's payload move at different speeds, and only the
+     * slow one is cached. This is the whole reason they were separated: the
+     * counters used to be thrown away every minute to stay current, and took
+     * the expensive facets with them.
+     */
+    public function test_a_games_counters_stay_current_while_its_facets_are_cached(): void
+    {
+        $this->server('rust', ['map' => 'before']);
+        $this->settleCounters();
+
+        $first = $this->getJson('/api/games/rust')->assertOk();
+        $this->assertSame('before', $first->json('data.facets.maps.0.slug'));
+
+        // Both changed behind the endpoint's back, and neither moves the count
+        // that would drop the facet cache.
+        Server::query()->update(['map' => 'after']);
+        Game::where('slug', 'rust')->update(['players_online' => 4242]);
+
+        $second = $this->getJson('/api/games/rust')->assertOk();
+
+        $this->assertSame(4242, $second->json('data.counters.players_online'));
+        $this->assertSame('before', $second->json('data.facets.maps.0.slug'));
+    }
+
+    /** And the facets go when the game does change shape. */
+    public function test_a_game_gaining_a_server_drops_its_facets(): void
+    {
+        $this->server('rust', ['map' => 'before']);
+        $this->settleCounters();
+
+        $this->getJson('/api/games/rust')->assertOk();
+
+        Server::query()->update(['map' => 'after']);
+        $this->server('rust', ['map' => 'after']);
+        app(CatalogCounters::class)->refresh();
+
+        $this->assertSame(
+            'after',
+            $this->getJson('/api/games/rust')->assertOk()->json('data.facets.maps.0.slug'),
+        );
+    }
+
     /** Free text has no bounded keyspace, so it is left out of the cache. */
     public function test_a_search_is_not_cached(): void
     {

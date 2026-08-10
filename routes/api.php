@@ -31,10 +31,20 @@ use Illuminate\Support\Facades\Route;
  * routes that must never be shared: anything behind a token, the vote status of
  * whoever is asking, and `servers/live`.
  *
- * The windows follow how fast each thing actually moves. Games and their facets
- * are rewritten once a minute by `counters:refresh`; a listing is already
- * cached that long inside the app; history is measurements that only grow; the
- * sitemap is an enumeration nobody reads twice in an hour.
+ * The windows follow how fast each thing actually moves, and they are not all
+ * the same on purpose.
+ *
+ * Ten minutes where the payload's fast half is refreshed somewhere else: a
+ * listing's player counts and statuses are overlaid in the browser from
+ * /servers/live, and its order is `rank`, which is only rewritten every fifteen
+ * minutes. History is measurements that only grow. The sitemap is an
+ * enumeration nobody reads twice in an hour.
+ *
+ * A minute where the payload *is* the fast half. `games` and `games/{game}`
+ * carry the counters that `counters:refresh` rewrites every minute — a longer
+ * window here would freeze them in front of PHP and undo the very split that
+ * keeps them current (see GameController::show). Same for a server's own page,
+ * whose map, version and wipe time the live layer does not cover.
  *
  * Search is left off deliberately. nginx keys its cache on the URL, so a free
  * text parameter fills it with entries written once and never read — the same
@@ -50,7 +60,7 @@ Route::name('api.')->group(function () {
         ->name('games.show');
 
     Route::get('games/{game}/servers', [ServerController::class, 'index'])
-        ->middleware('cache.public:60')
+        ->middleware('cache.public:600')
         ->name('games.servers');
 
     Route::get('games/{game}/votes', [VoteController::class, 'recent'])
@@ -65,7 +75,7 @@ Route::name('api.')->group(function () {
 
     // The catalog-wide listing the home page is built from.
     Route::get('servers', [ServerController::class, 'catalog'])
-        ->middleware('cache.public:60')
+        ->middleware('cache.public:600')
         ->name('servers.index');
 
     // Must precede servers/{server}, or "live" would be read as a slug.
@@ -80,7 +90,7 @@ Route::name('api.')->group(function () {
         ->middleware('throttle:refreshes')
         ->name('servers.refresh');
     Route::get('servers/{server}/history', [ServerHistoryController::class, 'show'])
-        ->middleware('cache.public:300')
+        ->middleware('cache.public:600')
         ->name('servers.history');
 
     Route::get('servers/{server}/vote', [VoteController::class, 'status'])->name('servers.vote.status');

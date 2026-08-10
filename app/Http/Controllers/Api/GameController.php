@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\GameResource;
 use App\Models\Game;
+use App\Services\Catalog\ListingCache;
 use App\Services\Catalog\ServerListing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,18 +45,24 @@ class GameController extends Controller
         return response()->json(['data' => $games]);
     }
 
-    public function show(Request $request, Game $game, ServerListing $listing): JsonResponse
+    /**
+     * The game, and the facet counts its page filters by.
+     *
+     * Only the facets are cached. The game's own fields — including the three
+     * counters, which is why this payload used to be thrown away every minute —
+     * come off a row the router has already loaded, so reading them per request
+     * costs nothing and keeps them as current as `counters:refresh` left them.
+     * The facets are the expensive half and live in ListingCache, which drops
+     * them on the same event that drops the listings.
+     */
+    public function show(Request $request, Game $game, ServerListing $listing, ListingCache $cache): JsonResponse
     {
         abort_unless($game->is_active, 404);
 
-        $payload = Cache::remember(
-            "api:games:{$game->id}",
-            self::CACHE_TTL,
-            fn () => (new GameResource($game))->toArray($request) + [
-                'facets' => $listing->facets($game),
+        return response()->json([
+            'data' => (new GameResource($game))->toArray($request) + [
+                'facets' => $cache->facets($game, fn () => $listing->facets($game)),
             ],
-        );
-
-        return response()->json(['data' => $payload]);
+        ]);
     }
 }

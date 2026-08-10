@@ -37,14 +37,20 @@ class PublicCacheHeadersTest extends TestCase
     {
         $server = $this->server();
 
+        /*
+         * The windows differ, and the difference is the point: a minute where
+         * the payload carries numbers that are rewritten every minute, ten
+         * where whatever moves inside it is refreshed somewhere else. Pinned
+         * here so raising one of the short ones has to be deliberate.
+         */
         $shareable = [
             '/api/games' => 60,
             '/api/games/rust' => 60,
-            '/api/games/rust/servers' => 60,
+            '/api/games/rust/servers' => 600,
             '/api/games/rust/votes' => 60,
-            '/api/servers' => 60,
+            '/api/servers' => 600,
             "/api/servers/{$server->slug}" => 60,
-            "/api/servers/{$server->slug}/history" => 300,
+            "/api/servers/{$server->slug}/history" => 600,
             '/api/sitemap/servers' => 3600,
         ];
 

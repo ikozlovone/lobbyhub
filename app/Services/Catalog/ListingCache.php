@@ -31,12 +31,25 @@ use Illuminate\Support\Facades\Cache;
 class ListingCache
 {
     /**
-     * Long enough to collapse a burst of identical requests — a chip pressed,
-     * the same page shared, a listing crawled — and short enough that the
-     * things tags do not catch, like a server going offline or being renamed,
-     * are never wrong for long.
+     * Ten minutes, and the sort is what makes that safe rather than reckless.
+     *
+     * A listing is asked for as `sort=rank` unless somebody chooses otherwise,
+     * and `rank_score` is rewritten by `ranking:recompute` every fifteen
+     * minutes — so the order this window holds could not have changed inside it
+     * anyway. What does move underneath is the player counts and statuses, and
+     * those are overlaid in the browser from /servers/live rather than read
+     * from here (Мониторинг.md §15.1).
+     *
+     * It was a minute before, which also made caching `total` separately worth
+     * doing: the count is the one part of a listing that is linear in the size
+     * of the game, and membership moves far more slowly than rows do. At ten
+     * minutes that separation buys nothing — the count is inside this entry and
+     * gets the same window.
+     *
+     * What the window is emphatically not responsible for is somebody adding a
+     * server and coming back to look for it. That is the tags' job, below.
      */
-    private const TTL = 60;
+    private const TTL = 600;
 
     /** Carried by every entry, so there is one lever that clears all of them. */
     private const TAG = 'listing';
@@ -54,6 +67,41 @@ class ListingCache
 
         return Cache::tags($this->tags($game))
             ->remember($this->key($game, $filters), self::TTL, $build);
+    }
+
+    /**
+     * A game's facet counts, which are the expensive half of its page.
+     *
+     * Five aggregates, three of them linear in the size of the game — the
+     * status buckets, the country breakdown and the map list. They used to ride
+     * inside the game's own payload, on a ten-minute window that never got to
+     * apply: CatalogCounters::refresh() forgot that key every minute so the
+     * counters beside them would stay current, and took the facets with it. A
+     * cold Counter-Strike paid 1.74 seconds for the privilege, once a minute.
+     *
+     * Separated because the two halves move at different speeds. The counters
+     * are three denormalised columns on the game row, already in memory by the
+     * time this is called, and they stay exactly as fresh as they were. The
+     * facets get a real window and the same tags as the listings, so a game
+     * that gains or loses servers drops both together.
+     *
+     * The cost is the status chips: online, offline, empty and full are counted
+     * across the whole game (§15.5), and they now lag by up to the window. The
+     * chips answer "what does this game look like", which is a question that
+     * tolerates ten minutes; the numbers a visitor watches move are on the rows
+     * and come from the live layer.
+     *
+     * @param  Closure(): array<string, mixed>  $build
+     * @return array<string, mixed>
+     */
+    public function facets(Game $game, Closure $build): array
+    {
+        if (! $this->taggable()) {
+            return $build();
+        }
+
+        return Cache::tags($this->tags($game))
+            ->remember(self::TAG.":facets:{$game->slug}", self::TTL, $build);
     }
 
     /**

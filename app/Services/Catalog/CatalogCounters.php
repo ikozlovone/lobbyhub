@@ -214,13 +214,18 @@ class CatalogCounters
         return $aggregates->count();
     }
 
-    /** Mirrors the keys GameController writes; see its CACHE_TTL. */
+    /**
+     * The one API cache these numbers are in: the games index, which carries a
+     * counter per game and is what the navigation rail is built from.
+     *
+     * It used to forget a key per game as well, so the counters in each game's
+     * own payload would not sit a minute behind. That payload no longer holds
+     * anything worth caching — see GameController::show — and the facets that
+     * used to ride along with it are dropped by their own tag, in forget()
+     * above, only when the game they belong to actually changed.
+     */
     private function flushApiCache(): void
     {
         Cache::forget('api:games');
-
-        foreach (DB::table('games')->pluck('id') as $id) {
-            Cache::forget("api:games:{$id}");
-        }
     }
 }

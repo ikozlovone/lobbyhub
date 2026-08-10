@@ -26,7 +26,7 @@ class ServerHistoryController extends Controller
         // collapses a burst of page views into one query.
         $payload = Cache::remember(
             "api:servers:{$server->id}:history:{$range}",
-            60,
+            600,
             fn () => $history->for($server, $range),
         );
 
