@@ -170,7 +170,15 @@ class ServerListing
             $query->orderBy('players_online', 'desc');
         }
 
-        $query->orderBy('id');
+        // Every sort ends on the primary key, so equal values come out in the
+        // same order on every page rather than in whatever order the plan
+        // happened to produce. Except when it *is* the primary key: `newest`
+        // sorts by id descending, and appending it again ascending asked for
+        // `order by id desc, id asc` — a second key that can never be reached,
+        // and one no index could be shaped like.
+        if ($column !== 'id') {
+            $query->orderBy('id');
+        }
 
         return $this->applyFilters($query, $game, $filters);
     }

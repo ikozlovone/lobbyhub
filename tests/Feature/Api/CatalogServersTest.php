@@ -109,6 +109,30 @@ class CatalogServersTest extends TestCase
         $this->getJson('/api/servers?sort=whatever')->assertStatus(422);
     }
 
+    /**
+     * Insertion order, newest first.
+     *
+     * Worth pinning because this is the one sort whose column is also the
+     * tiebreak every other sort ends on, and appending the tiebreak to itself
+     * asked for `order by id desc, id asc` — harmless to the answer, but a
+     * shape no index can be built in.
+     */
+    public function test_the_newest_sort_runs_from_the_last_row_backwards(): void
+    {
+        $first = $this->server('rust', ['name' => 'first']);
+        $second = $this->server('rust', ['name' => 'second']);
+        $third = $this->server('rust', ['name' => 'third']);
+
+        $this->assertTrue($first->id < $second->id && $second->id < $third->id);
+
+        $names = array_column(
+            $this->getJson('/api/servers?sort=newest')->assertOk()->json('data'),
+            'name',
+        );
+
+        $this->assertSame(['third', 'second', 'first'], $names);
+    }
+
     private function server(string $game, array $attributes = []): Server
     {
         return Server::factory()->create($attributes + [
