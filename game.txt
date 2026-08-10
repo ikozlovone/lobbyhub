@@ -1,0 +1,1216 @@
+
+
+
+<!DOCTYPE html>
+<html>
+	<head>
+	<title>V-ONE Roleplay | Custom Vice City - TrackyServer</title>	<base href="/">
+	<meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="🌴 Welcome to V-One RP | EU | Whitelist 🌴Step into a unique FiveM roleplay experience on our custom Vice City map, built for players who enjoy serious roleplay, immersive gameplay, and an active " /><meta property="og:image" content="https://www.trackyserver.com/user_data/server_banners/6f8038e8173086aaec47197ac16d969b.webp">
+			<meta property="og:twitter" content="https://www.trackyserver.com/user_data/server_banners/6f8038e8173086aaec47197ac16d969b.webp">
+			<meta property="og:image:secure_url" content="https://www.trackyserver.com/user_data/server_banners/6f8038e8173086aaec47197ac16d969b.webp">
+			<meta property="og:image:width" content="96" />
+			<meta property="og:image:height" content="96" />
+					<link rel="alternate" hreflang="de" href="https://www.trackyserver.com/de/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401" />
+					<link rel="alternate" hreflang="x-default" href="https://www.trackyserver.com/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401" />
+					<link rel="alternate" hreflang="es" href="https://www.trackyserver.com/es/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401" />
+					<link rel="alternate" hreflang="fr" href="https://www.trackyserver.com/fr/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401" />
+					<link rel="alternate" hreflang="nl" href="https://www.trackyserver.com/nl/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401" />
+	<link defer href="template/css/tracky.css?18" rel="stylesheet" media="screen">
+	<!--<link href="template/css/bootstrap.min.css" rel="stylesheet" media="screen">-->
+	<!--<link href="template/css/custom.min.css" rel="stylesheet" media="screen">-->
+	<script type="ebc34c81fdbcc30895e11a75-text/javascript">
+		var account_has_been_created = "Your account has been created, check your email for the activation link !";
+		var link_copied = "Vote link has been copied !";
+		var lang_code = '';
+		var lang_for_process = "?lang=";
+		var profil_id = "";
+
+		function copyText(btn) {
+			const inputElement = btn.nextElementSibling;
+			inputElement.select();    
+			document.execCommand('copy');
+			var copyButton = btn;
+			copyButton.innerHTML = "<i class='fa fa-check' aria-hidden='true'></i>";
+			copyButton.disabled = true;
+		}
+	</script>
+			<script type="ebc34c81fdbcc30895e11a75-text/javascript">
+			var server_id = "3489401";
+			var link = "https://www.trackyserver.com/";
+			var server_link = link+'server/'+'3489401';
+			var server_name = "V-ONE Roleplay | Custom Vice City";	
+			var server_cat = "FiveM";
+			var Max_players_connected = "Max. players connected";
+			var stats_visits_str = "Unique visits";
+			var stats_votes_str = "Votes";
+			var stats_today_str = "Today";
+			var stats_yesterday_str = "Yesterday";
+			var stats_last_7_days_str = "Last 7 days";
+			var stats_last_30_days_str = "Last 30 days";
+			var stats_this_month_str = "This month";
+			var stats_last_month_str = "Last month";
+			var stats_last_3_months_str = "Last 3 months";
+			var stats_last_12_months_str = "Last 12 months";
+			var stats_custom_range_str = "Custom range";
+			var stats_apply_str = "Apply";
+			var stats_cancel_str = "Cancel";
+			var stats_days_week_str = "Su_Mo_Tu_We_Th_Fr_Sa";
+			var stats_months_list_str = "Jan_Feb_Mar_Apr_May_Jun_Jul_Aug_Sep_Oct_Nov_Dec";
+			var stats_date_format = "YYYY-MM-DD";
+			var stats_date_format_choice = "MMM D, YYYY";			
+			var years_t = "years";
+			var months_t = "months";
+			var days_t = "days";
+			var hours_t = "hours";
+			var minutes_t = "minutes";
+			var seconds_t = "seconds";
+			var sidebar_unfavorite = "Unfavorite";
+			var sidebar_favorite = "Favorite";
+		</script>
+
+		<script type="ebc34c81fdbcc30895e11a75-text/javascript" defer src="template/js/jsforserver.js?56"></script>
+		<link rel="stylesheet" defer type="text/css" href="template/css/daterangepicker.css?2" />
+		<script type="ebc34c81fdbcc30895e11a75-text/javascript" defer src="//s7.addthis.com/js/300/addthis_widget.js#pubid=ra-5a871a46fe241232"></script>
+		
+	<script type="ebc34c81fdbcc30895e11a75-text/javascript">window.pushMST_config={"vapidPK":"BF4y-ornKabBxenZv_8ksokIr8hPOG-4MMmu1yhlvjl-DvVyNnVglzspERWAlZdzkiSyK3G4x_B7on6_C3AqROM","enableOverlay":true,"swPath":"/sw.js","i18n":{}};
+		var pushmasterTag = document.createElement('script');
+		pushmasterTag.src = "https://cdn.pushmaster-cdn.xyz/scripts/publishers/62286cc092562d00099ade12/SDK.js";
+		pushmasterTag.setAttribute('defer','');
+
+		var firstScriptTag = document.getElementsByTagName('script')[0];
+		firstScriptTag.parentNode.insertBefore(pushmasterTag, firstScriptTag);
+	</script>
+
+	<!--<script src="template/js/jquery.js"></script>-->
+	<!--<script async src="template/js/bootstrap.min.js"></script>-->
+	<!--<script async src="template/js/functions.js"></script>-->
+
+			<script async src="https://cdn.fuseplatform.net/publift/tags/2/2399/fuse.js" type="ebc34c81fdbcc30895e11a75-text/javascript"></script>
+		<meta name="ezoic_ads" content="true" />
+		
+	<link href="template/images/favicon.png" rel="shortcut icon" />
+	<link rel="apple-touch-icon" sizes="120x120" href="template/images/apple-touch-icon-120x120-precomposed.png" /> <link rel="apple-touch-icon" sizes="152x152" href="template/images/apple-touch-icon-152x152-precomposed.png" />	
+	
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FS5NZSDQDR" type="ebc34c81fdbcc30895e11a75-text/javascript"></script>
+    <script type="ebc34c81fdbcc30895e11a75-text/javascript">
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-FS5NZSDQDR');
+    </script>    
+	
+	<style>
+	.copy-btn {
+		cursor: pointer;
+	}
+	a.input-group-addon {
+		text-decoration: none;
+		color: #fff;
+	}
+	.input-group-addon.input-label-online:hover {
+		background-color: #58a758;
+	}
+	.input-group-addon.input-label-offline:hover {
+		background-color: #b65451;
+	}
+	.publift_ads.server_header{
+		min-height: 250px;
+	}
+	.publift_ads.sidebar{
+		padding-bottom: 20px;
+	}
+	@media screen and (min-width: 992px) {
+		.publift_ads.sidebar{
+			min-height: 600px;
+		}
+	}
+	.publift_ads.server_home{
+		min-height: 90px;
+		padding-bottom: 20px;
+	}
+	.banner_server{
+		width:100%; 
+		height:auto;
+	}
+	/* Styles pour les appareils mobiles uniquement */
+	@media only screen and (max-width: 768px) {
+		.banner_server {
+			width: 100%;
+			max-weight: auto!important;
+			height: auto;
+		}
+	}
+
+	</style>
+    
+    
+	</head>
+	<body>
+		<!--STARTMENU-->
+<div class="navbar navbar-default navbar-static-top" role="navigation">
+	<div class="container">
+		<div class="navbar-header">
+			<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+				<span class="sr-only">Toggle navigation</span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+				<span class="icon-bar"></span>
+			</button>
+			<div style="float:left;margin-top:5px;margin-left:5px;padding-right:6px;"><img src="pages/logos/logo-rond.png" alt="Trackyserver logo" style="width:40px;height:40px;"></div>
+
+			<a class="navbar-brand hidden-sm" href="/">TrackyServer</a>
+		</div>
+		<div class="navbar-collapse collapse">
+			<ul class="nav navbar-nav">
+			
+												
+								<li><a href="" data-toggle="modal" data-target="#login"class="btn btn-warning" style="padding: .375rem .75rem; margin-top: 11px;"><i class="fa fa-sign-in" aria-hidden="true"></i> Add Server</a></li>				
+				<li><a href="" data-toggle="modal" data-target="#login"><i class="fa fa-sign-in" aria-hidden="true"></i> Login</a></li>
+				<li><a href="purchase-highlight"><i class="fa fa-bullhorn" aria-hidden="true"></i> Premium</a></li>
+				
+									
+					<li class="dropdown">
+						<a class="dropdown-toggle" data-toggle="dropdown" href="#"> Help <span class="caret"></span>
+						</a>
+						<ul class="dropdown-menu">
+															<li><a href="listing/api-get-server">API get server infos</a></li>			
+															<li><a href="listing/api">API vote</a></li>			
+															<li><a href="listing/frequently-asked-questions">Contact</a></li>			
+															<li><a href="listing/how-to-create-unturned-server">How to create Unturned server ? (2019)</a></li>			
+															<li><a href="listing/how-to-join-a-clash-royale-private-server">How to join a Clash Royale private server ?</a></li>			
+															<li><a href="listing/how-to-make-a-rust-server">How to make a Rust server ? (2018)</a></li>			
+															<li><a href="listing/how-to-make-an-ark-server">How to make an Ark server ? (2018)</a></li>			
+															<li><a href="listing/port-forwarding">How to port forwarding ?</a></li>			
+															<li><a href="listing/tip4serv-webstore">Monetize your server with Tip4serv</a></li>			
+													</ul>
+					</li>
+									<!--STARTLGLIST-->
+						<li class="dropdown"><a class="dropdown-toggle" data-toggle="dropdown" href="#"> <img style="margin-bottom:2px;" src="template/images/locations/EN.png" alt="en" /> EN <span class="caret"></span></a><ul class="dropdown-menu"><li><a href="de/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401"><img style="margin-bottom:2px;" src="template/images/locations/DE.png" alt="de" /> DE</a></li><li><a href="es/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401"><img style="margin-bottom:2px;" src="template/images/locations/ES.png" alt="es" /> ES</a></li><li><a href="fr/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401"><img style="margin-bottom:2px;" src="template/images/locations/FR.png" alt="fr" /> FR</a></li><li><a href="nl/server/v-one-rp-eu-serious-roleplay-custom-cars-jobs-gangs-3489401"><img style="margin-bottom:2px;" src="template/images/locations/NL.png" alt="nl" /> NL</a></li></ul></li>					<!--ENDLGLIST-->
+				</ul>			
+			<p class="navbar-social pull-right">
+				<a href="http://facebook.com/trackyserver"><span class="fa-stack"><i class="fa fa-circle fa-stack-2x"></i><i class="fa fa-facebook fa-stack-1x fa-inverse"></i></span></a><a href="http://twitter.com/trackyserver"><span class="fa-stack"><i class="fa fa-circle fa-stack-2x"></i><i class="fa fa-twitter fa-stack-1x fa-inverse"></i></span></a><a href="https://steamcommunity.com/groups/trackyserver"><span class="fa-stack"><i class="fa fa-circle fa-stack-2x"></i><i class="fa fa-steam fa-stack-1x fa-inverse"></i></span></a>			</p>
+			
+		</div>
+	</div>
+</div>
+<!--ENDMENU-->
+
+
+<div class="modal fade" id="login" tabindex="-1" role="dialog" aria-hidden="true">
+
+<style>
+.nav-tabs {
+    margin-bottom: 15px;
+}
+.sign-with {
+    margin-top: 5px;
+    padding: 20px;
+}
+div#OR {
+    height: 30px;
+    min-width: 30px;
+    border: 1px solid #C2C2C2;
+    border-radius: 50%;
+    font-weight: bold;
+    line-height: 28px;
+    text-align: center;
+    font-size: 12px;
+    float: right;
+    position: absolute;
+    right: -16px;
+    top: 40%;
+    z-index: 1;
+    background: #DFDFDF;
+}
+.social_button {
+    background-color: transparent;
+    border-radius: 9999px;
+    border: 1px solid rgb(177, 172, 163);
+    padding: 0.78125rem 1.5rem;
+    width: 100%;
+}
+.social-btn {
+    margin: 35px 0px;
+    width: 80%;
+    min-width: 240px;
+    max-width: 100%;
+    height: 42px;
+    background-color: #fcfcfc;
+    border-radius: 2px;
+    box-shadow: 0 3px 4px 0 rgba(0, 0, 0, .2);
+    cursor: pointer;
+    cursor: hand;
+    align-self: center;
+    user-select: none;
+    transition: all 400ms ease 0s;
+    display: flex;
+}
+.social-btn .social-icon-wrapper {
+    position: absolute;
+    margin-top: 1px;
+    margin-left: 1px;
+    width: 40px;
+    height: 40px;
+    border-radius: 2px;
+    user-select: none
+}
+.social-btn .google-icon-svg {
+    position: absolute;
+    margin-top: 10px;
+    margin-left: -7px;
+    width: 18px;
+    height: 18px;
+    user-select: none
+}
+.social-btn .facebook-icon-svg {
+    position: absolute;
+    margin-top: 0px;
+    margin-left: -17px;
+    width: 38px;
+    height: 38px;
+    user-select: none
+}
+.social-btn .discord-icon-svg {
+    position: absolute;
+    margin-top: 0;
+    margin-left: -9px;
+    width: 22px;
+    height: 37px;
+    user-select: none;
+}
+.social-btn .btn-text {
+    float: right;
+    margin: 11px 14px 40px 44px;
+    color: #757575;
+    font-size: 14px;
+    letter-spacing: .2px;
+    font-family: Roboto;
+    user-select: none
+}
+.social-btn:hover {
+    box-shadow: 0 3px 8px rgba(117, 117, 117, .5);
+    user-select: none
+}
+.social-btn:active {
+    box-shadow: 0 1px 1px #757575;
+    background: #F8F8F8;
+    color: #fff;
+    user-select: none
+}
+</style>
+
+<div class="modal-dialog modal-lg" id="login">
+	<div class="modal-content">
+		<div class="modal-header">
+			<button type="button" class="close" data-dismiss="modal" aria-hidden="true">
+				×</button>
+			<h4 class="modal-title" id="myModalLabel">Login</h4>
+		</div>
+		<div class="modal-body">
+			<div class="row">
+				<div class="col-md-8" style="border-right: 1px dotted #C2C2C2;padding-right: 30px;">
+					<!-- Nav tabs -->
+					<ul class="nav nav-tabs">
+						<li class="active"><a href="#Login" data-toggle="tab">Login</a></li>
+						<li><a href="#Registration" data-toggle="tab">Register</a></li>
+					</ul><br>
+					<!-- Tab panes -->
+					<div class="tab-content">
+						<div class="tab-pane active" id="Login">
+							<form action="" method="post" class="form-horizontal" role="form">
+							<div class="row">
+								<div class="col-sm-2">
+								</div>								
+								<div class="col-sm-10">
+									<div id ="loginerrors" class=""></div>
+								</div>							
+							</div>
+							<div class="form-group">
+								<label class="col-sm-2 control-label">Username</label>
+								<div class="col-sm-10">
+									<input type="text" id="username" name="username" class="form-control" />
+								</div>
+							</div>
+							<div class="form-group">
+								<label class="col-sm-2 control-label">Password</label>
+								<div class="col-sm-10">
+									<input type="password" id="password" name="password" class="form-control" autocomplete="off" />
+								</div>
+							</div>
+							<div class="row">
+								<div class="col-sm-2">
+								</div>
+								<div class="col-sm-10">
+									By clicking on SUBMIT button below I confirm that I have read and accept the <a href='privacy-policy' target='_blank'>Privacy Policy</a> and <a href='terms-of-service' target='_blank'>Terms of service</a>.<br><br>
+									<button type="button" name="login" class="btn btn-primary btn-sm" onclick="if (!window.__cfRLUnblockHandlers) return false; validate_login()" data-cf-modified-ebc34c81fdbcc30895e11a75-="">Submit</button>
+									&nbsp;&nbsp;<input type="checkbox" id="rememberme" /> Remember me?</input>
+									<div style="float:right;margin-top:4px"><a href="lost-password"  role="button">I forgot my password</a></div>
+								</div>								
+							</div>
+							</form>
+						</div>
+						<div class="tab-pane" id="Registration">
+							<form action="" method="post" class="form-horizontal" role="form">
+							<div class="row">
+								<div class="col-sm-2">
+								</div>								
+								<div class="col-sm-10">
+									<div id ="registererrors" class=""></div>
+								</div>							
+							</div>							
+							<div class="form-group">
+								<label class="col-sm-2 control-label">Username *</label>
+								<div class="col-sm-10">
+									<input type="text" id="usernamer" name="username" class="form-control" value=""/>
+								</div>
+							</div>	
+							<div class="form-group">
+								<label class="col-sm-2 control-label">Password *</label>
+								<div class="col-sm-10">
+									<input type="password" id="passwordr" name="password" class="form-control" autocomplete="off" />
+								</div>
+							</div>							
+							<div class="form-group">
+								<label class="col-sm-2 control-label">Email *</label>
+								<div class="col-sm-10">
+									<input type="email" id="emailr" name="mail" class="form-control" value=""/>
+								</div>
+							</div>
+							<div class="form-group">
+								<label class="col-sm-2 control-label">Full Name *</label>
+								<div class="col-sm-10">
+									<input type="text" id="namer" name="name" class="form-control" value=""/>
+								</div>
+							</div>							
+							<div class="form-group">
+								<label class="col-sm-2 control-label">Captcha *</label>															
+								<div class="col-sm-10">
+									<div class="g-recaptcha" data-sitekey="6LdZXCcUAAAAALZKMPo_H5a9Nt94SNIApUAe64iJ" data-callback="enableBtn"></div>
+								</div>
+							</div>	
+							<div class="row">
+								<div class="col-sm-2">
+								</div>
+								<div class="col-sm-10">
+									<a href='resend-activation' target='_blank'><i class='fa fa-envelope' aria-hidden='true'></i> Resend activation email</a>
+									<br><br>
+									By clicking on SUBMIT button below I confirm that I have read and accept the <a href='privacy-policy' target='_blank'>Privacy Policy</a> and <a href='terms-of-service' target='_blank'>Terms of service</a>.						
+									<br><br>				
+									<button type="button" disabled id="buttonregister" name="registration" class="btn btn-primary btn-sm" onclick="if (!window.__cfRLUnblockHandlers) return false; validate_register()" data-cf-modified-ebc34c81fdbcc30895e11a75-="">Submit</button>
+								</div>
+							</div>
+							</form>
+						</div>
+					</div>
+					<div id="OR" class="hidden-xs">OR</div>
+				</div>
+				<div class="col-md-4">
+					<div class="row text-center sign-with">
+						<div class="col-md-12">
+							<div class="social-btn" id="discord_log">
+								<div class="social-icon-wrapper"> <img class="discord-icon-svg" src="/template/includes/modals/social-logo/discord.svg"/></div>
+								<p class="btn-text"><b>Continue with Discord</b></p>
+							</div>
+							<div class="social-btn" id="google_log">
+								<div class="social-icon-wrapper"> <img class="google-icon-svg" src="/template/includes/modals/social-logo/google.svg"/></div>
+								<p class="btn-text"><b>Continue with Google</b></p>
+							</div>
+							<div class="social-btn" id="facebook_log">
+								<div class="social-icon-wrapper"> <img class="facebook-icon-svg" src="/template/includes/modals/social-logo/facebook.svg"/></div>
+								<p class="btn-text"><b>Continue with Facebook</b></p>
+							</div>						
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+				
+		<div class="container"><!-- Start Container -->
+
+			
+			<div class="row">
+	<div class="col-md-10">
+
+		<div id="response" style="display:none;">
+			<div class="alert alert-success">
+				<button type="button" class="close" data-dismiss="alert">&times;</button>
+				<strong>Congratulations!</strong> Your requested command was performed successfully ! Wait 10 minutes to see the modifications on all the pages of the website (due to the cache system)
+			</div>
+		</div>
+
+<div class="panel panel-default">
+	<div class="panel-body">
+		<h1 class="no-margin">
+			V-ONE Roleplay | Custom Vice City		</h1>
+						<hr>
+				<center>
+					<img src="user_data/server_banners/6f8038e8173086aaec47197ac16d969b.webp" class="img-rounded banner"/>				</center>
+				<hr>
+				
+		<div class="no-margin">
+			<span class="glyphicon glyphicon-random"></span> 185.228.82.52:25697			<span class="pull-right">
+				<div class="u_status">
+					<span class='glyphicon glyphicon-ok green' style='font-size: 20px;'></span>Online				</div>
+			</span>
+			<br><br>
+			<p> 
+			<div class="pull-right"><span class="label label-default">Published on 2026-06-29 </span></div>
+			<div class="pull-left"><div class="addthis_inline_share_toolbox"></div></div>
+			<p>			
+		</div>
+	</div>
+</div>
+
+<!-- 71161633/server_header/server_header -->
+<div class="publift_ads server_header">
+	<div data-fuse="22391083673"></div>
+</div>
+
+
+<div style="margin-top:30px"></div>
+
+<div class="panel panel-default">
+	<div class="panel-body">
+
+		<ul class="nav nav-tabs" id="details_tab">
+			<li class="active"><a href="#general" style="color:#555;" data-toggle="tab"><i class="fa fa-home" aria-hidden="true"></i></a></li>	
+						<li>
+				<a href="#statistics" style="color:#555;" data-toggle="tab"><i class="fa fa-bar-chart"></i> Stats</a>
+			</li>
+						
+			<li><a href="#banners" style="color:#555;" data-toggle="tab"><i class="fa fa-link"></i> Banners</a></li>
+						<li id="details_desk" style="visibility:hidden" class="hidden-xs hidden-sm">
+				<a href="#details" style="color:#555;" data-toggle="tab"><i class="fa fa-info"></i> Details</a>
+			</li>
+			<li id="details_mobile" style="visibility:hidden" class="visible-xs visible-sm">
+				<a href="#details" style="color:#555;" data-toggle="tab"><i class="fa fa-info"></i></a>
+			</li>
+					</ul><br />
+
+		<div class="tab-content">
+			<div class="tab-pane fade in active" id="general">	
+				<table class="table">
+					<tbody>
+						<tr>
+							<td><span class="fa fa-gamepad"></span> <strong>Game</strong></td>
+							<td>FiveM</td>
+						</tr>
+						<tr>
+							<td><span class="glyphicon glyphicon-folder-open"></span> <strong>Browse</strong></td>
+							<td><a href="fivem-server"><span class="label label-primary">FiveM servers</span></a></td>
+						</tr>
+												<tr>
+							<td><span class="fa fa-list-alt"></span> <strong>Type</strong></td>
+							<td>
+							<a href="fivem-server/type/rp"><span class="label label-default">RP</span></a> <a href="fivem-server/type/pvp"><span class="label label-default">PVP</span></a> <a href="fivem-server/type/race"><span class="label label-default">Race</span></a> 							</td>							
+						</tr>
+						
+							
+						
+												<tr>
+							<td style="width: 45%;"><span class="glyphicon glyphicon-off"></span> <strong>Status</strong></td>
+							<td>
+								<div class="u_status2">
+									<span class='label label-success'><span class='glyphicon glyphicon-ok glyphicon glyphicon-white'></span></span> Online								</div>
+							</td>
+						</tr>
+							
+
+												
+										
+							<tr>
+								<td><span class="glyphicon glyphicon-bell"></span> <strong>Last Check</strong></td>
+								<td><div class="u_lastcheck">4 minutes</div></td>														
+							</tr>
+																
+							
+													<tr>
+
+								<td><span class="glyphicon glyphicon-random"></span> <strong>IP Address</strong></td>
+								<td>185.228.82.52 </td>
+							</tr>
+								
+								<tr>
+									<td><span class="glyphicon glyphicon-tasks"></span> <strong>Port</strong></td>
+									<td>25697</td>
+								</tr>
+																			
+						
+								
+						
+							
+
+												
+
+												
+
+												<tr>
+							<td><span class="glyphicon glyphicon-tower"></span> <strong>Server Owner</strong></td>
+							<td><a href="profile/90405">Anton1994</a></td>
+						</tr>						
+						
+						
+												
+													<tr>
+								<td><span class="fa fa-microphone"></span> <strong>Discord</strong></td>
+								<td><a href="https://discord.com/invite/vAZfnf7Awt">https://discord.com/invite/vAZfnf7Awt <i class="fa fa-sign-in" aria-hidden="true"></i></a></td>
+							</tr>
+						
+												
+						
+						<tr>
+							<td><span class="fa fa-thumbs-up"></span> <strong>Votes</strong></td>
+							<td id="votes_value"><div class="u_votes">0</div></td>
+						</tr>
+						<tr>
+							<td><span class="glyphicon glyphicon-star"></span> <strong>Favorites</strong></td>
+							<td><div class="u_favorites">0</div></td>
+						</tr>
+						<tr>
+							<td><span class="glyphicon glyphicon-upload"></span> <strong>Hits this month</strong></td>
+							<td><div class="u_hits">6</div></td>
+						</tr>
+						<tr>
+							<td><span class="glyphicon glyphicon-globe"></span> <strong>Country</strong></td>
+							<td><a href="fivem-server/country/NL">Netherlands <img src="template/images/locations/NL.png" alt="NL" /></a></td>
+						</tr>					
+						
+					</tbody>
+				</table>
+
+			</div>
+			<!-- Online Players -->
+			<div class="tab-pane fade details" id="details">
+							</div>
+			
+			<div class="tab-pane fade" id="statistics">
+				<style>
+canvas_players_number {
+	-moz-user-select: none;
+	-webkit-user-select: none;
+	-ms-user-select: none;
+}
+canvas_votes_number {
+	-moz-user-select: none;
+	-webkit-user-select: none;
+	-ms-user-select: none;
+}
+.charts-container {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: center;
+}	
+</style>
+
+<div class="charts-container">
+	<button type="button" class="btn btn-outline-secondary" style="width: 15%" id="updatehour">hours</button>&nbsp;
+	<button type="button" class="btn btn-primary active" style="width: 15%" id="updateday">days</button>&nbsp;
+	<button type="button" class="btn btn-outline-secondary" style="width: 15%" id="updatemonth">months</button>
+	<div id="reportrange" class="pull-right" style="text-align: right; cursor: pointer; padding: 5px 10px; width: 50%">
+		<i class="glyphicon glyphicon-calendar fa fa-calendar"></i>&nbsp;
+		<span></span> <b class="caret"></b>
+	</div>
+	<div style="width:100%; height:auto; ">
+		<canvas id="canvas_players_number"></canvas>
+	</div>
+	<div style="width:100%; height:auto;">
+		<canvas id="canvas_votes_number"></canvas>
+	</div>	
+</div>
+			</div>
+
+			<!-- Banners -->
+			<div class="tab-pane fade" id="banners">
+
+			<h3><i class="fa fa-link" aria-hidden="true"></i> <font color="#428bca"><b>Make a link</b></h3></font>
+			<hr>			
+			<p>Invite your players to vote for your server and gain visiblity ! The servers with the most votes are displayed on the homepage and under each listing. <strong>Each user can vote once every 24 hours</strong>.</p><br>
+
+			<center><img id="logo" style="width:90px; height:auto;" src="pages/images/vote.png" /></center>
+
+			<div class="form-group">
+				<textarea name="html_code_vote" class="form-control" rows="3" cols="40"><a href="https://www.trackyserver.com/server/3489401" target="_blank"><img alt="V-ONE Roleplay | Custom Vice City" src="https://www.trackyserver.com/pages/images/vote.png" width="90px" height="auto" /></a>				</textarea>
+			</div>
+
+			<center><a href="https://www.trackyserver.com/server/3489401" target="_blank">Vote for our FiveM server</a></center>
+
+			<div class="form-group">
+				<textarea name="html_code_vote" class="form-control" rows="3" cols="40"><a href="https://www.trackyserver.com/server/3489401" target="_blank">Vote for our FiveM server</a>				</textarea>
+			</div>
+			
+			
+					
+
+				<h3><i class="fa fa-image" aria-hidden="true"></i> <font color="#428bca"><b>Custom widget</b></h3></font>
+				<hr>				
+								<center><iframe id='live_widget'src='https://api.trackyserver.com/widget/tracky.php?id=3489401&lang_code=&map=1&version=1&votes=1&plist=1&connect=1&button_name=Connect&color1=ff8415&color2=333&color3=333&color4=fff&color5=fff&color6=8a8e94&color7=8a8e94&color8=8a8e94&color9=fff&title=V-ONE Roleplay | Custom Vice City' width='auto' height='200' allowtransparency='true' frameborder='0'></iframe></center>	
+
+				<div class="form-group col-md-12">
+					<label>Server name</label>
+					<input type="text" name="widget_server_name" class="form-control widgetlive" value="V-ONE Roleplay | Custom Vice City" />
+				</div>
+
+				<div class="form-group col-md-6">
+					<label>Width</label>
+					<input type="text" name="widget_width" class="form-control widgetlive" value="auto" />
+				</div>
+
+				<div class="form-group col-md-6">
+					<label>Height</label>
+					<input type="text" name="widget_height" class="form-control widgetlive" value="200" />
+				</div>	
+
+				<div class="form-group col-md-6">
+					<label>Map</label>
+					<select name="widget_map" class="form-control widgetlive">
+						<option value="1">Yes</option>
+						<option value="0" >No</option>
+					</select>
+				</div>
+
+				<div class="form-group col-md-6">
+					<label>Version</label>
+					<select name="widget_version" class="form-control widgetlive">
+						<option value="1">Yes</option>
+						<option value="0">No</option>
+					</select>
+				</div>
+
+				<div class="form-group col-md-6">
+					<label>Votes</label>
+					<select name="widget_votes" class="form-control widgetlive">
+						<option value="1">Yes</option>
+						<option value="0">No</option>
+					</select>
+				</div>				
+				
+				<div class="form-group col-md-6">
+					<label>Online Players</label>
+					<select name="widget_plist" class="form-control widgetlive">
+						<option value="1">Yes</option>
+						<option value="0">No</option>
+					</select>
+				</div>
+				
+				<div class="form-group col-md-6">
+					<label>Steam connect button</label>
+					<select name="widget_connect" class="form-control widgetlive">
+						<option value="1">Yes</option>
+						<option value="0" >No</option>
+					</select>
+				</div>	
+				
+				<div class="form-group col-md-6">
+					<label>Steam connect button</label>
+					<input type="text" name="widget_button_name" class="form-control widgetlive" value="Connect" />
+				</div>
+
+				<div class="form-group col-md-6">
+					<label>Header background</label>
+					<input type="text" name="widget_header_color" class="form-control color widgetlive" value="ff8415" />
+				</div>
+				
+				<div class="form-group col-md-6">
+					<label>IP</label>
+					<input type="text" name="widget_ip_color" class="form-control color widgetlive" value="fff" />
+				</div>					
+
+				<div class="form-group col-md-6">
+					<label>Body background</label>
+					<input type="text" name="widget_background_color" class="form-control color widgetlive" value="333" />
+				</div>
+				
+				<div class="form-group col-md-6">
+					<label>Title</label>
+					<input type="text" name="widget_title_color" class="form-control color widgetlive" value="fff" />
+				</div>
+
+				<div class="form-group col-md-6">
+					<label>Online Players</label>
+					<input type="text" name="widget_players_list_color" class="form-control color widgetlive" value="8a8e94" />
+				</div>					
+				
+				<div class="form-group col-md-6">
+					<label>Footer background</label>
+					<input type="text" name="widget_footer_color" class="form-control color widgetlive" value="333" />
+				</div>	
+				<div class="form-group">
+					<textarea name="widget_html_code" class="form-control" rows="3" cols="40"><iframe src='https://api.trackyserver.com/widget/tracky.php?id=3489401&lang_code=&map=1&version=1&votes=1&plist=1&connect=1&button_name=Connect&color1=ff8415&color2=333&color3=333&color4=fff&color5=fff&color6=8a8e94&color7=8a8e94&color8=8a8e94&color9=fff&title=V-ONE Roleplay | Custom Vice City' width='auto' height='200' allowtransparency='true' frameborder='0'></iframe></textarea>
+				</div>	
+
+							
+
+				
+				<h3><i class="fa fa-image" aria-hidden="true"></i> <font color="#428bca"><b>Banner</b></h3></font>
+				<hr>			
+				<center><img id="live_banner" width="70%" height="auto" src="banner/3489401/default/ffffff/ffffff" /></center>
+				
+				<div class="form-group">
+					<label>Banner background</label>
+					<select name="banner_background" class="form-control bannerlive">
+						<option name="default">default</option><option name="palm">palm</option><option name="peer">peer</option><option name="town">town</option>					</select>
+				</div>
+
+				<div class="form-group">
+					<label>Text color</label>
+					<input type="text" name="banner_text_color" class="form-control color bannerlive" />
+				</div>
+
+				<div class="form-group">
+					<label>Border color</label>
+					<input type="text" name="banner_border_color" class="form-control color bannerlive" />
+				</div>
+
+				<div class="form-group">
+					<label>HTML Code</label>
+					<textarea name="banner_html_code" class="form-control" rows="3" cols="40"><a href="https://www.trackyserver.com/server/3489401" target="_blank"><img alt="V-ONE Roleplay | Custom Vice City" src="https://www.trackyserver.com/banner/3489401/default/FFFFFF/FFFFFF" width="468px" height="auto" /></a></textarea>
+				</div>
+
+				<div class="form-group">
+					<label>BB Code</label>
+					<textarea name="banner_bb_code" class="form-control" rows="3" cols="40">[url=https://www.trackyserver.com/server/3489401][img]https://www.trackyserver.com/banner/3489401/default/FFFFFF/FFFFFF[/img][/url]</textarea>
+				</div>	
+				
+								
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Description -->
+
+	<div class="panel panel-default">
+		<div class="panel-heading">
+			<h3 class="panel-title"><i class="fa fa-file-text-o" aria-hidden="true"></i> Description</h3>
+		</div>
+		<div class="panel-body">
+			<!-- Description supprimer les <div> si -->
+			<div class="description">			
+				<p><p>🌴 Welcome to V-One RP | EU | Whitelist 🌴</p><p><br /></p><p>Step into a unique FiveM roleplay experience on our custom Vice City map, built for players who enjoy serious roleplay, immersive gameplay, and an active community.</p><p><br /></p><p>Whether you want to become a police officer, EMS, criminal, business owner, or simply create your own story, V-One RP offers endless opportunities.</p><p><br /></p><p>✨ Features</p><p>• Custom Vice City map</p><p>• Serious Whitelist Roleplay</p><p>• Co-op Missions</p><p>• Gang Missions</p><p>• Custom Robberies</p><p>• Custom Vehicles</p><p>• Active & Friendly Staff Team</p><p>• Player-Owned Businesses</p><p>• Optimized Scripts</p><p>• Regular Events & Updates</p><p>• Economy-Based Gameplay</p><p><br /></p><p>We are focused on building a strong European (EU) community with active players who value quality roleplay.</p><p><br /></p><p>🎮 Why choose V-One RP?</p><p>✔ Friendly and helpful community</p><p>✔ Fair and active staff</p><p>✔ Frequent content updates</p><p>✔ Unique custom content</p><p>✔ New player friendly</p><p><br /></p><p>Join our Discord, submit your whitelist application, and start your new story today!</p><p><br /></p><p>Discord:  https://discord.com/invite/vAZfnf7Awt</p><p> Join the server: https://cfx.re/join/6myzry7</p><p><br /></p><p>Server Name: V-One RP | EU | Whitelist | Vice City</p></p>
+			</div>
+		</div>
+	</div>
+ 
+
+<!-- Video -->
+<h3><i class="fa fa-star" aria-hidden="true"></i> <font color="#428bca"><b> Other servers</b></h3></font><hr>	
+			<div class="panel panel-default">
+				<div class="panel-body" style="padding: 10px;">
+					<table class="server">
+						<div class="pull-left inline" style="position: relative;top: -5px;"> 
+												
+							<span class="label label-default tooltipz"><span class="fa fa-thumbs-up"></span> 2</span>
+													</div>
+						<div class="pull-right inline" style="position: relative;top: -5px;">
+																			
+							<a href="fivem-server/country/NL"><span class="label label-default tooltipz" data-toggle="tooltip" title="NL"><i class="flags flag-nl"></i></span></a>
+
+							
+							<span class="label label-success tooltipz"><span class="glyphicon glyphicon-user"></span> 1/8</span>						</div>
+					</table>
+					<br>
+					<table class="server">
+						<tr>
+							<td rowspan="2">
+								<a href="server/berkelland-roleplay-3497908">
+								<img loading="lazy" src="user_data/server_banners/cecf235bd295f9ae131db221960dc237.webp" class="img-rounded hidden-xs hidden-sm banner"/>																	
+								</a>
+							</td>
+							<td class="header">
+								<h4 class="no-margin"><a href="server/berkelland-roleplay-3497908">Berkelland Roleplay</h4>
+								</a>
+							</td>
+						</tr>
+						<tr>
+							<td class="footer">
+								<div class="input-group input-group-sm" style="width: 100%;"><span class="input-group-addon input-label-online"><i class="fa fa-power-off"></i> Online</span><input type="text" class="form-control" readonly style="cursor:text" value="Hidden ip"></div>							</td>					
+					</table>
+					<table class="server">
+						<tr>
+							<td class="footer">
+							<div style='font-size:12px; padding-top:6px; padding-bottom:6px; word-break: break-word'>Welkom bij Berkelland Roleplay!Ben jij op zoek naar een gezellige, serieuze en actieve Nederlandse roleplay server? Dan ben je bij Berkellan...</div><a href="fivem-server"><span class="label label-primary">FiveM</span></a> <a href="fivem-server/type/rp"><span class="label label-default">RP</span></a> 							</td>
+						</tr>
+					</table>						
+				</div>
+			</div>			
+
+		
+			<div class="panel panel-default">
+				<div class="panel-body" style="padding: 10px;">
+					<table class="server">
+						<div class="pull-left inline" style="position: relative;top: -5px;"> 
+												
+							<span class="label label-default tooltipz"><span class="fa fa-thumbs-up"></span> 1</span>
+													</div>
+						<div class="pull-right inline" style="position: relative;top: -5px;">
+																			
+							<a href="fivem-server/country/NL"><span class="label label-default tooltipz" data-toggle="tooltip" title="NL"><i class="flags flag-nl"></i></span></a>
+
+							
+							<span class="label label-success tooltipz"><span class="glyphicon glyphicon-user"></span> 1/60</span>						</div>
+					</table>
+					<br>
+					<table class="server">
+						<tr>
+							<td rowspan="2">
+								<a href="server/waterstad-roleplay-3343006">
+								<img loading="lazy" src="user_data/server_banners/bd447eaa480046742417b73098627259-icon.webp" class="img-rounded hidden-xs hidden-sm bannericon"/>																	
+								</a>
+							</td>
+							<td class="header">
+								<h4 class="no-margin"><a href="server/waterstad-roleplay-3343006">Waterstad Roleplay | Niet geschikt voor iedereen | Join op eigen risico</h4>
+								</a>
+							</td>
+						</tr>
+						<tr>
+							<td class="footer">
+								<div class="input-group input-group-sm" style="width: 100%;"><a href="fivem://connect/cfx.re/join/oax43ox" class="input-group-addon input-label-online"><i class="fa fa-sign-out" aria-hidden="true"></i> Connect</a><input type="text" class="form-control" readonly style="cursor:text" value="cfx.re/join/oax43ox"></div>							</td>					
+					</table>
+					<table class="server">
+						<tr>
+							<td class="footer">
+							<div style='font-size:12px; padding-top:6px; padding-bottom:6px; word-break: break-word'>Welkom bij Waterstad RP – een unieke, realistische Nederlandstalige GTA V roleplayserver waar jouw verbeelding de grenzen bepaalt. Waterst...</div><a href="fivem-server"><span class="label label-primary">FiveM</span></a> <a href="fivem-server/type/pve"><span class="label label-default">PVE</span></a> <a href="fivem-server/type/pvp"><span class="label label-default">PVP</span></a> <a href="fivem-server/type/race"><span class="label label-default">Race</span></a> <a href="fivem-server/type/rp"><span class="label label-default">RP</span></a> 							</td>
+						</tr>
+					</table>						
+				</div>
+			</div>			
+
+		
+			<div class="panel panel-default">
+				<div class="panel-body" style="padding: 10px;">
+					<table class="server">
+						<div class="pull-left inline" style="position: relative;top: -5px;"> 
+												
+							<span class="label label-default tooltipz"><span class="fa fa-thumbs-up"></span> 1</span>
+													</div>
+						<div class="pull-right inline" style="position: relative;top: -5px;">
+																			
+							<a href="fivem-server/country/NL"><span class="label label-default tooltipz" data-toggle="tooltip" title="NL"><i class="flags flag-nl"></i></span></a>
+
+							
+							<span class="label label-success tooltipz"><span class="glyphicon glyphicon-user"></span> 1/128</span>						</div>
+					</table>
+					<br>
+					<table class="server">
+						<tr>
+							<td rowspan="2">
+								<a href="server/vijfhuizenrp-535639">
+								<img loading="lazy" src="user_data/server_banners/fd9a3bae96e504e7cdbc22def187e6a2.webp" class="img-rounded hidden-xs hidden-sm banner"/>																	
+								</a>
+							</td>
+							<td class="header">
+								<h4 class="no-margin"><a href="server/vijfhuizenrp-535639">Vijfhuizen RP | Whitelisted | Stabi...</h4>
+								</a>
+							</td>
+						</tr>
+						<tr>
+							<td class="footer">
+								<div class="input-group input-group-sm" style="width: 100%;"><a href="fivem://connect/cfx.re/join/ydpmy9" class="input-group-addon input-label-online"><i class="fa fa-sign-out" aria-hidden="true"></i> Connect</a><input type="text" class="form-control" readonly style="cursor:text" value="cfx.re/join/ydpmy9"></div>							</td>					
+					</table>
+					<table class="server">
+						<tr>
+							<td class="footer">
+							<div style='font-size:12px; padding-top:6px; padding-bottom:6px; word-break: break-word'>Welkom bij Vijfhuizen RP!Wil jij graag meer te weten komen over onze stad? Kom dan gezellig de Discord in waar je alles te weten kan komen!H...</div><a href="fivem-server"><span class="label label-primary">FiveM</span></a> <a href="fivem-server/type/pve"><span class="label label-default">PVE</span></a> <a href="fivem-server/type/pvp"><span class="label label-default">PVP</span></a> <a href="fivem-server/type/race"><span class="label label-default">Race</span></a> <a href="fivem-server/type/rp"><span class="label label-default">RP</span></a> 							</td>
+						</tr>
+					</table>						
+				</div>
+			</div>			
+
+	<script type="ebc34c81fdbcc30895e11a75-text/javascript">
+//function show_playerscount(){var e=document.getElementById("playerscount");"none"===e.style.display&&(e.style.display="")}function update_servers_infos(e,t){if(e.includes("table")){document.getElementById("details_desk").children[0].style.visibility="visible",document.getElementById("details_mobile").children[0].style.visibility="visible",x=document.getElementsByClassName("details");for(var s=0;s<x.length;s++)x[s].innerHTML=e}if(t.includes("|")){if(t=t.split("|"),x=document.getElementsByClassName("connected_player"),x)for(s=0;s<x.length;s++)x[s].innerHTML=t[0];for(show_playerscount(),x=document.getElementsByClassName("u_votes"),s=0;s<x.length;s++)x[s].innerHTML=t[1];for(x=document.getElementsByClassName("u_hits"),s=0;s<x.length;s++)x[s].innerHTML=t[2];if(x=document.getElementsByClassName("u_lastcheck"),x)for(s=0;s<x.length;s++)x[s].innerHTML=timeSince(t[3],years_t,months_t,days_t,hours_t,minutes_t,seconds_t);for(x=document.getElementsByClassName("favorite_option"),s=0;s<x.length;s++)"1"==t[4]?x[s].innerHTML="<a class='list-group-item clickable list-group-item-success favorite'><span class='glyphicon glyphicon-heart'></span> <span class='text'>Unfavorite</span></a>":"2"==t[4]&&(x[s].innerHTML="<a class='list-group-item clickable favorite'><span class='glyphicon glyphicon-heart-empty'></span> <span class='text'>Favorite</span></a>");if("1"==t[5]||"2"==t[5])for(x=document.getElementsByClassName("owner_edit_button"),s=0;s<x.length;s++)x[s].innerHTML="<a href='edit-server/"+t[8]+"' class='list-group-item'><span class='glyphicon glyphicon-pencil'></span> Edit</a>";if("2"==t[5])for(x=document.getElementsByClassName("admin_edit_button"),s=0;s<x.length;s++)x[s].innerHTML="<a href='admin/edit-server/"+t[8]+"' class='list-group-item'><span class='glyphicon glyphicon-pencil'></span> Admin edit</a>";if(t[6])for(x=document.getElementsByClassName("u_favorites"),s=0;s<x.length;s++)x[s].innerHTML=t[6];if(t[7])for(x=document.getElementsByClassName("u_wipe"),s=0;s<x.length;s++)x[s].innerHTML=timeSince(t[7],years_t,months_t,days_t,hours_t,minutes_t,seconds_t)}}var request=new XMLHttpRequest;request.open("GET","https://www.trackyserver.com/pages/server_playerslist.php?server_id=3489401&cache_server=disabled&visitor_id=0&engine=fivem&category_id=6&address=185.228.82.52&query_port=25697&checktime=1785597501&image=&icon_checktime=1785535526&discord_id=",!0),request.onload=function(){if(this.status>=200&&this.status<400){var e=this.response;update_servers_infos((e=e.split("{/DETAILS}{PLAYERLIST}"))[1],e[0])}},request.send();
+</script>
+<script type="ebc34c81fdbcc30895e11a75-text/javascript">
+function timeSince(o,t,e,r,a,f,h){var l=Math.floor((new Date).getTime()/1e3-o),M=l/31536e3;return M>1?Math.floor(M)+" "+t:(M=l/2592e3)>1?Math.floor(M)+" "+e:(M=l/86400)>1?Math.floor(M)+" "+r:(M=l/3600)>1?Math.floor(M)+" "+a:(M=l/60)>1?Math.floor(M)+" "+f:Math.floor(l)+" "+h}
+function show_playerscount(status) {
+  if (status == "1"){
+	  var x = document.getElementById("playerscount");
+	  if (x.style.display === "none") {
+		x.style.display = "";
+	  }
+  }
+}
+function update_servers_infos(e, t) {
+	if (e.includes("table")) {
+		(document.getElementById("details_desk").children[0].style.visibility = "visible"), (document.getElementById("details_mobile").children[0].style.visibility = "visible"), (x = document.getElementsByClassName("details"));
+		for (var n = 0; n < x.length; n++) x[n].innerHTML = e;
+	}
+	if (t.includes("|")) {
+		t = t.split("|");
+		if (t[0] && t[0] != "/"){
+			if (((x = document.getElementsByClassName("connected_player")), x)) for (n = 0; n < x.length; n++) x[n].innerHTML = t[0];	
+			show_playerscount(t[9]);
+		}
+
+		x = document.getElementsByClassName("u_votes");
+		for (n = 0; n < x.length; n++) x[n].innerHTML = t[1];
+		x = document.getElementsByClassName("u_hits");
+		for (n = 0; n < x.length; n++) x[n].innerHTML = t[2];
+		if (((x = document.getElementsByClassName("u_lastcheck")), x)) for (n = 0; n < x.length; n++) x[n].innerHTML = timeSince(t[3],years_t,months_t,days_t,hours_t,minutes_t,seconds_t);;
+		x = document.getElementsByClassName("favorite_option");
+		for (n = 0; n < x.length; n++)
+			"1" == t[4]
+				? (x[n].innerHTML = "<a class='list-group-item clickable list-group-item-success favorite'><span class='glyphicon glyphicon-heart'></span> <span class='text'>Unfavorite</span></a>")
+				: "2" == t[4] && (x[n].innerHTML = "<a class='list-group-item clickable favorite'><span class='glyphicon glyphicon-heart-empty'></span> <span class='text'>Favorite</span></a>");
+		if ("1" == t[5] || "2" == t[5]) {
+			x = document.getElementsByClassName("owner_edit_button");
+			for (n = 0; n < x.length; n++) x[n].innerHTML = "<a href='edit-server/"+t[8]+"' class='list-group-item'><span class='glyphicon glyphicon-pencil'></span> Edit</a>";
+		}
+		if ("2" == t[5]) {
+			x = document.getElementsByClassName("admin_edit_button");
+			for (n = 0; n < x.length; n++) x[n].innerHTML = "<a href='admin/edit-server/"+t[8]+"' class='list-group-item'><span class='glyphicon glyphicon-pencil'></span> Admin edit</a>";
+		}
+		if (t[6]) {
+			x = document.getElementsByClassName("u_favorites");
+			for (n = 0; n < x.length; n++) x[n].innerHTML = t[6];
+		}
+		if (t[7]) {
+			x = document.getElementsByClassName("u_wipe");
+			for (n = 0; n < x.length; n++) x[n].innerHTML = timeSince(t[7],years_t,months_t,days_t,hours_t,minutes_t,seconds_t);
+		}
+		x = document.getElementsByClassName("u_status");
+		if (t[9] == 1) {
+			for (n = 0; n < x.length; n++) x[n].innerHTML = "<span class='glyphicon glyphicon-ok green' style='font-size: 20px;'></span>Online";
+		} else {
+			for (n = 0; n < x.length; n++) x[n].innerHTML = "<span class='glyphicon glyphicon-remove red' style='font-size: 20px;'></span>Offline";	
+		}
+		x = document.getElementsByClassName("u_status2");
+		if (t[9] == 1) {
+			for (n = 0; n < x.length; n++) x[n].innerHTML = "<span class='label label-success'><span class='glyphicon glyphicon-ok glyphicon glyphicon-white'></span></span> Online";
+		} else {
+			for (n = 0; n < x.length; n++) x[n].innerHTML = "<span class='label label-danger'><span class='glyphicon glyphicon-remove glyphicon glyphicon-white'></span></span> "+t[10];
+		}
+	}
+}
+var request = new XMLHttpRequest();
+request.open("GET", "https://www.trackyserver.com/pages/server_playerslist.php?server_id=3489401&cache_server=disabled&visitor_id=0&engine=fivem&category_id=6&address=185.228.82.52&query_port=25697&checktime=1785597501&image=&icon_checktime=1785535526&discord_id=", !0),
+	(request.onload = function () {
+		if (this.status >= 200 && this.status < 400) {
+			var e = this.response;
+			update_servers_infos((e = e.split("{/DETAILS}{PLAYERLIST}"))[1], e[0]);
+	}
+	}),
+request.send();
+</script>					</div><!-- END Main Column -->
+				<!-- START Sidebar -->
+				<div class="col-md-2">
+					<!-- 71161633/server_vrec_1/server_vrec_1 -->
+<div class="publift_ads sidebar">
+	<div data-fuse="22391083973" id="stickyad"></div>
+</div>
+
+<script type="ebc34c81fdbcc30895e11a75-text/javascript" defer src="https://www.google.com/recaptcha/api.js"></script>
+<div class="modal fade" id="vote" tabindex="-1" role="dialog" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+
+			
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+				<h4 class="modal-title">Vote every 24 hours !</h4>
+			</div>
+
+			<div class="modal-body">	
+			If the server communicates with our <a href='listing/api' target='_blank'>API</a>, you receive rewards on the server.			<br><br>
+			My IP address will be registered for security reasons. By clicking on the Submit button I confirm that I have read and accept the <a href='privacy-policy' target='_blank'>Privacy Policy</a>.				
+			</div>
+				
+			
+				<div class="modal-footer">
+					<div class="form-group col-md-12">
+						<div class="form-group col-md-6" style="text-align:center">
+							<img src='template/includes/modals/steamlogo.png' alt="Steam" height="auto" width="50%">
+							<form method="post" role="form" class="steamvote">
+								<input type="hidden" name="steam_vote" value="1" />
+								<button type="submit" class="btn btn-primary">Vote</button>
+							</form>
+						</div>
+						<div class="form-group col-md-6" style="text-align:center">
+							<img src='template/includes/modals/discordlogo.png' alt="Discord" height="auto" width="50%">
+							<form method="post" role="form" class="discordvote">
+								<input type="hidden" name="discord_vote" value="1" />
+								<button type="submit" class="btn btn-primary">Vote</button>
+							</form>
+						</div>
+					</div>
+				</div>
+
+				<div class="modal-footer">
+					<input id="simple_vote_url" type="hidden" value="https://www.trackyserver.com/server/3489401#vote">
+					<button type="button" class="btn pull-left" id="copy_vote_url" onclick="if (!window.__cfRLUnblockHandlers) return false; copyToClipboard('simple_vote_url')" data-cf-modified-ebc34c81fdbcc30895e11a75-=""><i class="fa fa-copy"></i> Copy vote link</button>
+				</div>
+				
+						
+		</div>
+	</div>
+</div>
+<div class="panel panel-default">
+	<div class="panel-body">
+		<div class="tab-content">
+						<div class="btn-group btn-group-justified">
+				<a class="btn btn-warning" data-toggle="modal" data-target="#vote"><i class="fa fa-thumbs-up" aria-hidden="true"></i> VOTE</a>		
+			</div>	
+		</div>
+	</div>
+</div><h4><i class="fa fa-cog" aria-hidden="true"></i> Server Options</h4>
+
+<div class="list-group" id="server_options">
+			<a href="fivem://connect/cfx.re/join/6myzry7" class="list-group-item" style="background-color:#5cb85c;">
+			<div style="color:#fff;"><span class="fa fa-steam"></span> Connect to the server</div>
+		</a>
+		<a href="premium/3489401" class="list-group-item" style="background-color:#5cb85c;">
+		<div style="color:#fff;"><span class="fa fa-bullhorn"></span> PREMIUM</div>
+	</a>
+	<a href="claim/3489401" class="list-group-item">
+		<span class="glyphicon glyphicon-home"></span> Claim	</a>
+	<div class="favorite_option">
+		</div>
+	<div class="owner_edit_button">
+			</div>
+	<div class="admin_edit_button">
+			</div>
+</div><h4><i class="fa fa-dollar" aria-hidden="true"></i> Monetize your FiveM server</h4>
+<div style="margin-bottom:20px">
+	<center>
+    <a href="https://www.trackyserver.com/processing/banner_redirect_t4s.php">
+         <img loading="lazy" style="border-radius:5px;border:1px solid #ddd" alt="Donation system FiveM" src="/template/includes/widgets/bannieres/fivem_donation_system.webp" width="300" height="265">
+    </a>
+	</center>
+</div>
+<h4><i class="fa fa-list" aria-hidden="true"></i> Servers categories</h4>
+
+<div class="list-group">
+	<a href="fivem-server" class="list-group-item active">FiveM (747)</a><a href="fivem-server/type/drift" class="list-group-item"> <span class="glyphicon glyphicon-minus"></span> Drift (81)</a><a href="fivem-server/type/pve" class="list-group-item"> <span class="glyphicon glyphicon-minus"></span> PVE (102)</a><a href="fivem-server/type/pvp" class="list-group-item"> <span class="glyphicon glyphicon-minus"></span> PVP (166)</a><a href="fivem-server/type/race" class="list-group-item"> <span class="glyphicon glyphicon-minus"></span> Race (138)</a><a href="fivem-server/type/rp" class="list-group-item"> <span class="glyphicon glyphicon-minus"></span> RP (690)</a><a href="7-days-to-die-server" class="list-group-item ">7 Days to Die (20709)</a><a href="ark-server" class="list-group-item ">Ark (20852)</a><a href="ark-survival-ascended-server" class="list-group-item ">Ark Survival Ascended (58)</a><a href="arma-3-server" class="list-group-item ">Arma 3 (13891)</a><a href="atlas-server" class="list-group-item ">Atlas (1844)</a><a href="conan-exiles-server" class="list-group-item ">Conan Exiles (192)</a><a href="cs-go-server" class="list-group-item ">CS:GO (18040)</a><a href="dayz-server" class="list-group-item ">Dayz (15241)</a><a href="deadside-server" class="list-group-item ">Deadside (43)</a><a href="discord-server" class="list-group-item ">Discord (6659)</a><a href="empyrion-server" class="list-group-item ">Empyrion (1)</a><a href="gmod-server" class="list-group-item ">Gmod (10241)</a><a href="hytale-server" class="list-group-item ">Hytale (21)</a><a href="last-oasis-server" class="list-group-item ">Last Oasis (32)</a><a href="life-is-feudal-server" class="list-group-item ">Life is Feudal (156)</a><a href="maplestory-private-server" class="list-group-item ">MapleStory (8)</a><a href="minecraft-server" class="list-group-item ">Minecraft (363)</a><a href="miscreated-server" class="list-group-item ">Miscreated (196)</a><a href="pixark-server" class="list-group-item ">PixArk (407)</a><a href="project-zomboid-server" class="list-group-item ">Project Zomboid (18543)</a><a href="redm-server" class="list-group-item ">RedM (54)</a><a href="runescape-private-server" class="list-group-item ">Runescape (9)</a><a href="rust-server" class="list-group-item ">Rust (21976)</a><a href="scum-server" class="list-group-item ">Scum (317)</a><a href="space-engineers-server" class="list-group-item ">Space Engineers (6415)</a><a href="squad-server" class="list-group-item ">Squad (1)</a><a href="starbound-server" class="list-group-item ">Starbound (2)</a><a href="unturned-server" class="list-group-item ">Unturned (3494)</a><a href="v-rising-server" class="list-group-item ">V-Rising (561)</a><a href="valheim-server" class="list-group-item ">Valheim (5503)</a></div>				</div>
+				<!-- END Sidebar -->
+
+			</div><!-- END ROW -->
+
+			
+		</div><!-- END Container -->
+		
+		<div class="sticky-footer">
+			<div class="container">
+				<p><!--   FOOTER START================== --> 
+				
+        <div class="row">
+        <div class="col-sm-3">
+							<h4 class="title">About FiveM</h4>
+				<p><strong>FiveM</strong> is a program for GTA V, allowing to play multiplayer on dedicated servers. Each server has the ability to add mods and scripts in order to modify the gaming experience. FiveM is renowned for its roleplay servers</p>
+			        </div>
+        <div class="col-sm-3">
+            <h4 class="title">Useful links</h4>
+            <span class="acount-icon">
+							<a href="" data-toggle="modal" data-target="#login"> Add a server</a>	
+			            <a href="privacy-policy">Privacy Policy</a>
+            <a href="terms-of-service">Terms of Service</a>
+            <a href="listing/frequently-asked-questions">FAQ & Contact</a>		
+            </span>
+        </div>
+        <div class="col-sm-3">
+							<h4 class="title">FiveM links</h4>
+				<span class="acount-icon">          
+					<a href="https://fivem.net/">FiveM Official</a>
+<a href="https://docs.fivem.net/">FiveM Docs</a>
+<a href="https://nexus-games.com/us/games/fivem-server-hosting/">FiveM Server Hosting</a>
+<a href="https://tip4serv.com/?ads=trackyfooter">Donation system for FiveM server</a>					<!--
+					<a href="#">men</a>
+					<a href="#">women</a>
+					-->
+				</span>
+							
+        </div>	
+		
+        <div class="col-sm-3">	
+		
+							<h4 class="title">Rankings</h4>
+				<span class="acount-icon">
+					<a href="fivem-server/sort/new">New FiveM servers</a><a href="fivem-server/country">Search by country</a>				</span>
+						</div>
+        </div>
+		<br>
+		<hr>
+		<br>
+        <div class="row text-center"><a href="https://www.trackyserver.com/" style="color: #fff;">Copyright © Trackyserver 2026</a></div><br>
+		<br>
+		<style>
+			.opd_adsticky-scroll:not(.opd_adsticky-close) {
+				display: block;
+			}
+			.opd_adsticky {
+				display: none;
+				position: fixed;
+				margin-bottom: 0;
+				bottom: 0;
+				left: 0;
+				width: 100%;
+				height: auto;
+				padding: 5px 0 4px;
+				text-align: center;
+				background-color: #fff;
+				border-top: 1px solid #999;
+				box-shadow: 0 0 5px 0 rgb(0 0 0 / 20%);
+			}
+			.opd_adclose {
+				position: absolute;
+				left: 4px;
+				top: 4px;
+				width: 16px;
+				height: 16px;
+				opacity: 1;
+			}
+			.opd_adclosebox {
+				position: absolute;
+				top: -25px;
+				right: 0;
+				width: 24px;
+				height: 24px;
+				padding: 0px 0 0 0px;
+				background-color: #fff;
+				border-left: 1px solid #999;
+				border-top: 1px solid #999;
+				border-radius: 12px 0 0 0;
+				font-size: 1.4em;
+				color: #444;
+				box-shadow: 0 -1px 1px 0 rgb(0 0 0 / 20%);
+			}
+			.opd_adclose:before {
+				transform: rotate(45deg);
+			}
+			.opd_adclose:after {
+				transform: rotate(-45deg);
+			}
+			.opd_adclose:before, .opd_adclose:after {
+				position: absolute;
+				content: ' ';
+				height: 16px;
+				width: 2px;
+				background-color: #333;
+			}
+		</style>
+		<div class="publift_ads">
+			<div id="opd_bottomstickyad" class="opd_adsticky opd_adsticky-scroll" style="z-index: 1000; cursor: initial !important;">
+				<div class="opd_adclosebox" style="top:-25px;">
+				<span class="opd_adclose" onclick="if (!window.__cfRLUnblockHandlers) return false; document.getElementById('opd_bottomstickyad').style.display = 'none';" data-cf-modified-ebc34c81fdbcc30895e11a75-=""></span></div>
+				<!-- 71161633/desk_footer_sticky/desk_footer_sticky -->
+				<div data-fuse="22391083670"></div>
+			</div>
+		</div></p>
+			</div>
+		</div>
+	<script src="/cdn-cgi/scripts/7d0fa10a/cloudflare-static/rocket-loader.min.js" data-cf-settings="ebc34c81fdbcc30895e11a75-|49" defer></script></body>
+</html>
