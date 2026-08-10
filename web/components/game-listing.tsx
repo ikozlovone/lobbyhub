@@ -43,23 +43,35 @@ export type Description = {
  */
 type Describe = (game: GameDetail) => Description | null
 
-/** Must match ServerBrowser's own page size, or Load more would skip rows. */
-const PER_PAGE = 25
-
-export function GameListing({
-  gameSlug,
-  filters = {},
-  describe,
-}: {
+/** What a route turns out to be, once its params have resolved. */
+export type Route = {
   gameSlug: string
   /** Fixed by the route. Everything else the visitor picks in the browser. */
   filters?: ServerFilters
   describe: Describe
-}) {
+}
+
+/**
+ * A thunk, and that is the whole point of it.
+ *
+ * The caller must not `await params` to build this — under Partial Prefetching
+ * a route's App Shell is shared by every link pointing at it, so reading URL
+ * data outside a `<Suspense>` boundary ties the shell to one URL and the route
+ * loses the sharing. Facet pages have no `generateStaticParams` and so no
+ * per-URL shell to fall back on; they were the ones Next flagged. Deferring the
+ * read into the boundaries below keeps the shell free of it, and the slugs
+ * arrive with the data they were needed for anyway.
+ */
+type Resolve = () => Promise<Route>
+
+/** Must match ServerBrowser's own page size, or Load more would skip rows. */
+const PER_PAGE = 25
+
+export function GameListing({ route }: { route: Resolve }) {
   return (
     <div className="space-y-6">
       <Suspense fallback={<HeroSkeleton />}>
-        <Hero gameSlug={gameSlug} describe={describe} />
+        <Hero route={route} />
       </Suspense>
 
       {/* The rail follows the listing until there is genuinely room beside it:
@@ -67,7 +79,7 @@ export function GameListing({
       <div className="grid min-w-0 gap-6 2xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 space-y-8">
           <Suspense fallback={<BrowserSkeleton />}>
-            <Listing gameSlug={gameSlug} filters={filters} describe={describe} />
+            <Listing route={route} />
           </Suspense>
         </div>
 
@@ -77,7 +89,7 @@ export function GameListing({
                 votes, so a skeleton here would promise something that may
                 never arrive and then collapse the column when it does not. */}
             <Suspense fallback={null}>
-              <Votes gameSlug={gameSlug} />
+              <Votes route={route} />
             </Suspense>
           </div>
         </aside>
@@ -86,7 +98,8 @@ export function GameListing({
   )
 }
 
-async function Hero({ gameSlug, describe }: { gameSlug: string; describe: Describe }) {
+async function Hero({ route }: { route: Resolve }) {
+  const { gameSlug, describe } = await route()
   const game = await getGame(gameSlug)
   const described = game && describe(game)
 
@@ -105,15 +118,9 @@ async function Hero({ gameSlug, describe }: { gameSlug: string; describe: Descri
   )
 }
 
-async function Listing({
-  gameSlug,
-  filters,
-  describe,
-}: {
-  gameSlug: string
-  filters: ServerFilters
-  describe: Describe
-}) {
+async function Listing({ route }: { route: Resolve }) {
+  const { gameSlug, filters = {}, describe } = await route()
+
   const [game, listing] = await Promise.all([
     // Already in flight for the hero, and deduped for the length of this
     // request — see the React `cache` wrappers in lib/data.
@@ -149,7 +156,9 @@ async function Listing({
   )
 }
 
-async function Votes({ gameSlug }: { gameSlug: string }) {
+async function Votes({ route }: { route: Resolve }) {
+  const { gameSlug } = await route()
+
   return <RecentVotes votes={await getRecentVotes(gameSlug)} />
 }
 

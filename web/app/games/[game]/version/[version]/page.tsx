@@ -40,24 +40,30 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function VersionPage({ params }: Props) {
-  const { game: gameSlug, version: versionSlug } = await params
-
+export default function VersionPage({ params }: Props) {
   return (
     <GameListing
-      gameSlug={gameSlug}
-      filters={{ version: versionSlug }}
-      describe={(game) => {
-        // Read at request time along with the listing: a version appears in the
-        // facets the moment a server reports it, and so should its page.
-        const version = game.facets.versions.find((candidate) => candidate.slug === versionSlug)
-
-        if (!version) return null
+      route={async () => {
+        const { game: gameSlug, version: versionSlug } = await params
 
         return {
-          heading: `${game.name} ${version.name} servers`,
-          crumb: version.name,
-          facetLabel: version.name,
+          gameSlug,
+          filters: { version: versionSlug },
+          describe: (game) => {
+            // Read at request time along with the listing: a version appears in
+            // the facets the moment a server reports it, and so should its page.
+            const version = game.facets.versions.find(
+              (candidate) => candidate.slug === versionSlug,
+            )
+
+            if (!version) return null
+
+            return {
+              heading: `${game.name} ${version.name} servers`,
+              crumb: version.name,
+              facetLabel: version.name,
+            }
+          },
         }
       }}
     />

@@ -40,24 +40,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function CountryPage({ params }: Props) {
-  const { game: gameSlug, country: countrySlug } = await params
-
+export default function CountryPage({ params }: Props) {
   return (
     <GameListing
-      gameSlug={gameSlug}
-      filters={{ country: countrySlug }}
-      describe={(game) => {
-        // Read at request time along with the listing, so the first server in a
-        // country makes this page exist rather than 404 until the window turns.
-        const country = game.facets.countries.find((candidate) => candidate.slug === countrySlug)
-
-        if (!country) return null
+      route={async () => {
+        const { game: gameSlug, country: countrySlug } = await params
 
         return {
-          heading: `${game.name} servers in ${country.name}`,
-          crumb: country.name,
-          facetLabel: country.name,
+          gameSlug,
+          filters: { country: countrySlug },
+          describe: (game) => {
+            // Read at request time along with the listing, so the first server
+            // in a country makes this page exist rather than 404 until the
+            // window turns.
+            const country = game.facets.countries.find(
+              (candidate) => candidate.slug === countrySlug,
+            )
+
+            if (!country) return null
+
+            return {
+              heading: `${game.name} servers in ${country.name}`,
+              crumb: country.name,
+              facetLabel: country.name,
+            }
+          },
         }
       }}
     />

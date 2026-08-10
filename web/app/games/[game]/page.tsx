@@ -42,13 +42,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * GameListing does the reading behind Suspense boundaries so the shell still
  * prerenders — see the note there.
  */
-export default async function GamePage({ params }: Props) {
-  const { game: slug } = await params
-
+export default function GamePage({ params }: Props) {
   return (
     <GameListing
-      gameSlug={slug}
-      describe={(game) => ({ heading: `${game.name} server list`, crumb: 'Servers' })}
+      route={async () => {
+        const { game: slug } = await params
+
+        return {
+          gameSlug: slug,
+          describe: (game) => ({ heading: `${game.name} server list`, crumb: 'Servers' }),
+        }
+      }}
     />
   )
 }

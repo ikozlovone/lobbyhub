@@ -46,24 +46,28 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function ModePage({ params }: Props) {
-  const { game: gameSlug, mode: modeSlug } = await params
-
+export default function ModePage({ params }: Props) {
   return (
     <GameListing
-      gameSlug={gameSlug}
-      filters={{ mode: modeSlug }}
-      describe={(game) => {
-        // Read at request time along with the listing, so a mode that was
-        // categorised a minute ago is a page rather than a 404.
-        const mode = game.facets.modes.find((candidate) => candidate.slug === modeSlug)
-
-        if (!mode) return null
+      route={async () => {
+        const { game: gameSlug, mode: modeSlug } = await params
 
         return {
-          heading: `${mode.name} ${game.name} servers`,
-          crumb: mode.name,
-          facetLabel: mode.name,
+          gameSlug,
+          filters: { mode: modeSlug },
+          describe: (game) => {
+            // Read at request time along with the listing, so a mode that was
+            // categorised a minute ago is a page rather than a 404.
+            const mode = game.facets.modes.find((candidate) => candidate.slug === modeSlug)
+
+            if (!mode) return null
+
+            return {
+              heading: `${mode.name} ${game.name} servers`,
+              crumb: mode.name,
+              facetLabel: mode.name,
+            }
+          },
         }
       }}
     />
