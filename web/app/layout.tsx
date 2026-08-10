@@ -196,19 +196,22 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             </footer>
             </FavoritesProvider>
           </AuthProvider>
+
+          {/* Google Analytics is loaded only after the visitor has allowed
+              'analytics' — ConsentGate renders nothing until then, so no
+              request is made to googletagmanager.com and no cookie is set.
+              Withdrawing consent from the footer unmounts the component and
+              no further events are sent.
+
+              Inside ConsentProvider on purpose: ConsentGate reads the context
+              and throws at prerender time if it is mounted outside. */}
+          {GA_ID && (
+            <ConsentGate category="analytics">
+              <GoogleAnalytics gaId={GA_ID} />
+            </ConsentGate>
+          )}
           </ConsentProvider>
         </ToastProvider>
-
-        {/* Google Analytics is loaded only after the visitor has allowed
-            'analytics' — ConsentGate renders nothing until then, so no request
-            is made to googletagmanager.com and no cookie is set. Withdrawing
-            consent from the footer unmounts the component and no further
-            events are sent. */}
-        {GA_ID && (
-          <ConsentGate category="analytics">
-            <GoogleAnalytics gaId={GA_ID} />
-          </ConsentGate>
-        )}
       </body>
     </html>
   )
