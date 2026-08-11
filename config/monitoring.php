@@ -114,6 +114,22 @@ return [
     'steam_queue' => env('MONITORING_STEAM_QUEUE', 'steam'),
 
     /**
+     * Whether a Steam sweep may add a server the catalog has not seen before.
+     *
+     * Off by default. The sweep is still the fast half of monitoring — it
+     * refreshes every server we already know about — but a fresh row lands
+     * only when somebody submits through the form or an operator imports one
+     * from /admin. Turning this on brings back the original behaviour: every
+     * Source server Steam knows about that matches a listed game will land
+     * as a new row on the next pass.
+     *
+     * The trade-off is straight: fixed catalog vs. broad automatic coverage.
+     * The two channels the sweep does not touch are ServerSubmission and the
+     * admin import; both keep working regardless.
+     */
+    'steam_create_new_servers' => filter_var(env('MONITORING_STEAM_CREATE_NEW_SERVERS', false), FILTER_VALIDATE_BOOLEAN),
+
+    /**
      * How deep the query queue may get before the dispatcher stops adding.
      *
      * A backlog this size is not work waiting to be done, it is a statement

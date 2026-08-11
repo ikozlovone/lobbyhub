@@ -81,7 +81,7 @@ class SteamCatalogSync
         $this->byAddress = $this->existing($game);
         $this->countries = Country::query()->pluck('id', 'code');
         $this->updates = $this->inserts = $this->samples = [];
-        $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0];
+        $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0, 'skipped' => 0];
 
         $result = $sweep->stream($game, fn (DiscoveredServer $found) => $this->write($found), $populatedOnly);
 
@@ -97,6 +97,7 @@ class SteamCatalogSync
             requests: $result->requests,
             truncated: $result->truncated,
             unreachable: $result->unreachable,
+            skipped: $this->counts['skipped'],
         );
     }
 
@@ -111,6 +112,19 @@ class SteamCatalogSync
         }
 
         if ($existing === null) {
+            /*
+             * Sweep-created rows are gated by config. Off, the catalog only
+             * grows through the submission form and the admin import, and a
+             * server Steam is showing us for the first time is counted and
+             * dropped. Updates still land — the sweep is what keeps the
+             * catalog fresh — but the population stops moving on its own.
+             */
+            if (! config('monitoring.steam_create_new_servers', false)) {
+                $this->counts['skipped']++;
+
+                return;
+            }
+
             $this->inserts[] = $this->newRow($found);
             $this->counts['created']++;
         } else {

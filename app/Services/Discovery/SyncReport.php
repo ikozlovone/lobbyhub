@@ -15,5 +15,11 @@ final readonly class SyncReport
         public int $truncated,
         /** Buckets a network failure kept us from reading. Also a gap, different cause. */
         public int $unreachable = 0,
+        /**
+         * Servers Steam handed over that the sweep would have added if
+         * monitoring.steam_create_new_servers were on. Not a failure — it is
+         * what a frozen catalog looks like from the sweep's side.
+         */
+        public int $skipped = 0,
     ) {}
 }

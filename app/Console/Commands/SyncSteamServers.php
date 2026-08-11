@@ -57,7 +57,7 @@ class SyncSteamServers extends Command
             return self::SUCCESS;
         }
 
-        $totals = ['found' => 0, 'created' => 0, 'updated' => 0, 'requests' => 0, 'truncated' => 0, 'unreachable' => 0];
+        $totals = ['found' => 0, 'created' => 0, 'updated' => 0, 'skipped' => 0, 'requests' => 0, 'truncated' => 0, 'unreachable' => 0];
 
         foreach ($games as $game) {
             if ($game->steam_appid === null) {
@@ -74,16 +74,17 @@ class SyncSteamServers extends Command
                 continue;
             }
 
-            foreach (['found', 'created', 'updated', 'requests', 'truncated', 'unreachable'] as $key) {
+            foreach (['found', 'created', 'updated', 'skipped', 'requests', 'truncated', 'unreachable'] as $key) {
                 $totals[$key] += $report->{$key};
             }
 
             $this->line(sprintf(
-                '  %-30s %6d found  %5d new  %5d updated  %5d sampled  %3d requests',
+                '  %-30s %6d found  %5d new  %5d updated  %5d skipped  %5d sampled  %3d requests',
                 $game->slug,
                 $report->found,
                 $report->created,
                 $report->updated,
+                $report->skipped,
                 $report->sampled,
                 $report->requests,
             ));
@@ -107,10 +108,11 @@ class SyncSteamServers extends Command
 
         $this->newLine();
         $this->info(sprintf(
-            '%d found, %d new, %d updated, %d requests%s.',
+            '%d found, %d new, %d updated%s, %d requests%s.',
             $totals['found'],
             $totals['created'],
             $totals['updated'],
+            $totals['skipped'] > 0 ? ", {$totals['skipped']} skipped" : '',
             $totals['requests'],
             $totals['truncated'] > 0 ? ", {$totals['truncated']} truncated" : '',
         ));
