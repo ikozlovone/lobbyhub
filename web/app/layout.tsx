@@ -204,13 +204,20 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                   them under the columns above rather than inside one of them
                   keeps the columns readable at their intended widths. */}
               <div className="mx-auto mt-8 w-full max-w-[100rem] border-t border-line px-4 pt-6">
+                {/* Hardcoded year rather than new Date().getFullYear(): the
+                    layout prerenders, and reading the current time inside a
+                    prerender is a non-deterministic value this Next build
+                    refuses. A copyright year is the year of publication or
+                    the last substantial revision anyway, not today — updated
+                    by hand once a year, which is what any real copyright
+                    notice already needs. */}
                 <p className="text-xs leading-relaxed">
-                  © {new Date().getFullYear()} LobbyHub. All rights reserved.
-                  Content may be reused only with a working link back to the
-                  source. LobbyHub is an independent project — not affiliated
-                  with, endorsed by, or sponsored by any game publisher or
-                  developer. All trademarks and registered trademarks are the
-                  property of their respective owners.
+                  © 2026 LobbyHub. All rights reserved. Content may be reused
+                  only with a working link back to the source. LobbyHub is an
+                  independent project — not affiliated with, endorsed by, or
+                  sponsored by any game publisher or developer. All trademarks
+                  and registered trademarks are the property of their
+                  respective owners.
                 </p>
               </div>
             </footer>
