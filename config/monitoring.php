@@ -114,6 +114,26 @@ return [
     'steam_queue' => env('MONITORING_STEAM_QUEUE', 'steam'),
 
     /**
+     * Whether the schedule fires `steam:sync` at all.
+     *
+     * Off leaves the command reachable by hand — for example the
+     * ServerSubmission form calling it inline for one server — but the
+     * five-and-thirty-minute passes stop happening. Old jobs already in
+     * the `steam` queue drain out; workers then idle until enabled again.
+     */
+    'sweep_enabled' => filter_var(env('MONITORING_SWEEP_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    /**
+     * Whether the schedule fires `servers:query`.
+     *
+     * Off, the UDP path stops receiving new work. Servers keep their last
+     * measurement until either the sweep refreshes them or someone opens the
+     * page and hits Refresh, which is inline anyway. Off is what a frozen
+     * catalog looks like from the poller's side.
+     */
+    'polling_enabled' => filter_var(env('MONITORING_POLLING_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
+    /**
      * Whether a Steam sweep may add a server the catalog has not seen before.
      *
      * Off by default. The sweep is still the fast half of monitoring — it

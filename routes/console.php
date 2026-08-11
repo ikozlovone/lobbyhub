@@ -31,17 +31,25 @@ Artisan::command('inspire', function () {
  * servers that emptied since the last full pass, and those answer in
  * milliseconds rather than timing out.
  */
+/*
+ * Sweep and poll both gate on config flags — off by default, on by env var.
+ * `->when()` runs the closure at tick time, so a config change takes effect
+ * on the next reload without redeploying the scheduler process.
+ */
 Schedule::command('steam:sync --populated')
     ->everyFiveMinutes()
+    ->when(fn () => (bool) config('monitoring.sweep_enabled'))
     ->withoutOverlapping();
 
 Schedule::command('steam:sync')
     ->everyThirtyMinutes()
+    ->when(fn () => (bool) config('monitoring.sweep_enabled'))
     ->withoutOverlapping();
 
 // The dispatcher itself is cheap; the actual queries run on the queue.
 Schedule::command('servers:query')
     ->everyMinute()
+    ->when(fn () => (bool) config('monitoring.polling_enabled'))
     ->withoutOverlapping();
 
 // Votes and measured activity both move constantly; the ranking they feed
