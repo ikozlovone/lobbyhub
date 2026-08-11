@@ -24,7 +24,7 @@ export const DISCORD_URL = 'https://discord.gg/bxUUtvxS7Z'
  * public invite URL — the contact page will start rendering the row on the
  * next build.
  */
-export const TELEGRAM_URL: string | null = null
+export const TELEGRAM_URL: string | null = 'https://t.me/lobbyhubgg'
 
 /** Plain-English promise the contact page shows next to the form. */
 export const RESPONSE_SLA = 'Within one business day.'
