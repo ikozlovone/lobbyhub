@@ -465,6 +465,60 @@ export type SitemapServer = { slug: string; lastmod: string | null }
  * the listing is capped at a hundred pages of a hundred rows, so a sitemap
  * built on it would stop at ten thousand servers without saying so.
  */
+/**
+ * A message from the contact form. The API validates each field and answers
+ * with either `sent` or `error`; `fieldErrors` carries the per-field wording
+ * the form paints next to each input, and `error` is the sentence a toast
+ * announces. The rate limiter answers with a plain `message`, which is what
+ * `error` falls back to when nothing under `errors` matched.
+ */
+export type ContactOutcome =
+  | { status: 'sent' }
+  | {
+      status: 'error'
+      error: string
+      fieldErrors?: Partial<Record<'name' | 'email' | 'subject' | 'message', string>>
+    }
+
+export async function sendContactMessage(
+  apiUrl: string,
+  form: { name: string; email: string; subject: string; message: string },
+): Promise<ContactOutcome> {
+  let response: Response
+
+  try {
+    response = await fetch(`${apiUrl}/contact`, {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(form),
+    })
+  } catch {
+    return { status: 'error', error: 'Could not reach LobbyHub. Check your connection and try again.' }
+  }
+
+  const payload = await response.json().catch(() => null)
+
+  if (response.status === 200) {
+    return { status: 'sent' }
+  }
+
+  const errors = payload?.errors as Record<string, string[]> | undefined
+  const fieldErrors = errors
+    ? Object.fromEntries(
+        Object.entries(errors).map(([field, messages]) => [field, messages[0]]),
+      )
+    : undefined
+
+  return {
+    status: 'error',
+    error:
+      payload?.message ??
+      (errors ? 'Please check the highlighted fields.' : 'Could not send the message. Try again in a moment.'),
+    fieldErrors,
+  }
+}
+
 export async function fetchSitemapServers(page: number, perPage: number, init?: RequestInit) {
   return get<Paginated<SitemapServer>>(
     `/sitemap/servers?page=${page}&per_page=${perPage}`,

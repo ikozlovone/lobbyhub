@@ -129,5 +129,15 @@ class AppServiceProvider extends ServiceProvider
         // real defence; this stops the same client trying a thousand codes
         // against a thousand addresses.
         RateLimiter::for('auth-verify', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+
+        // The contact form sends mail to our own inbox on demand — cheap per
+        // request, but the mailbox on the other end is one place, so the ceiling
+        // is what stops a mistake or a bad actor from filling it. Per-hour by
+        // network, plus a per-address budget so somebody rotating IPs cannot
+        // burn all of them writing as the same person.
+        RateLimiter::for('contact', fn (Request $request) => [
+            Limit::perHour(5)->by($request->ip()),
+            Limit::perHour(20)->by((string) $request->input('email')),
+        ]);
     }
 }

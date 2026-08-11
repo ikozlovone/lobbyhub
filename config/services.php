@@ -123,4 +123,20 @@ return [
         'revalidate_secret' => env('FRONTEND_REVALIDATE_SECRET'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mail routing
+    |--------------------------------------------------------------------------
+    |
+    | Where the contact form's messages land. Kept out of the controller so a
+    | fork does not silently mail its own operators — set CONTACT_TO in .env,
+    | otherwise MAIL_FROM_ADDRESS is used as a fallback that at least reaches
+    | somebody on the same deployment.
+    |
+    */
+
+    'mail' => [
+        'contact_to' => env('CONTACT_TO'),
+    ],
+
 ];

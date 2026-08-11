@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\EmailCodeController;
 use App\Http\Controllers\Api\Auth\SessionController;
 use App\Http\Controllers\Api\Auth\SocialAuthController;
+use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\SearchController;
@@ -100,6 +101,13 @@ Route::name('api.')->group(function () {
     Route::post('servers/{server}/votes/claim', [VoteController::class, 'claim'])->name('servers.votes.claim');
 
     Route::get('search', SearchController::class)->name('search');
+
+    // The contact form sends mail to our own support inbox — cheap per
+    // request but the mailbox on the other end is one place, so it is
+    // throttled below the general read budget.
+    Route::post('contact', [ContactController::class, 'store'])
+        ->middleware('throttle:contact')
+        ->name('contact');
 
     /*
      * Every server URL there is, for the frontend's sitemap.

@@ -166,6 +166,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                           Add server
                         </Link>
                       </li>
+                      <li>
+                        <Link href="/contact" prefetch={false} className="transition-colors hover:text-fg">
+                          Contact
+                        </Link>
+                      </li>
                     </ul>
                   </nav>
 
@@ -192,6 +197,21 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     </ul>
                   </nav>
                 </div>
+              </div>
+
+              {/* The fine print, in a row of its own: copyright, attribution
+                  and the independence disclaimer belong together, and putting
+                  them under the columns above rather than inside one of them
+                  keeps the columns readable at their intended widths. */}
+              <div className="mx-auto mt-8 w-full max-w-[100rem] border-t border-line px-4 pt-6">
+                <p className="text-xs leading-relaxed">
+                  © {new Date().getFullYear()} LobbyHub. All rights reserved.
+                  Content may be reused only with a working link back to the
+                  source. LobbyHub is an independent project — not affiliated
+                  with, endorsed by, or sponsored by any game publisher or
+                  developer. All trademarks and registered trademarks are the
+                  property of their respective owners.
+                </p>
               </div>
             </footer>
             </FavoritesProvider>
