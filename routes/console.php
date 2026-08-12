@@ -36,33 +36,33 @@ Artisan::command('inspire', function () {
  * `->when()` runs the closure at tick time, so a config change takes effect
  * on the next reload without redeploying the scheduler process.
  */
-Schedule::command('steam:sync --populated')
-    ->everyFiveMinutes()
-    ->when(fn () => (bool) config('monitoring.sweep_enabled'))
-    ->withoutOverlapping();
-
-Schedule::command('steam:sync')
-    ->everyThirtyMinutes()
-    ->when(fn () => (bool) config('monitoring.sweep_enabled'))
-    ->withoutOverlapping();
-
-// The dispatcher itself is cheap; the actual queries run on the queue.
-Schedule::command('servers:query')
-    ->everyMinute()
-    ->when(fn () => (bool) config('monitoring.polling_enabled'))
-    ->withoutOverlapping();
+// Schedule::command('steam:sync --populated')
+//     ->everyFiveMinutes()
+//     ->when(fn () => (bool) config('monitoring.sweep_enabled'))
+//     ->withoutOverlapping();
+//
+// Schedule::command('steam:sync')
+//     ->everyThirtyMinutes()
+//     ->when(fn () => (bool) config('monitoring.sweep_enabled'))
+//     ->withoutOverlapping();
+//
+// // The dispatcher itself is cheap; the actual queries run on the queue.
+// Schedule::command('servers:query')
+//     ->everyMinute()
+//     ->when(fn () => (bool) config('monitoring.polling_enabled'))
+//     ->withoutOverlapping();
 
 // Votes and measured activity both move constantly; the ranking they feed
 // does not need to be more current than this.
-Schedule::command('ranking:recompute')
-    ->everyFifteenMinutes()
-    ->withoutOverlapping();
+// Schedule::command('ranking:recompute')
+//     ->everyFifteenMinutes()
+//     ->withoutOverlapping();
 
 // Four aggregate queries, and the numbers they feed sit next to live ones in
 // the same hero — five minutes of drift was visible as the two disagreeing.
-Schedule::command('counters:refresh')
-    ->everyMinute()
-    ->withoutOverlapping();
+// Schedule::command('counters:refresh')
+//     ->everyMinute()
+//     ->withoutOverlapping();
 
 /*
  * Facets — the chip counts on a game's page — are heavier than counters (five
@@ -72,14 +72,14 @@ Schedule::command('counters:refresh')
  * with facets more stale than that, and the cold Postgres pass a first
  * visitor used to pay is gone: the controller reads a JSON column.
  */
-Schedule::command('facets:refresh')
-    ->everyFiveMinutes()
-    ->withoutOverlapping();
+// Schedule::command('facets:refresh')
+//     ->everyFiveMinutes()
+//     ->withoutOverlapping();
 
 // Re-rolls today (partial) and yesterday, so graphs stay current intraday.
-Schedule::command('stats:rollup --days=2')
-    ->hourly()
-    ->withoutOverlapping();
+// Schedule::command('stats:rollup --days=2')
+//     ->hourly()
+//     ->withoutOverlapping();
 
 /*
  * Tagged cache entries expire on their own; the sets that remember which keys
@@ -90,6 +90,6 @@ Schedule::command('stats:rollup --days=2')
  * Nightly because it is a scan, and what it reclaims is bookkeeping rather than
  * the payloads themselves.
  */
-Schedule::command('cache:prune-stale-tags')
-    ->dailyAt('04:10')
-    ->withoutOverlapping();
+// Schedule::command('cache:prune-stale-tags')
+//     ->dailyAt('04:10')
+//     ->withoutOverlapping();
