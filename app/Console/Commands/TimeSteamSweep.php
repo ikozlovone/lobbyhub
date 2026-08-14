@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Game;
 use App\Services\Discovery\DiscoveredServer;
 use App\Services\Discovery\SteamServerSweep;
+use App\Services\Discovery\SteamServerSweepParallel;
 use Illuminate\Console\Command;
 use RuntimeException;
 
@@ -19,12 +20,18 @@ use RuntimeException;
 class TimeSteamSweep extends Command
 {
     protected $signature = 'steam:time
-        {--game= : Slug of a single game; omit to time every game with an app id}';
+        {--game= : Slug of a single game; omit to time every game with an app id}
+        {--parallel : Use the level-parallel sweep (Http::pool) instead of the sequential one}';
 
     protected $description = 'Measure how long Steam takes to answer GetServerList for each game';
 
-    public function handle(SteamServerSweep $sweep): int
+    public function handle(SteamServerSweep $sequential, SteamServerSweepParallel $parallel): int
     {
+        $sweep = $this->option('parallel') ? $parallel : $sequential;
+
+        $this->line(sprintf('mode: %s', $this->option('parallel') ? 'parallel' : 'sequential'));
+
+
         $games = $this->option('game')
             ? Game::query()->where('slug', $this->option('game'))->get()
             : Game::query()->whereNotNull('steam_appid')->orderBy('sort_order')->get();

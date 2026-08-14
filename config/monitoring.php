@@ -175,6 +175,16 @@ return [
     'steam_saturated_at' => (int) env('MONITORING_STEAM_SATURATED_AT', 9000),
 
     /**
+     * How many Steam requests may be in flight at once, for the parallel sweep.
+     *
+     * Http::pool waits for the whole batch before returning, so the pool holds
+     * a saturated response per slot in memory — tens of megabytes each. A
+     * level of thirty-six filters unchunked is hundreds of megabytes held
+     * live; the chunk caps that. Ten is comfortable against five keys.
+     */
+    'steam_pool_size' => (int) env('MONITORING_STEAM_POOL_SIZE', 10),
+
+    /**
      * One provider often holds hundreds of servers behind a single IP. Querying
      * them all in one batch looks like a port scan, so a batch takes at most
      * this many per host and the rest wait for the next run.

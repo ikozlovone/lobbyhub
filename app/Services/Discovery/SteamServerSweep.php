@@ -76,7 +76,7 @@ class SteamServerSweep
      * it can run at the cadence the busy servers actually deserve while the
      * full population is read on the cadence the quiet ones do.
      */
-    private const POPULATED = '\empty\1';
+    public const POPULATED = '\empty\1';
 
     /**
      * The ladder. Each entry is a set of filter fragments that together cover
@@ -89,7 +89,7 @@ class SteamServerSweep
      *
      * @var list<list<string>>
      */
-    private const AXES = [
+    public const AXES = [
         ['\region\0', '\region\1', '\region\2', '\region\3', '\region\4',
             '\region\5', '\region\6', '\region\7', '\region\255'],
         ['\empty\1', '\noplayers\1'],
@@ -156,7 +156,7 @@ class SteamServerSweep
     /**
      * @return list<list<string>>
      */
-    private static function populatedAxes(): array
+    public static function populatedAxes(): array
     {
         return [self::AXES[0], ...self::NAME_AXES];
     }
