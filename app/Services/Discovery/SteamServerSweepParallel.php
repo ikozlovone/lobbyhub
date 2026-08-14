@@ -40,9 +40,16 @@ class SteamServerSweepParallel
 
     /**
      * @param  callable(DiscoveredServer): void  $onServer
+     * @param  (callable(int, int, float): void)|null  $onLevel  Called once per
+     *         level with (level index, requests fired, wall milliseconds). Level
+     *         0 is the sequential root fetch; 1+ are the parallel expansions.
      */
-    public function stream(Game $game, callable $onServer, bool $populatedOnly = false): SweepResult
-    {
+    public function stream(
+        Game $game,
+        callable $onServer,
+        bool $populatedOnly = false,
+        ?callable $onLevel = null,
+    ): SweepResult {
         if ($game->steam_appid === null) {
             throw new RuntimeException("Game [{$game->slug}] has no Steam app id");
         }
@@ -63,17 +70,22 @@ class SteamServerSweepParallel
          * cannot be reached there is nothing under it to salvage, and no
          * reason to fan out and prove it a hundred times over.
          */
+        $levelStart = microtime(true);
         $rows = $this->request($keys[0], $rootFilter, $keys);
         $requests++;
         $returned = count($rows);
         $this->emit($rows, $seen, $onServer);
         unset($rows);
+        if ($onLevel !== null) {
+            $onLevel(0, 1, (microtime(true) - $levelStart) * 1000);
+        }
 
         if ($returned < $this->saturatedAt()) {
             return new SweepResult(count($seen), $requests, 0, 0);
         }
 
         $saturated = [$rootFilter];
+        $levelIndex = 1;
 
         while ($saturated !== [] && $axes !== []) {
             $axis = array_shift($axes);
@@ -87,6 +99,8 @@ class SteamServerSweepParallel
             }
 
             $saturated = [];
+            $levelStart = microtime(true);
+            $levelRequests = 0;
 
             foreach (array_chunk($filters, $this->poolSize()) as $chunk) {
                 $offset = $requests;
@@ -110,6 +124,7 @@ class SteamServerSweepParallel
 
                 foreach ($chunk as $i => $filter) {
                     $requests++;
+                    $levelRequests++;
                     $response = $responses[(string) $i] ?? null;
 
                     if ($response instanceof Throwable
@@ -135,6 +150,12 @@ class SteamServerSweepParallel
                     }
                 }
             }
+
+            if ($onLevel !== null) {
+                $onLevel($levelIndex, $levelRequests, (microtime(true) - $levelStart) * 1000);
+            }
+
+            $levelIndex++;
         }
 
         return new SweepResult(count($seen), $requests, $truncated, $unreachable);

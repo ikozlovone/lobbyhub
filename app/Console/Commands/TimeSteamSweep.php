@@ -49,6 +49,14 @@ class TimeSteamSweep extends Command
         $totalUnreachable = 0;
         $failed = 0;
 
+        $parallel = (bool) $this->option('parallel');
+        $emit = static fn (DiscoveredServer $_) => null;
+        $onLevel = $parallel
+            ? fn (int $level, int $requests, float $wallMs) => $this->line(sprintf(
+                '    L%-2d %3d req  %8.0f ms', $level, $requests, $wallMs,
+            ))
+            : null;
+
         foreach ($games as $game) {
             if ($game->steam_appid === null) {
                 $this->warn(sprintf('  %-30s no Steam app id, skipped', $game->slug));
@@ -56,13 +64,18 @@ class TimeSteamSweep extends Command
                 continue;
             }
 
-            $found = 0;
+            // Announced upfront so per-level lines below have something to
+            // sit under; without it the breakdown reads with no game name.
+            if ($parallel) {
+                $this->line(sprintf('  %s', $game->slug));
+            }
+
             $started = microtime(true);
 
             try {
-                $result = $sweep->stream($game, function (DiscoveredServer $_) use (&$found) {
-                    $found++;
-                });
+                $result = $parallel
+                    ? $sweep->stream($game, $emit, false, $onLevel)
+                    : $sweep->stream($game, $emit);
             } catch (RuntimeException $exception) {
                 $elapsed = (microtime(true) - $started) * 1000;
                 $this->error(sprintf('  %-30s %8.0f ms  failed: %s', $game->slug, $elapsed, $exception->getMessage()));
