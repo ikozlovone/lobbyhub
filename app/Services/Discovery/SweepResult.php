@@ -23,5 +23,19 @@ final readonly class SweepResult
         public int $truncated,
         /** Buckets a network failure kept us from reading at all. */
         public int $unreachable = 0,
+        /**
+         * Rows dropped by the caller's address filter, before anything was built
+         * from them. Counted rather than ignored: it is the difference between
+         * what Steam is offering and what the catalog is willing to take, and on
+         * a frozen catalog that difference is most of the response.
+         */
+        public int $skipped = 0,
+        /**
+         * Wall milliseconds spent waiting on Steam, and nothing else — not the
+         * JSON decode, not the rows. Separated because these are the two costs
+         * with completely different fixes: more keys and more concurrency move
+         * the first, and nothing done locally moves it at all.
+         */
+        public float $httpMs = 0.0,
     ) {}
 }

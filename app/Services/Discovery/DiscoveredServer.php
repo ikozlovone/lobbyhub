@@ -39,7 +39,24 @@ final readonly class DiscoveredServer
         public ?bool $vacEnabled = null,
     ) {}
 
-    public static function fromApi(array $row): ?self
+    /**
+     * The two addresses a raw row answers to, without building anything.
+     *
+     * Split out because the sweep has to know *which* server a row is before it
+     * decides whether the row is worth reading. On a catalog that only refreshes
+     * what it already holds, almost every row of a hundred thousand is thrown
+     * away — and paying `SourceTags::parse`, two `mb_substr` and an object
+     * allocation to reach that conclusion is the bulk of the CPU a sweep spends.
+     * These are three string operations and no allocation.
+     *
+     * Both ports come back because they are used for different questions: the
+     * query port keys the sweep's own deduplication (it is what `addr` carries,
+     * so it is the identity Steam listed the row under), and the game port is
+     * what the catalog stores and matches on.
+     *
+     * @return array{0: string, 1: int, 2: int}|null ip, query port, game port
+     */
+    public static function addressOf(array $row): ?array
     {
         $address = (string) ($row['addr'] ?? '');
 
@@ -53,6 +70,20 @@ final readonly class DiscoveredServer
             return null;
         }
 
+        return [$ip, (int) $queryPort, (int) ($row['gameport'] ?? $queryPort)];
+    }
+
+    public static function fromApi(array $row): ?self
+    {
+        $parsed = self::addressOf($row);
+
+        if ($parsed === null) {
+            return null;
+        }
+
+        [$ip, $queryPort, $gamePort] = $parsed;
+        $address = $ip.':'.$queryPort;
+
         // The same tag string A2S returns as `keywords`. Its counts are more
         // reliable than the API's own `players` field, which disagrees with the
         // `cp` tag on roughly one server in six.
@@ -62,8 +93,8 @@ final readonly class DiscoveredServer
 
         return new self(
             ip: $ip,
-            queryPort: (int) $queryPort,
-            gamePort: (int) ($row['gameport'] ?? $queryPort),
+            queryPort: $queryPort,
+            gamePort: $gamePort,
             name: $name === '' ? $address : mb_substr($name, 0, 255),
             playersOnline: max(0, $tags['players'] ?? (int) ($row['players'] ?? 0)),
             playersMax: max(0, $tags['max_players'] ?? (int) ($row['max_players'] ?? 0)),

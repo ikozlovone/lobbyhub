@@ -21,5 +21,21 @@ final readonly class SyncReport
          * what a frozen catalog looks like from the sweep's side.
          */
         public int $skipped = 0,
+        /**
+         * Where the wall clock went, in milliseconds.
+         *
+         * Four numbers rather than one, because "the sweep took four seconds"
+         * has four completely different fixes behind it and no way to tell
+         * which. `steam` is the wait on the API and moves only with more keys
+         * or more concurrency. `rows` is decoding and building, and moves with
+         * how early unwanted rows are dropped. `db` is the writes. `existing`
+         * is the address map loaded before any of it, which is the one that
+         * grows with the catalog rather than with the game.
+         */
+        public float $totalMs = 0.0,
+        public float $steamMs = 0.0,
+        public float $rowsMs = 0.0,
+        public float $dbMs = 0.0,
+        public float $existingMs = 0.0,
     ) {}
 }

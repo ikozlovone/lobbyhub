@@ -69,6 +69,9 @@ class SteamCatalogSync
     /** @var array<string, int> */
     private array $counts = [];
 
+    /** Milliseconds, by phase. @var array<string, float> */
+    private array $spent = [];
+
     public function __construct(
         private readonly PollingSchedule $schedule,
         private readonly GeoResolver $geo,
@@ -76,18 +79,46 @@ class SteamCatalogSync
 
     public function run(Game $game, SteamServerSweep $sweep, bool $populatedOnly = false): SyncReport
     {
+        $startedAt = hrtime(true);
+
         $this->game = $game;
         $this->now = now();
-        $this->byAddress = $this->existing($game);
-        $this->countries = Country::query()->pluck('id', 'code');
         $this->updates = $this->inserts = $this->samples = [];
         $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0, 'skipped' => 0];
+        $this->spent = ['db' => 0.0, 'existing' => 0.0];
 
-        $result = $sweep->stream($game, fn (DiscoveredServer $found) => $this->write($found), $populatedOnly);
+        $loading = hrtime(true);
+        $this->byAddress = $this->existing($game);
+        $this->countries = Country::query()->pluck('id', 'code');
+        $this->spent['existing'] = (hrtime(true) - $loading) / 1e6;
+
+        /*
+         * The catalog's own addresses, handed to the sweep as a filter.
+         *
+         * Only when the sweep is not allowed to create rows — which is the
+         * default. In that mode a row Steam offers for an address we do not
+         * hold has exactly one destiny, `skipped`, and there is no reason to
+         * parse it to find that out. With creation on the set is withheld, or
+         * the sweep would filter out precisely the rows it is meant to add.
+         */
+        $only = config('monitoring.steam_create_new_servers', false) ? null : $this->byAddress;
+
+        $result = $sweep->stream($game, fn (DiscoveredServer $found) => $this->write($found), $populatedOnly, $only);
 
         $this->flushUpdates();
         $this->flushInserts();
         $this->flushSamples();
+
+        $totalMs = (hrtime(true) - $startedAt) / 1e6;
+
+        /*
+         * Whatever is left over after the three measured phases: JSON decoding,
+         * address parsing, building the payload rows. Derived rather than timed
+         * because timing it directly means two hrtime calls per server, and at a
+         * hundred thousand servers the measurement starts showing up in what it
+         * measures.
+         */
+        $rowsMs = max(0.0, $totalMs - $result->httpMs - $this->spent['db'] - $this->spent['existing']);
 
         return new SyncReport(
             found: $result->found,
@@ -97,7 +128,12 @@ class SteamCatalogSync
             requests: $result->requests,
             truncated: $result->truncated,
             unreachable: $result->unreachable,
-            skipped: $this->counts['skipped'],
+            skipped: $this->counts['skipped'] + $result->skipped,
+            totalMs: $totalMs,
+            steamMs: $result->httpMs,
+            rowsMs: $rowsMs,
+            dbMs: $this->spent['db'],
+            existingMs: $this->spent['existing'],
         );
     }
 
@@ -247,13 +283,21 @@ class SteamCatalogSync
             'updated_at' => $this->now,
         ];
 
-        foreach (['steam_id' => $found->steamId, 'bots' => $found->bots, 'vac_enabled' => $found->vacEnabled] as $column => $value) {
-            // Absent from a payload is not the same as zero: a game that never
-            // reports bots should keep whatever the last real answer was.
-            if ($value !== null) {
-                $row[$column] = $value;
-            }
-        }
+        /*
+         * Always carried, even as null, and the null is what the SET clause
+         * reads as "leave this one alone" — see SOFT.
+         *
+         * They used to be added only when present, which gave a batch as many
+         * shapes as there are combinations of the three, and one statement can
+         * only have one shape. Five hundred rows arriving as eight groups of
+         * sixty is eight statements doing the work of one, and which of the
+         * eight a server lands in depends on what its game happens to report.
+         * Absent from a payload still is not the same as zero — that part is
+         * now the SET clause's job rather than the array's.
+         */
+        $row['steam_id'] = $found->steamId;
+        $row['bots'] = $found->bots;
+        $row['vac_enabled'] = $found->vacEnabled;
 
         return $row;
     }
@@ -396,30 +440,53 @@ class SteamCatalogSync
             return;
         }
 
+        $started = hrtime(true);
+
         /*
-         * Columns vary between rows — steam_id, bots and vac_enabled are there
-         * only when the payload carried them — and one statement needs one
-         * shape. Grouping by the shape a row happens to have keeps the batching
-         * without writing nulls over good data.
+         * Sorted by id before it goes down. Five hundred rows is a cheap sort
+         * and it turns five hundred scattered heap pages into a walk in page
+         * order — the same reason a bulk load is written sorted.
          */
-        $groups = [];
+        usort($this->updates, static fn (array $a, array $b) => $a['id'] <=> $b['id']);
 
-        foreach ($this->updates as $row) {
-            $groups[implode(',', array_keys($row))][] = $row;
+        foreach (array_chunk($this->updates, self::CHUNK) as $chunk) {
+            $this->updateChunk($chunk);
         }
 
-        foreach ($groups as $rows) {
-            // Smaller than the insert batches: this compiles to one compound
-            // select per row, and SQLite refuses past five hundred of them.
-            foreach (array_chunk($rows, 200) as $chunk) {
-                $this->updateChunk($chunk);
-            }
-        }
-
+        $this->spent['db'] += (hrtime(true) - $started) / 1e6;
         $this->updates = [];
     }
 
     /**
+     * The three columns a null must not overwrite.
+     *
+     * Absent from a Steam payload is not the same as zero: a game that never
+     * reports bots should keep whatever the last real answer was, and one that
+     * reports them intermittently should not lose the count on the sweeps that
+     * do not carry it.
+     */
+    private const SOFT = ['steam_id', 'bots', 'vac_enabled'];
+
+    /**
+     * Five hundred differing rows, one statement, one bound parameter.
+     *
+     * The shape this replaces was `select ? … union all select ? …`, one branch
+     * per row: at twenty-one columns that is ten thousand five hundred
+     * placeholders for a batch, every one of them parsed, planned and bound
+     * individually, and a statement text that is a hundred kilobytes of SQL the
+     * server has never seen before and will never see again. It also could not
+     * batch past two hundred, because SQLite gives up past five hundred
+     * compound selects — so the largest game paid for the smallest engine.
+     *
+     * Handing the batch over as one JSON document instead moves the row work
+     * from the parser into a function scan: one placeholder, one plan, and a
+     * statement text that is identical every time and can therefore be reused.
+     *
+     * Both engines can read it, which is the property the old shape was chosen
+     * for and this one keeps — Postgres with `jsonb_to_recordset`, SQLite with
+     * `json_each`. A bulk path no test can reach is a bulk path nobody knows is
+     * broken.
+     *
      * @param  list<array<string, mixed>>  $rows
      */
     private function updateChunk(array $rows): void
@@ -427,45 +494,61 @@ class SteamCatalogSync
         $columns = array_keys($rows[0]);
         $assign = array_values(array_diff($columns, ['id']));
 
-        /*
-         * `select … union all select …` rather than a `values` list with column
-         * aliases, because both engines this runs on accept the first and only
-         * one accepts the second: production is Postgres and the suite is
-         * SQLite in memory, and a bulk path no test can reach is a bulk path
-         * nobody knows is broken.
-         *
-         * The casts go on the first branch and only on Postgres. It cannot infer
-         * a bare placeholder's type in a select list and says so; SQLite has no
-         * such syntax at all.
-         */
-        $postgres = DB::connection()->getDriverName() === 'pgsql';
-        $branches = [];
-        $bindings = [];
+        $payload = [];
 
-        foreach ($rows as $index => $row) {
-            $selects = [];
-
-            foreach ($columns as $column) {
-                $selects[] = $index === 0
-                    ? '?'.($postgres ? '::'.self::TYPES[$column] : '')." as \"{$column}\""
-                    : '?';
-
-                $bindings[] = $row[$column] instanceof Carbon
-                    ? $row[$column]->toDateTimeString()
-                    : $row[$column];
+        foreach ($rows as $row) {
+            foreach ($row as $column => $value) {
+                $row[$column] = $value instanceof Carbon ? $value->toDateTimeString() : $value;
             }
 
-            $branches[] = 'select '.implode(',', $selects);
+            $payload[] = $row;
         }
 
-        $set = implode(', ', array_map(fn (string $c) => "\"{$c}\" = v.\"{$c}\"", $assign));
+        /*
+         * `SUBSTITUTE` is belt and braces rather than a fix for something seen:
+         * every value here came out of a `json_decode` of Steam's response, so
+         * it is valid UTF-8 already, and `mb_substr` cuts on character
+         * boundaries rather than bytes. What it guarantees is that if a row ever
+         * reaches this from somewhere with weaker promises, one bad byte does
+         * not fail the encode and take the other four hundred and ninety-nine
+         * rows down with it.
+         */
+        $json = json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
 
-        DB::update(
-            'update "servers" set '.$set.
-            ' from ('.implode(' union all ', $branches).') as v'.
-            ' where "servers"."id" = v."id"',
-            $bindings,
-        );
+        $set = implode(', ', array_map(
+            fn (string $c) => in_array($c, self::SOFT, true)
+                ? "\"{$c}\" = coalesce(v.\"{$c}\", \"servers\".\"{$c}\")"
+                : "\"{$c}\" = v.\"{$c}\"",
+            $assign,
+        ));
+
+        DB::update('update "servers" set '.$set.' from '.$this->source($columns).' where "servers"."id" = v."id"', [$json]);
+    }
+
+    /**
+     * The JSON document, read back as a table of typed columns.
+     *
+     * Postgres is told the types up front, which is what `jsonb_to_recordset`
+     * requires and also what makes a null land as a null of the right type
+     * rather than as text. SQLite has no typed form and does not need one — it
+     * takes whatever `json_extract` gives back and compares it happily.
+     *
+     * @param  list<string>  $columns
+     */
+    private function source(array $columns): string
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $typed = implode(', ', array_map(fn (string $c) => "\"{$c}\" ".self::TYPES[$c], $columns));
+
+            return "jsonb_to_recordset(?::jsonb) as v({$typed})";
+        }
+
+        $selects = implode(', ', array_map(
+            fn (string $c) => "json_extract(\"value\", '$.\"{$c}\"') as \"{$c}\"",
+            $columns,
+        ));
+
+        return "(select {$selects} from json_each(?)) as v";
     }
 
     private function flushInserts(): void
@@ -473,6 +556,8 @@ class SteamCatalogSync
         if ($this->inserts === []) {
             return;
         }
+
+        $started = hrtime(true);
 
         $this->disambiguate($this->inserts);
 
@@ -500,11 +585,19 @@ class SteamCatalogSync
         }
 
         $this->inserts = [];
+        $this->spent['db'] += (hrtime(true) - $started) / 1e6;
+
         $this->flushSamples();
     }
 
     private function flushSamples(): void
     {
+        if ($this->samples === []) {
+            return;
+        }
+
+        $started = hrtime(true);
+
         foreach (array_chunk($this->samples, self::CHUNK) as $chunk) {
             // upsert, like the job's own recording: two writes landing in the
             // same second must not collide on (server_id, recorded_at).
@@ -516,6 +609,7 @@ class SteamCatalogSync
         }
 
         $this->samples = [];
+        $this->spent['db'] += (hrtime(true) - $started) / 1e6;
     }
 
     /**

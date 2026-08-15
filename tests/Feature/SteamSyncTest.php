@@ -45,6 +45,15 @@ class SteamSyncTest extends TestCase
             // Three rows is a full response here, so the recursion can be proved
             // without building nine thousand of them per test.
             'monitoring.steam_saturated_at' => 3,
+            /*
+             * On, though production runs with it off.
+             *
+             * Most of this file predates the freeze and is about what the sweep
+             * reads and writes, which is the same work either way — it just
+             * needs the rows to exist to assert against. The freeze itself has
+             * its own tests below, and they turn this back off.
+             */
+            'monitoring.steam_create_new_servers' => true,
         ]);
         Http::preventStrayRequests();
     }
@@ -431,6 +440,154 @@ class SteamSyncTest extends TestCase
         $this->assertSame('second', $keys[1]);
         $this->assertSame('first', $keys[2]);
         $this->assertSame(5, count(array_filter($keys, fn ($k) => $k === 'second')));
+    }
+
+    /**
+     * The freeze, from the sweep's side: Steam offers, the catalog declines.
+     */
+    public function test_a_frozen_catalog_updates_what_it_holds_and_adds_nothing(): void
+    {
+        config(['monitoring.steam_create_new_servers' => false]);
+
+        $mine = Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '1.1.1.1',
+            'port' => 27015,
+            'players_online' => 0,
+        ]);
+
+        $this->fakeSteam(['' => [
+            $this->row('1.1.1.1', 27015, players: 31),
+            $this->row('5.5.5.5', 27015, players: 12),
+        ]]);
+
+        $report = $this->sync();
+
+        $this->assertSame(0, $report->created);
+        $this->assertSame(1, $report->updated);
+        $this->assertSame(1, $report->skipped);
+        // Both were listed: `found` is what Steam has, not what we took.
+        $this->assertSame(2, $report->found);
+        $this->assertSame(31, $mine->refresh()->players_online);
+        $this->assertSame(1, Server::count());
+    }
+
+    /**
+     * The rows nobody asked for are dropped before anything is built from them.
+     *
+     * Asserted through the tag string, which only `fromApi` reads: a row whose
+     * address is not ours lands in `skipped` whatever its `gametype` says, and
+     * a malformed one cannot throw because it is never parsed.
+     */
+    public function test_an_unwanted_row_is_never_parsed(): void
+    {
+        config(['monitoring.steam_create_new_servers' => false]);
+
+        Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '1.1.1.1',
+            'port' => 27015,
+        ]);
+
+        $this->fakeSteam(['' => [
+            $this->row('1.1.1.1', 27015, players: 5),
+            ['addr' => '9.9.9.9:27015', 'gameport' => 27015, 'gametype' => str_repeat('cp', 5000)],
+        ]]);
+
+        $report = $this->sync();
+
+        $this->assertSame(1, $report->updated);
+        $this->assertSame(1, $report->skipped);
+    }
+
+    /**
+     * A game that never reports bots must not have the last real answer wiped
+     * by a payload that simply does not carry one — which is what a batched
+     * update writing every column would do.
+     */
+    public function test_an_absent_field_does_not_overwrite_a_stored_one(): void
+    {
+        $server = Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '1.1.1.1',
+            'port' => 27015,
+            'steam_id' => '90071992547409',
+            'bots' => 6,
+            'vac_enabled' => true,
+        ]);
+
+        // Two servers, one carrying the soft fields and one not, so they share
+        // a batch — the case the old shape split into two statements.
+        Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '2.2.2.2',
+            'port' => 27015,
+        ]);
+
+        $this->fakeSteam(['' => [
+            $this->row('1.1.1.1', 27015, players: 3),
+            $this->row('2.2.2.2', 27015, players: 4, steamId: '5', bots: 1, secure: true),
+        ]]);
+
+        $this->assertSame(2, $this->sync()->updated);
+
+        $server->refresh();
+
+        $this->assertSame('90071992547409', $server->steam_id);
+        $this->assertSame(6, $server->bots);
+        $this->assertTrue($server->vac_enabled);
+        // The measurements it did carry still landed.
+        $this->assertSame(3, $server->players_online);
+    }
+
+    /**
+     * A name carrying the characters that break a hand-built statement.
+     *
+     * The batch is handed over as one JSON document now, so quotes, backslashes
+     * and commas in a server name go through an encoder rather than through
+     * string concatenation — and Cyrillic has to survive the round trip intact.
+     */
+    public function test_a_name_full_of_punctuation_survives_the_batch(): void
+    {
+        $server = Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '1.1.1.1',
+            'port' => 27015,
+        ]);
+
+        $name = 'Вайп "сегодня", 100x \\ {"drop": true} | 50%';
+
+        $this->fakeSteam(['' => [$this->row('1.1.1.1', 27015, players: 8, name: $name)]]);
+
+        $this->assertSame(1, $this->sync()->updated);
+
+        $server->refresh();
+
+        $this->assertSame($name, $server->motd);
+        $this->assertSame(8, $server->players_online);
+    }
+
+    /** The wall clock, split into the phases that have different fixes. */
+    public function test_it_reports_where_the_time_went(): void
+    {
+        Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '1.1.1.1',
+            'port' => 27015,
+        ]);
+
+        $this->fakeSteam(['' => [$this->row('1.1.1.1', 27015)]]);
+
+        $report = $this->sync();
+
+        $this->assertGreaterThan(0, $report->totalMs);
+        $this->assertGreaterThan(0, $report->steamMs);
+        $this->assertGreaterThan(0, $report->dbMs);
+        // The parts cannot add up to more than the whole.
+        $this->assertLessThanOrEqual(
+            $report->totalMs + 0.001,
+            $report->steamMs + $report->rowsMs + $report->dbMs + $report->existingMs,
+        );
     }
 
     private function game(): Game

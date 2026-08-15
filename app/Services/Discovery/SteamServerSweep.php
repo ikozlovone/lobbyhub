@@ -120,8 +120,12 @@ class SteamServerSweep
      *
      * @param  callable(DiscoveredServer): void  $onServer
      * @param  bool  $populatedOnly  Only servers with someone on them
+     * @param  array<string, mixed>|null  $only  Addresses (`ip:gameport`) worth
+     *                                           building. Null takes everything; a set drops the rest before a
+     *                                           DiscoveredServer is made of it, which on a catalog that only
+     *                                           refreshes what it holds is ninety-nine rows in a hundred.
      */
-    public function stream(Game $game, callable $onServer, bool $populatedOnly = false): SweepResult
+    public function stream(Game $game, callable $onServer, bool $populatedOnly = false, ?array $only = null): SweepResult
     {
         if ($game->steam_appid === null) {
             throw new RuntimeException("Game [{$game->slug}] has no Steam app id");
@@ -132,6 +136,8 @@ class SteamServerSweep
         $requests = 0;
         $truncated = 0;
         $unreachable = 0;
+        $skipped = 0;
+        $httpMs = 0.0;
 
         $this->collect(
             $keys,
@@ -148,9 +154,12 @@ class SteamServerSweep
             $requests,
             $truncated,
             $unreachable,
+            $skipped,
+            $httpMs,
+            $only,
         );
 
-        return new SweepResult(count($seen), $requests, $truncated, $unreachable);
+        return new SweepResult(count($seen), $requests, $truncated, $unreachable, $skipped, $httpMs);
     }
 
     /**
@@ -194,6 +203,7 @@ class SteamServerSweep
      * @param  list<list<string>>  $axes
      * @param  array<string, true>  $seen
      * @param  callable(DiscoveredServer): void  $onServer
+     * @param  array<string, mixed>|null  $only
      */
     private function collect(
         array $keys,
@@ -204,6 +214,9 @@ class SteamServerSweep
         int &$requests,
         int &$truncated,
         int &$unreachable,
+        int &$skipped,
+        float &$httpMs,
+        ?array $only,
     ): void {
         /*
          * One bucket failing is not the game failing.
@@ -221,7 +234,7 @@ class SteamServerSweep
         try {
             // Round-robin, so a game costing sixty-eight requests spreads them
             // rather than spending one key's whole allowance on itself.
-            $rows = $this->request($keys[$requests % count($keys)], $filter, $keys);
+            $rows = $this->request($keys[$requests % count($keys)], $filter, $keys, $httpMs);
         } catch (RuntimeException $exception) {
             if ($requests === 0) {
                 throw $exception;
@@ -236,20 +249,49 @@ class SteamServerSweep
         $requests++;
         $returned = count($rows);
 
+        /*
+         * Addressed first, built second — and only for the rows that survive.
+         *
+         * Every row used to become a DiscoveredServer before anyone asked
+         * whether it was wanted: a tag-string regex, two mb_substr and an
+         * allocation each, a hundred thousand times for Counter-Strike, to keep
+         * a few hundred. `addressOf` answers the same question with three string
+         * operations, so the rows nobody asked for cost nothing but the decode
+         * that already happened.
+         *
+         * Deduplication stays above the filter. `found` is what Steam listed,
+         * which is a different number from what the catalog took, and both are
+         * worth printing — one says the sweep is complete, the other says the
+         * catalog is frozen.
+         */
         foreach ($rows as $row) {
-            $server = DiscoveredServer::fromApi($row);
+            $parsed = DiscoveredServer::addressOf($row);
 
-            if ($server === null) {
+            if ($parsed === null) {
                 continue;
             }
 
-            $address = $server->ip.':'.$server->queryPort;
+            [$ip, $queryPort, $gamePort] = $parsed;
+            $address = $ip.':'.$queryPort;
 
             if (isset($seen[$address])) {
                 continue;
             }
 
             $seen[$address] = true;
+
+            if ($only !== null && ! isset($only[$ip.':'.$gamePort])) {
+                $skipped++;
+
+                continue;
+            }
+
+            $server = DiscoveredServer::fromApi($row);
+
+            if ($server === null) {
+                continue;
+            }
+
             $onServer($server);
         }
 
@@ -283,15 +325,23 @@ class SteamServerSweep
         $axis = array_shift($next);
 
         foreach ($axis as $fragment) {
-            $this->collect($keys, $filter.$fragment, $next, $seen, $onServer, $requests, $truncated, $unreachable);
+            $this->collect(
+                $keys, $filter.$fragment, $next, $seen, $onServer,
+                $requests, $truncated, $unreachable, $skipped, $httpMs, $only,
+            );
         }
     }
 
     /**
      * @return list<array<string, mixed>>
      */
-    private function request(string $key, string $filter, array $keys): array
+    private function request(string $key, string $filter, array $keys, float &$httpMs): array
     {
+        // Around the transfer and nothing else. The decode below is real work
+        // too, but it is work this machine does and can be made cheaper; the
+        // wait above it is Steam's and cannot.
+        $started = hrtime(true);
+
         try {
             $response = Http::timeout(90)->retry(3, 1000, throw: false)->get(self::ENDPOINT, [
                 'key' => $key,
@@ -299,6 +349,7 @@ class SteamServerSweep
                 'limit' => self::CEILING,
             ]);
         } catch (ConnectionException $exception) {
+            $httpMs += (hrtime(true) - $started) / 1e6;
             /*
              * Redacted, and this is not caution for its own sake.
              *
@@ -312,6 +363,8 @@ class SteamServerSweep
                 'Steam API unreachable for filter '.$filter.': '.$this->redact($exception->getMessage(), $keys),
             );
         }
+
+        $httpMs += (hrtime(true) - $started) / 1e6;
 
         if ($response->failed()) {
             throw new RuntimeException("Steam API returned HTTP {$response->status()} for filter {$filter}");

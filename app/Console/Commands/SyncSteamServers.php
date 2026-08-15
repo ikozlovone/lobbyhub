@@ -58,6 +58,7 @@ class SyncSteamServers extends Command
         }
 
         $totals = ['found' => 0, 'created' => 0, 'updated' => 0, 'skipped' => 0, 'requests' => 0, 'truncated' => 0, 'unreachable' => 0];
+        $spent = ['totalMs' => 0.0, 'steamMs' => 0.0, 'rowsMs' => 0.0, 'dbMs' => 0.0, 'existingMs' => 0.0];
 
         foreach ($games as $game) {
             if ($game->steam_appid === null) {
@@ -78,15 +79,35 @@ class SyncSteamServers extends Command
                 $totals[$key] += $report->{$key};
             }
 
+            foreach (array_keys($spent) as $key) {
+                $spent[$key] += $report->{$key};
+            }
+
             $this->line(sprintf(
-                '  %-30s %6d found  %5d new  %5d updated  %5d skipped  %5d sampled  %3d requests',
+                '  %-30s %8.0f ms  %6d found  %5d new  %5d updated  %5d skipped  %5d sampled  %3d requests',
                 $game->slug,
+                $report->totalMs,
                 $report->found,
                 $report->created,
                 $report->updated,
                 $report->skipped,
                 $report->sampled,
                 $report->requests,
+            ));
+
+            /*
+             * The breakdown under the line, because the total on its own does
+             * not say what to do about itself. `steam` is the wait on the API
+             * and only more keys or more concurrency move it; `rows` is decode
+             * and build; `db` is the writes; `existing` is the address map,
+             * which grows with the catalog rather than with the game.
+             */
+            $this->line(sprintf(
+                '      <fg=gray>steam %.0f ms   rows %.0f ms   db %.0f ms   existing %.0f ms</>',
+                $report->steamMs,
+                $report->rowsMs,
+                $report->dbMs,
+                $report->existingMs,
             ));
 
             /*
@@ -107,6 +128,14 @@ class SyncSteamServers extends Command
         }
 
         $this->newLine();
+        $this->info(sprintf(
+            '%.1f s total — steam %.1f s, rows %.1f s, db %.1f s, existing %.1f s.',
+            $spent['totalMs'] / 1000,
+            $spent['steamMs'] / 1000,
+            $spent['rowsMs'] / 1000,
+            $spent['dbMs'] / 1000,
+            $spent['existingMs'] / 1000,
+        ));
         $this->info(sprintf(
             '%d found, %d new, %d updated%s, %d requests%s.',
             $totals['found'],
