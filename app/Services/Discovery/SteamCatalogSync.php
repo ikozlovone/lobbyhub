@@ -216,10 +216,16 @@ class SteamCatalogSync
          * paging asks `where id > last` instead, so every page costs what the
          * first one did.
          *
-         * Worth having and worth keeping in proportion: measured at ninety
-         * thousand rows it is 682 ms against 554 ms, while the read itself is
-         * 106 ms and the rest is this closure — three keys and a Carbon parse
-         * per row. The paging is not what makes this phase expensive.
+         * How much it is worth depends entirely on where it runs, which is why
+         * the local measurement was misleading: on a laptop against a local
+         * Postgres it is 682 ms against 554 ms at ninety thousand rows — small
+         * enough to write off, and written off in the first draft of this
+         * comment. On the deployed box, where the connection goes through
+         * pgbouncer and the disk is not an M-series SSD, the same change took
+         * this phase from 36.3 s to 7.4 s of a Counter-Strike sweep.
+         *
+         * The discarded rows are not free anywhere. They are just cheap enough
+         * on good hardware to hide behind everything else.
          */
         DB::table('servers')
             ->where('game_id', $game->id)
