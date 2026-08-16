@@ -24,7 +24,7 @@ use Throwable;
  * times a saturated response — ten megabytes each. A wide level unchunked is
  * hundreds of megabytes held live; the chunk caps that.
  */
-class SteamServerSweepParallel
+class SteamServerSweepParallel implements ServerSweep
 {
     private const ENDPOINT = 'https://api.steampowered.com/IGameServersService/GetServerList/v1/';
 
@@ -40,14 +40,17 @@ class SteamServerSweepParallel
 
     /**
      * @param  callable(DiscoveredServer): void  $onServer
+     * @param  array<string, mixed>|null  $only  Addresses (`ip:gameport`) worth
+     *                                           building; null takes everything. See SteamServerSweep::stream.
      * @param  (callable(int, int, float): void)|null  $onLevel  Called once per
-     *         level with (level index, requests fired, wall milliseconds). Level
-     *         0 is the sequential root fetch; 1+ are the parallel expansions.
+     *                                                           level with (level index, requests fired, wall milliseconds). Level
+     *                                                           0 is the sequential root fetch; 1+ are the parallel expansions.
      */
     public function stream(
         Game $game,
         callable $onServer,
         bool $populatedOnly = false,
+        ?array $only = null,
         ?callable $onLevel = null,
     ): SweepResult {
         if ($game->steam_appid === null) {
@@ -59,6 +62,8 @@ class SteamServerSweepParallel
         $requests = 0;
         $truncated = 0;
         $unreachable = 0;
+        $skipped = 0;
+        $httpMs = 0.0;
 
         $rootFilter = '\appid\\'.$game->steam_appid.($populatedOnly ? SteamServerSweep::POPULATED : '');
         $axes = $populatedOnly ? SteamServerSweep::populatedAxes() : SteamServerSweep::AXES;
@@ -71,17 +76,17 @@ class SteamServerSweepParallel
          * reason to fan out and prove it a hundred times over.
          */
         $levelStart = microtime(true);
-        $rows = $this->request($keys[0], $rootFilter, $keys);
+        $rows = $this->request($keys[0], $rootFilter, $keys, $httpMs);
         $requests++;
         $returned = count($rows);
-        $this->emit($rows, $seen, $onServer);
+        $this->emit($rows, $seen, $onServer, $only, $skipped);
         unset($rows);
         if ($onLevel !== null) {
             $onLevel(0, 1, (microtime(true) - $levelStart) * 1000);
         }
 
         if ($returned < $this->saturatedAt()) {
-            return new SweepResult(count($seen), $requests, 0, 0);
+            return new SweepResult(count($seen), $requests, 0, 0, $skipped, $httpMs);
         }
 
         $saturated = [$rootFilter];
@@ -105,6 +110,18 @@ class SteamServerSweepParallel
             foreach (array_chunk($filters, $this->poolSize()) as $chunk) {
                 $offset = $requests;
 
+                /*
+                 * The wall time of the batch, not the sum of its requests.
+                 *
+                 * Ten requests answering in a second each are one second of
+                 * waiting here, and reporting ten would make the parallel sweep
+                 * look slower than the sequential one it just beat. What this
+                 * number answers is "how long was this process waiting on
+                 * Steam", which is the only form of it that can be compared
+                 * between the two shapes.
+                 */
+                $poolStart = hrtime(true);
+
                 $responses = Http::pool(function (Pool $pool) use ($chunk, $keys, $offset) {
                     $calls = [];
 
@@ -122,6 +139,8 @@ class SteamServerSweepParallel
                     return $calls;
                 });
 
+                $httpMs += (hrtime(true) - $poolStart) / 1e6;
+
                 foreach ($chunk as $i => $filter) {
                     $requests++;
                     $levelRequests++;
@@ -138,7 +157,7 @@ class SteamServerSweepParallel
                     $rows = $response->json('response.servers') ?? [];
                     $returned = count($rows);
 
-                    $this->emit($rows, $seen, $onServer);
+                    $this->emit($rows, $seen, $onServer, $only, $skipped);
                     unset($rows);
 
                     if ($returned >= $this->saturatedAt()) {
@@ -158,30 +177,48 @@ class SteamServerSweepParallel
             $levelIndex++;
         }
 
-        return new SweepResult(count($seen), $requests, $truncated, $unreachable);
+        return new SweepResult(count($seen), $requests, $truncated, $unreachable, $skipped, $httpMs);
     }
 
     /**
+     * Addressed first, built second — see SteamServerSweep::collect, which this
+     * is the level-parallel twin of.
+     *
      * @param  list<array<string, mixed>>  $rows
      * @param  array<string, true>  $seen
      * @param  callable(DiscoveredServer): void  $onServer
+     * @param  array<string, mixed>|null  $only
      */
-    private function emit(array $rows, array &$seen, callable $onServer): void
+    private function emit(array $rows, array &$seen, callable $onServer, ?array $only, int &$skipped): void
     {
         foreach ($rows as $row) {
-            $server = DiscoveredServer::fromApi($row);
+            $parsed = DiscoveredServer::addressOf($row);
 
-            if ($server === null) {
+            if ($parsed === null) {
                 continue;
             }
 
-            $address = $server->ip.':'.$server->queryPort;
+            [$ip, $queryPort, $gamePort] = $parsed;
+            $address = $ip.':'.$queryPort;
 
             if (isset($seen[$address])) {
                 continue;
             }
 
             $seen[$address] = true;
+
+            if ($only !== null && ! isset($only[$ip.':'.$gamePort])) {
+                $skipped++;
+
+                continue;
+            }
+
+            $server = DiscoveredServer::fromApi($row);
+
+            if ($server === null) {
+                continue;
+            }
+
             $onServer($server);
         }
     }
@@ -190,8 +227,10 @@ class SteamServerSweepParallel
      * @param  list<string>  $keys
      * @return list<array<string, mixed>>
      */
-    private function request(string $key, string $filter, array $keys): array
+    private function request(string $key, string $filter, array $keys, float &$httpMs): array
     {
+        $started = hrtime(true);
+
         try {
             $response = Http::timeout(90)->retry(3, 1000, throw: false)->get(self::ENDPOINT, [
                 'key' => $key,
@@ -199,10 +238,14 @@ class SteamServerSweepParallel
                 'limit' => SteamServerSweep::CEILING,
             ]);
         } catch (ConnectionException $exception) {
+            $httpMs += (hrtime(true) - $started) / 1e6;
+
             throw new RuntimeException(
                 'Steam API unreachable for filter '.$filter.': '.$this->redact($exception->getMessage(), $keys),
             );
         }
+
+        $httpMs += (hrtime(true) - $started) / 1e6;
 
         if ($response->failed()) {
             throw new RuntimeException("Steam API returned HTTP {$response->status()} for filter {$filter}");

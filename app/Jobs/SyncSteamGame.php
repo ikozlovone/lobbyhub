@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Game;
 use App\Services\Discovery\SteamCatalogSync;
 use App\Services\Discovery\SteamServerSweep;
+use App\Services\Discovery\SteamServerSweepParallel;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -46,8 +47,16 @@ class SyncSteamGame implements ShouldBeUnique, ShouldQueue
      * running. Nothing then refreshed `steam_seen_at`, so every server fell to
      * the poller and made the queue longer still.
      */
-    public function __construct(public Game $game, public bool $populatedOnly = false)
-    {
+    public function __construct(
+        public Game $game,
+        public bool $populatedOnly = false,
+        /*
+         * Defaulted, because a job already sitting on the queue when this
+         * deploys was serialized without it and must still unserialize into
+         * something that runs.
+         */
+        public bool $parallel = false,
+    ) {
         $this->onQueue(config('monitoring.steam_queue'));
     }
 
@@ -69,9 +78,13 @@ class SyncSteamGame implements ShouldBeUnique, ShouldQueue
         return (int) config('monitoring.unique_for', 3600);
     }
 
-    public function handle(SteamServerSweep $sweep, SteamCatalogSync $sync): void
+    public function handle(SteamServerSweep $sequential, SteamServerSweepParallel $parallel, SteamCatalogSync $sync): void
     {
-        $report = $sync->run($this->game, $sweep, $this->populatedOnly);
+        $report = $sync->run(
+            $this->game,
+            $this->parallel ? $parallel : $sequential,
+            $this->populatedOnly,
+        );
 
         /*
          * Only the gap is logged, and only when there is one.

@@ -31,7 +31,6 @@ class TimeSteamSweep extends Command
 
         $this->line(sprintf('mode: %s', $this->option('parallel') ? 'parallel' : 'sequential'));
 
-
         $games = $this->option('game')
             ? Game::query()->where('slug', $this->option('game'))->get()
             : Game::query()->whereNotNull('steam_appid')->orderBy('sort_order')->get();
@@ -74,7 +73,7 @@ class TimeSteamSweep extends Command
 
             try {
                 $result = $parallel
-                    ? $sweep->stream($game, $emit, false, $onLevel)
+                    ? $sweep->stream($game, $emit, false, null, $onLevel)
                     : $sweep->stream($game, $emit);
             } catch (RuntimeException $exception) {
                 $elapsed = (microtime(true) - $started) * 1000;

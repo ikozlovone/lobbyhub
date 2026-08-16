@@ -36,7 +36,7 @@ use RuntimeException;
  * are one request. Counter-Strike 2, which has around thirty thousand servers,
  * costs a few dozen.
  */
-class SteamServerSweep
+class SteamServerSweep implements ServerSweep
 {
     private const ENDPOINT = 'https://api.steampowered.com/IGameServersService/GetServerList/v1/';
 

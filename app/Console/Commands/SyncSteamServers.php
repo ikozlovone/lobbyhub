@@ -6,6 +6,7 @@ use App\Jobs\SyncSteamGame;
 use App\Models\Game;
 use App\Services\Discovery\SteamCatalogSync;
 use App\Services\Discovery\SteamServerSweep;
+use App\Services\Discovery\SteamServerSweepParallel;
 use Illuminate\Console\Command;
 use RuntimeException;
 
@@ -14,6 +15,7 @@ class SyncSteamServers extends Command
     protected $signature = 'steam:sync
         {--game= : Slug of a single game; omit to sweep every game with an app id}
         {--populated : Only servers with players on them — the cheap, frequent pass}
+        {--parallel : Ask each level of the axis tree at once instead of one bucket at a time}
         {--sync : Run the sweeps inline instead of queueing them}';
 
     protected $description = 'Read every Source server Steam knows about and write it into the catalog';
@@ -29,8 +31,19 @@ class SyncSteamServers extends Command
      * So the per-server queries stay, aimed only at the servers this does not
      * reach: see DispatchServerQueries.
      */
-    public function handle(SteamServerSweep $sweep, SteamCatalogSync $sync): int
+    public function handle(SteamServerSweep $sequential, SteamServerSweepParallel $parallel, SteamCatalogSync $sync): int
     {
+        /*
+         * The sweep is a choice now, not a class.
+         *
+         * Both write through the same SteamCatalogSync and agree on what a
+         * bucket is; they differ only in whether a level's buckets are asked one
+         * at a time or all at once. On the measured run the wait on Steam was
+         * 320 s of a 439 s sweep, which is the whole reason there is a switch
+         * here at all — nothing else in the breakdown is worth this much.
+         */
+        $sweep = $this->option('parallel') ? $parallel : $sequential;
+
         $games = $this->option('game')
             ? Game::query()->where('slug', $this->option('game'))->get()
             : Game::query()->whereNotNull('steam_appid')->orderBy('sort_order')->get();
@@ -44,7 +57,7 @@ class SyncSteamServers extends Command
         if (! $this->option('sync')) {
             foreach ($games as $game) {
                 if ($game->steam_appid !== null) {
-                    SyncSteamGame::dispatch($game, (bool) $this->option('populated'));
+                    SyncSteamGame::dispatch($game, (bool) $this->option('populated'), (bool) $this->option('parallel'));
                 }
             }
 

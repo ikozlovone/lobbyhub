@@ -77,7 +77,7 @@ class SteamCatalogSync
         private readonly GeoResolver $geo,
     ) {}
 
-    public function run(Game $game, SteamServerSweep $sweep, bool $populatedOnly = false): SyncReport
+    public function run(Game $game, ServerSweep $sweep, bool $populatedOnly = false): SyncReport
     {
         $startedAt = hrtime(true);
 
@@ -208,11 +208,23 @@ class SteamCatalogSync
     {
         $keyed = [];
 
+        /*
+         * chunkById rather than chunk, which pages with offset and limit: the
+         * last page of a game with ninety thousand servers asks Postgres for
+         * rows 88 000 to 90 000, and it can only answer by producing the
+         * eighty-eight thousand before them and throwing them away. Keyset
+         * paging asks `where id > last` instead, so every page costs what the
+         * first one did.
+         *
+         * Worth having and worth keeping in proportion: measured at ninety
+         * thousand rows it is 682 ms against 554 ms, while the read itself is
+         * 106 ms and the rest is this closure — three keys and a Carbon parse
+         * per row. The paging is not what makes this phase expensive.
+         */
         DB::table('servers')
             ->where('game_id', $game->id)
             ->select(['id', 'host', 'port', 'ip_address', 'game_port', 'next_query_at', 'deleted_at'])
-            ->orderBy('id')
-            ->chunk(2000, function (Collection $rows) use (&$keyed) {
+            ->chunkById(2000, function (Collection $rows) use (&$keyed) {
                 foreach ($rows as $row) {
                     $entry = [
                         (int) $row->id,

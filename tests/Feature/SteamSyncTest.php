@@ -9,6 +9,7 @@ use App\Models\ServerStat;
 use App\Services\Discovery\DiscoveredServer;
 use App\Services\Discovery\SteamCatalogSync;
 use App\Services\Discovery\SteamServerSweep;
+use App\Services\Discovery\SteamServerSweepParallel;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -565,6 +566,64 @@ class SteamSyncTest extends TestCase
 
         $this->assertSame($name, $server->motd);
         $this->assertSame(8, $server->players_online);
+    }
+
+    /**
+     * The parallel sweep writes what the sequential one writes.
+     *
+     * It exists because the wait on Steam was 320 s of a 439 s sweep, and it is
+     * only worth having if the catalog cannot tell which one ran — so the
+     * assertions here are deliberately the same ones the sequential path makes.
+     */
+    public function test_the_parallel_sweep_writes_the_same_catalog(): void
+    {
+        config(['monitoring.steam_create_new_servers' => false]);
+
+        $mine = Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '1.1.1.1',
+            'port' => 27015,
+            'players_online' => 0,
+        ]);
+
+        $this->fakeSteam(['' => [
+            $this->row('1.1.1.1', 27015, players: 44),
+            $this->row('5.5.5.5', 27015, players: 12),
+        ]]);
+
+        $report = app(SteamCatalogSync::class)->run($this->game(), app(SteamServerSweepParallel::class));
+
+        $this->assertSame(1, $report->updated);
+        $this->assertSame(1, $report->skipped);
+        $this->assertSame(0, $report->created);
+        $this->assertSame(44, $mine->refresh()->players_online);
+        $this->assertGreaterThan(0, $report->steamMs);
+    }
+
+    /**
+     * A level is asked at once, and only where the level above was full — so a
+     * game that fits in one response still costs one request.
+     */
+    public function test_the_parallel_sweep_expands_only_saturated_buckets(): void
+    {
+        $seen = [];
+
+        Http::fake(function ($request) use (&$seen) {
+            $filter = urldecode((string) ($request->data()['filter'] ?? ''));
+            $seen[] = $filter;
+
+            return Http::response(['response' => [
+                'servers' => $filter === '\appid\730' ? $this->fullResponse() : [],
+            ]]);
+        });
+
+        $report = app(SteamCatalogSync::class)->run($this->game(), app(SteamServerSweepParallel::class));
+
+        // The root plus its nine regions, and nothing below them.
+        $this->assertSame(10, $report->requests);
+        $this->assertSame(10, count($seen));
+        $this->assertContains('\appid\730\region\0', $seen);
+        $this->assertNotContains('\appid\730\region\0\empty\1', $seen);
     }
 
     /** The wall clock, split into the phases that have different fixes. */
