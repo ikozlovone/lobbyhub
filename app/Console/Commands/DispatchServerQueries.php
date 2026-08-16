@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\QueryServer;
+use App\Models\Game;
 use App\Models\Server;
 use App\Services\Monitoring\HostSpread;
 use App\Services\Monitoring\ServerQueryManager;
@@ -16,7 +17,9 @@ class DispatchServerQueries extends Command
 {
     protected $signature = 'servers:query
         {--limit= : How many servers to dispatch (default: monitoring.batch_size)}
+        {--game= : Only this game, by slug}
         {--server= : Query one server by slug, ignoring its schedule}
+        {--ignore-schedule : Take servers that are not due, and that the Steam sweep has covered}
         {--sync : Run the queries inline instead of queueing them}';
 
     protected $description = 'Dispatch monitoring queries for servers that are due';
@@ -25,6 +28,14 @@ class DispatchServerQueries extends Command
     {
         $single = (bool) $this->option('server');
         $limit = (int) ($this->option('limit') ?: config('monitoring.batch_size'));
+
+        // Said rather than silently polling the whole catalog, which is what a
+        // filter that quietly matches nothing would otherwise do.
+        if (($slug = $this->option('game')) && ! Game::query()->where('slug', $slug)->exists()) {
+            $this->error("No game with slug [{$slug}].");
+
+            return self::FAILURE;
+        }
 
         // A named server is somebody debugging one address, and waiting on the
         // backlog is not what they asked for.
@@ -162,6 +173,28 @@ class DispatchServerQueries extends Command
      */
     private function due(): Builder
     {
+        $query = Server::query()->active();
+
+        if ($slug = $this->option('game')) {
+            $query->whereHas('game', fn (Builder $game) => $game->where('slug', $slug));
+        }
+
+        /*
+         * Both gates dropped together, because either alone leaves nothing.
+         *
+         * A game that has just been swept has fresh `steam_seen_at` on every
+         * row and `next_query_at` pushed out by its tier, so the ordinary query
+         * returns none of it — which is correct on the timetable and useless
+         * when somebody is asking "is this game actually alive". Under this flag
+         * the packets go out regardless, and that is the whole point of asking.
+         *
+         * The lease still applies, so a run started this way does not leave the
+         * servers due for the next scheduled pass as well.
+         */
+        if ($this->option('ignore-schedule')) {
+            return $query;
+        }
+
         /*
          * Two windows, matched to the two passes.
          *
@@ -178,10 +211,9 @@ class DispatchServerQueries extends Command
         $populated = now()->subSeconds((int) config('monitoring.steam_trust_populated'));
         $quiet = now()->subSeconds((int) config('monitoring.steam_trust_quiet'));
 
-        return Server::query()
-            ->active()
+        return $query
             ->where('next_query_at', '<=', now())
-            ->where(fn (Builder $query) => $query
+            ->where(fn (Builder $gate) => $gate
                 ->whereNull('steam_seen_at')
                 ->orWhere(fn (Builder $busy) => $busy
                     ->where('players_online', '>', 0)

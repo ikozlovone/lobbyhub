@@ -363,6 +363,57 @@ class QueryServerTest extends TestCase
         Queue::assertPushed(QueryServer::class, 2);
     }
 
+    /** One game's servers, when the question is about that game. */
+    public function test_it_can_be_narrowed_to_one_game(): void
+    {
+        $mine = $this->minecraftServer(['next_query_at' => now()->subMinute()]);
+
+        $rust = Game::where('slug', 'rust')->firstOrFail();
+        Server::factory()->create(['game_id' => $rust->id, 'next_query_at' => now()->subMinute()]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query', ['--game' => 'minecraft'])->assertSuccessful();
+
+        Queue::assertPushed(QueryServer::class, 1);
+        Queue::assertPushed(fn (QueryServer $job) => $job->server->is($mine));
+    }
+
+    /** A slug nobody has is said out loud rather than polling everything. */
+    public function test_an_unknown_game_is_refused(): void
+    {
+        $this->minecraftServer(['next_query_at' => now()->subMinute()]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query', ['--game' => 'not-a-game'])->assertFailed();
+
+        Queue::assertNothingPushed();
+    }
+
+    /**
+     * A game the sweep has just covered answers "nothing due" to the ordinary
+     * question — fresh `steam_seen_at`, `next_query_at` pushed out by its tier —
+     * which is right on the timetable and useless when somebody is asking
+     * whether the game is actually alive.
+     */
+    public function test_ignore_schedule_takes_servers_the_sweep_has_covered(): void
+    {
+        $this->minecraftServer([
+            'next_query_at' => now()->addHour(),
+            'steam_seen_at' => now(),
+            'players_online' => 40,
+        ]);
+
+        Queue::fake();
+
+        $this->artisan('servers:query')->expectsOutputToContain('No servers due.')->assertSuccessful();
+        Queue::assertNothingPushed();
+
+        $this->artisan('servers:query', ['--ignore-schedule' => true])->assertSuccessful();
+        Queue::assertPushed(QueryServer::class, 1);
+    }
+
     /**
      * The bug this guards against filled a production queue with 160 000 jobs
      * for 23 000 servers: seven copies of each, because a job waiting its turn
