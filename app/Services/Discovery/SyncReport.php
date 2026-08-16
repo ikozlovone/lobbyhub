@@ -22,6 +22,15 @@ final readonly class SyncReport
          */
         public int $skipped = 0,
         /**
+         * Steam rows that resolved to a catalog row already written this run.
+         *
+         * Not a failure, but not nothing either: it counts servers whose stored
+         * `game_port` disagrees with their `port`, which is how one row comes to
+         * answer to two addresses that Steam lists separately. Anything much
+         * above zero means the catalog is matching more loosely than it should.
+         */
+        public int $duplicated = 0,
+        /**
          * Where the wall clock went, in milliseconds.
          *
          * Four numbers rather than one, because "the sweep took four seconds"

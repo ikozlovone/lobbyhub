@@ -133,6 +133,17 @@ class SyncSteamServers extends Command
                 $this->warn("    {$report->truncated} bucket(s) still full after every filter — some servers were not reached");
             }
 
+            /*
+             * Not a gap but a mismatch: rows whose stored game port disagrees
+             * with their port, so one catalog row answers to two addresses that
+             * Steam lists as two servers. Harmless now that the second one is
+             * dropped, and worth seeing, because the number is how loosely the
+             * catalog is matching.
+             */
+            if ($report->duplicated > 0) {
+                $this->warn("    {$report->duplicated} row(s) matched a server already written — check their game_port");
+            }
+
             // A different gap with a different fix: the first is Steam refusing
             // to finish, this is the network refusing to carry it.
             if ($report->unreachable > 0) {

@@ -72,6 +72,16 @@ class SteamCatalogSync
     /** Milliseconds, by phase. @var array<string, float> */
     private array $spent = [];
 
+    /**
+     * Catalog rows already written this run, so none is written twice.
+     *
+     * Ids rather than addresses: the same row answers to three addresses, and
+     * it is the row that must be unique here, not the way it was reached.
+     *
+     * @var array<int, true>
+     */
+    private array $touched = [];
+
     public function __construct(
         private readonly PollingSchedule $schedule,
         private readonly GeoResolver $geo,
@@ -84,7 +94,8 @@ class SteamCatalogSync
         $this->game = $game;
         $this->now = now();
         $this->updates = $this->inserts = $this->samples = [];
-        $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0, 'skipped' => 0];
+        $this->touched = [];
+        $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0, 'skipped' => 0, 'duplicated' => 0];
         $this->spent = ['db' => 0.0, 'existing' => 0.0];
 
         $loading = hrtime(true);
@@ -129,6 +140,7 @@ class SteamCatalogSync
             truncated: $result->truncated,
             unreachable: $result->unreachable,
             skipped: $this->counts['skipped'] + $result->skipped,
+            duplicated: $this->counts['duplicated'],
             totalMs: $totalMs,
             steamMs: $result->httpMs,
             rowsMs: $rowsMs,
@@ -165,6 +177,37 @@ class SteamCatalogSync
             $this->counts['created']++;
         } else {
             [$id, $nextQueryAt] = $existing;
+
+            /*
+             * One catalog row, written once, however many Steam rows found it.
+             *
+             * A server is keyed under three addresses — `host:port`,
+             * `ip_address:port` and `ip_address:game_port` — so that an owner
+             * who submitted a domain still matches what Steam reports. When
+             * `game_port` disagrees with `port`, two of those keys are two
+             * different addresses, and a machine hosting a server on each of
+             * them hands us two distinct rows that resolve to the same id.
+             *
+             * Postgres refuses the second one outright: the history upsert
+             * conflicts on (server_id, recorded_at), `recorded_at` is this run's
+             * single timestamp, and "ON CONFLICT DO UPDATE command cannot affect
+             * row a second time" is what a batch carrying both looks like. Seen
+             * on Rust, which is where query and game ports differ most often.
+             *
+             * The update had no error to give and was worse for it: two rows
+             * with the same id in one statement, and Postgres free to apply
+             * whichever it liked.
+             *
+             * First met wins, which is the rule the sweep already dedupes by.
+             */
+            if (isset($this->touched[$id])) {
+                $this->counts['duplicated']++;
+
+                return;
+            }
+
+            $this->touched[$id] = true;
+
             $due = $nextQueryAt === null || $nextQueryAt <= $this->now->getTimestamp();
 
             $this->updates[] = $this->snapshot($found, $due, $id, $nextQueryAt);

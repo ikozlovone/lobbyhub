@@ -626,6 +626,50 @@ class SteamSyncTest extends TestCase
         $this->assertNotContains('\appid\730\region\0\empty\1', $seen);
     }
 
+    /**
+     * Two Steam rows, one catalog row, one write.
+     *
+     * A server is keyed under `host:port`, `ip_address:port` and
+     * `ip_address:game_port`; when the stored game port differs from the port,
+     * the last of those is an address of its own, and a machine running a
+     * second server on it gives us two rows that resolve to the same id. On
+     * Postgres the history upsert then refuses the batch outright — "ON
+     * CONFLICT DO UPDATE command cannot affect row a second time", because
+     * `recorded_at` is one timestamp for the whole run. Seen on Rust.
+     */
+    public function test_two_rows_resolving_to_one_server_are_written_once(): void
+    {
+        config(['monitoring.steam_create_new_servers' => false]);
+
+        $server = Server::factory()->create([
+            'game_id' => $this->game()->id,
+            'host' => '1.1.1.1',
+            'port' => 27015,
+            'ip_address' => '1.1.1.1',
+            // Disagrees with `port`, which is what opens the second address.
+            'game_port' => 27016,
+            'next_query_at' => now()->subHour(),
+            'players_online' => 0,
+        ]);
+
+        $this->fakeSteam(['' => [
+            $this->row('1.1.1.1', 27015, players: 11),
+            // A different server on the same host, whose game port is the one
+            // the row above already answers to.
+            array_merge($this->row('1.1.1.1', 27017, players: 22), ['gameport' => 27016]),
+        ]]);
+
+        $report = $this->sync();
+
+        $this->assertSame(1, $report->updated);
+        $this->assertSame(1, $report->sampled);
+        $this->assertSame(1, $report->duplicated);
+        // One history row, not two colliding on the same second.
+        $this->assertSame(1, ServerStat::where('server_id', $server->id)->count());
+        // First met wins, which is the rule the sweep dedupes by.
+        $this->assertSame(11, $server->refresh()->players_online);
+    }
+
     /** The wall clock, split into the phases that have different fixes. */
     public function test_it_reports_where_the_time_went(): void
     {
