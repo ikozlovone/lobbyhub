@@ -11,6 +11,7 @@ import { ServerInformation } from '@/components/server-information'
 import { ShareBlock } from '@/components/share-block'
 import { VotePanel } from '@/components/vote-panel'
 import { getHistory, getServer } from '@/lib/data'
+import { outboundHref } from '@/lib/outbound'
 import { canonical, notFoundMetadata } from '@/lib/seo'
 
 type Props = { params: Promise<{ server: string }> }
@@ -203,8 +204,8 @@ export default async function ServerPage({ params }: Props) {
                         .map((href) => (
                           <li key={href}>
                             <a
-                              href={href}
-                              rel="nofollow ugc noopener"
+                              href={outboundHref(href)}
+                              rel="nofollow ugc noopener noreferrer"
                               target="_blank"
                               className="cursor-pointer break-all text-muted transition-colors hover:text-brand"
                             >

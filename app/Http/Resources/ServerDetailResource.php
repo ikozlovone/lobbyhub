@@ -47,7 +47,18 @@ class ServerDetailResource extends ServerResource
             'language' => app(ServerLanguage::class)->for($this->resource),
             'info' => $info->for($this->resource),
             'standing' => app(ServerRanking::class)->standing($this->resource),
-            'media' => $info->media($this->resource),
+            /*
+             * Empty on purpose. Every URL the media block used to render came
+             * from A2S rules — banners, logos and map images the server itself
+             * publishes — and nothing about the address they point at is
+             * verified. A Rust server can list any headerimage it wants, so
+             * every visitor's browser fetches whatever URL some anonymous
+             * owner typed, and Google reads our pages as hotlinking whatever
+             * that URL leads to. Kept as an empty object so the frontend
+             * shape does not change; a proxy path (see /go for links) is the
+             * followup for images.
+             */
+            'media' => (object) [],
             'details_synced_at' => $this->details_synced_at?->toIso8601String(),
             'latency_ms' => $this->latestLatency(),
             'game' => new GameResource($this->whenLoaded('game')),
@@ -60,7 +71,16 @@ class ServerDetailResource extends ServerResource
                 'name' => $this->version->name,
             ] : null),
             'links' => [
-                'website' => $this->website_url ?? $info->website($this->resource),
+                /*
+                 * Owner-typed only, no A2S fallback. The `url` rule a Source
+                 * server publishes is under nobody's editorial control and
+                 * Search Console had flagged pages linking to whatever Rust
+                 * owners were putting there. Owner URLs go through /go on the
+                 * frontend so the anchor is on our own origin — search
+                 * engines follow that, robots.txt turns them away, and the
+                 * destination is never in an href a crawler can index.
+                 */
+                'website' => $this->website_url,
                 'discord' => $this->discord_url,
             ],
             'claimed' => $this->isClaimed(),

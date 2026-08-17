@@ -24,8 +24,15 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: {
       userAgent: '*',
       allow: '/',
-      // Sorted and paginated variants are the same listings in another order.
-      disallow: ['/*?sort=', '/*?page='],
+      disallow: [
+        // Sorted and paginated variants are the same listings in another order.
+        '/*?sort=',
+        '/*?page=',
+        // The outbound bouncer for owner-typed URLs — see app/go/route.ts.
+        // Blocked at the source so a crawler never follows the redirect and
+        // never associates our host with the destinations it lands on.
+        '/go',
+      ],
     },
     sitemap: [
       `${SITE}/sitemap.xml`,
