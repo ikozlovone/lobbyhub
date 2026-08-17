@@ -48,17 +48,15 @@ class ServerDetailResource extends ServerResource
             'info' => $info->for($this->resource),
             'standing' => app(ServerRanking::class)->standing($this->resource),
             /*
-             * Empty on purpose. Every URL the media block used to render came
-             * from A2S rules — banners, logos and map images the server itself
-             * publishes — and nothing about the address they point at is
-             * verified. A Rust server can list any headerimage it wants, so
-             * every visitor's browser fetches whatever URL some anonymous
-             * owner typed, and Google reads our pages as hotlinking whatever
-             * that URL leads to. Kept as an empty object so the frontend
-             * shape does not change; a proxy path (see /go for links) is the
-             * followup for images.
+             * The URLs here come from A2S rules — banners, logos and map
+             * images a server publishes about itself — and are shown through
+             * the /img bouncer on the frontend rather than as direct
+             * hotlinks. The upstream is fetched by our origin, validated as
+             * an image, and served back under a noindex header, which keeps
+             * visitor IPs and page-image association out of some anonymous
+             * owner's URL of the day. See web/app/img/route.ts.
              */
-            'media' => (object) [],
+            'media' => $info->media($this->resource),
             'details_synced_at' => $this->details_synced_at?->toIso8601String(),
             'latency_ms' => $this->latestLatency(),
             'game' => new GameResource($this->whenLoaded('game')),

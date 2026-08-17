@@ -94,8 +94,12 @@ class ServerInfo
     }
 
     /**
-     * Only http(s) links are surfaced. These strings come from server owners, so
-     * they are untrusted input that ends up in an href.
+     * Only http(s) links on a real hostname are surfaced. These strings come
+     * from server owners, so they are untrusted input that ends up either in
+     * an href or as an upstream fetched by our image proxy — and a raw IP is
+     * how an owner would point either at 127.0.0.1 or a private subnet the
+     * proxy has no business talking to. Legitimate images live on domains
+     * (CDNs, imgur, Steam) so blocking IP hosts costs nothing real.
      */
     private function url(array $rules, string $key): ?string
     {
@@ -105,6 +109,16 @@ class ServerInfo
             return null;
         }
 
-        return str_starts_with($value, 'http://') || str_starts_with($value, 'https://') ? $value : null;
+        if (! str_starts_with($value, 'http://') && ! str_starts_with($value, 'https://')) {
+            return null;
+        }
+
+        $host = parse_url($value, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '' || filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return null;
+        }
+
+        return $value;
     }
 }

@@ -11,7 +11,7 @@ import { ServerInformation } from '@/components/server-information'
 import { ShareBlock } from '@/components/share-block'
 import { VotePanel } from '@/components/vote-panel'
 import { getHistory, getServer } from '@/lib/data'
-import { outboundHref } from '@/lib/outbound'
+import { outboundHref, proxyImage } from '@/lib/outbound'
 import { canonical, notFoundMetadata } from '@/lib/seo'
 
 type Props = { params: Promise<{ server: string }> }
@@ -61,7 +61,7 @@ export default async function ServerPage({ params }: Props) {
           <div className="flex items-start gap-3">
             {server.media.logo ? (
               <img
-                src={server.media.logo}
+                src={proxyImage(server.media.logo)}
                 alt=""
                 width={48}
                 height={48}
@@ -140,7 +140,7 @@ export default async function ServerPage({ params }: Props) {
             {server.media.banner && (
               <div className="overflow-hidden rounded-lg border border-line">
                 <img
-                  src={server.media.banner}
+                  src={proxyImage(server.media.banner)}
                   alt=""
                   loading="lazy"
                   className="max-h-72 w-full object-cover"
@@ -169,7 +169,7 @@ export default async function ServerPage({ params }: Props) {
                     <h2 className="font-display border-b border-line px-4 py-3 text-sm font-bold tracking-wide uppercase">
                       Map
                     </h2>
-                    <img src={server.media.map_image} alt="Server map" loading="lazy" className="w-full" />
+                    <img src={proxyImage(server.media.map_image)} alt="Server map" loading="lazy" className="w-full" />
                   </section>
                 )}
 

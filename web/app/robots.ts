@@ -32,6 +32,10 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         // Blocked at the source so a crawler never follows the redirect and
         // never associates our host with the destinations it lands on.
         '/go',
+        // The image proxy for server-published banners and maps — see
+        // app/img/route.ts. Same reason: Google Image Search would otherwise
+        // catalog these under our domain despite our not choosing them.
+        '/img',
       ],
     },
     sitemap: [
