@@ -20,7 +20,6 @@ import { NextRequest, NextResponse } from 'next/server'
  * capped at MAX_BYTES, and the upstream fetch has a hard timeout so a
  * hostile server that answers slowly cannot tie up a route worker.
  */
-export const dynamic = 'force-dynamic'
 
 const BASE_HEADERS = {
   'X-Robots-Tag': 'noindex, nofollow',

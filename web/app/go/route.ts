@@ -15,7 +15,6 @@ import { NextRequest, NextResponse } from 'next/server'
  * the current origin. An invalid `u` gets a 400, deliberately, so a broken
  * link is not silently swallowed as a homepage bounce.
  */
-export const dynamic = 'force-dynamic'
 
 const HEADERS = {
   'X-Robots-Tag': 'noindex, nofollow',
