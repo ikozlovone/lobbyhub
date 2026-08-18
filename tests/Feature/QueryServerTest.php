@@ -474,7 +474,7 @@ class QueryServerTest extends TestCase
 
         // Somebody else reaches the server while this job waits its turn.
         $this->travel(30)->seconds();
-        $server->forceFill(['players_online' => 99, 'last_queried_at' => now()])->save();
+        $server->state()->update(['players_online' => 99, 'last_queried_at' => now()]);
 
         $this->travel(30)->seconds();
         $this->runQueuedJob($stale, new QueryResult(playersOnline: 3, playersMax: 20));
@@ -516,7 +516,7 @@ class QueryServerTest extends TestCase
         $job->queuedAt = null;
 
         // Something reached the server since — which would normally skip it.
-        $server->forceFill(['last_queried_at' => now()])->save();
+        $server->state()->update(['last_queried_at' => now()]);
 
         $this->runQueuedJob($job, new QueryResult(playersOnline: 12, playersMax: 20));
 

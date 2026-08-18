@@ -205,7 +205,7 @@ class VotingTest extends TestCase
         Vote::create(['server_id' => $this->server->id, 'ip_hash' => str_repeat('b', 64), 'vote_day' => now()->toDateString()]);
 
         // Isolate the vote contribution from the factory's uptime.
-        $this->server->update(['uptime_percent' => null]);
+        $this->server->state()->update(['uptime_percent' => null]);
 
         app(ServerRanking::class)->recompute();
         $this->server->refresh();

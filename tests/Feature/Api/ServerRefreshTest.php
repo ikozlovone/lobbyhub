@@ -60,7 +60,7 @@ class ServerRefreshTest extends TestCase
 
     public function test_a_server_checked_moments_ago_is_left_alone(): void
     {
-        $this->server->forceFill(['last_queried_at' => now()->subSeconds(5)])->save();
+        $this->server->state()->update(['last_queried_at' => now()->subSeconds(5)]);
         $this->fakeDriver(new QueryResult(playersOnline: 999, playersMax: 999));
 
         $response = $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
@@ -155,7 +155,7 @@ class ServerRefreshTest extends TestCase
         ]);
         Http::fake();
 
-        $this->server->forceFill(['last_queried_at' => now()->subSeconds(5)])->save();
+        $this->server->state()->update(['last_queried_at' => now()->subSeconds(5)]);
         $this->fakeDriver(new QueryResult(playersOnline: 999, playersMax: 999));
 
         $this->postJson('/api/servers/refresh-me/refresh')->assertOk();

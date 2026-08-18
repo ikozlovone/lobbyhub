@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
+use App\Models\ServerState;
 use App\Services\Catalog\CatalogCounters;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
@@ -118,7 +119,7 @@ class ListingCacheTest extends TestCase
 
         // Both changed behind the endpoint's back, and neither moves the count
         // that would drop the facet cache.
-        Server::query()->update(['map' => 'after']);
+        ServerState::query()->update(['map' => 'after']);
         Game::where('slug', 'rust')->update(['players_online' => 4242]);
 
         $second = $this->getJson('/api/games/rust')->assertOk();
@@ -135,7 +136,7 @@ class ListingCacheTest extends TestCase
 
         $this->getJson('/api/games/rust')->assertOk();
 
-        Server::query()->update(['map' => 'after']);
+        ServerState::query()->update(['map' => 'after']);
         $this->server('rust', ['map' => 'after']);
         app(CatalogCounters::class)->refresh();
 
@@ -152,7 +153,9 @@ class ListingCacheTest extends TestCase
 
         $this->getJson('/api/games/minecraft/servers?q=alpha')->assertOk();
 
-        Server::where('slug', 'one')->update(['map' => 'after']);
+        ServerState::query()
+            ->whereIn('server_id', Server::where('slug', 'one')->pluck('id'))
+            ->update(['map' => 'after']);
 
         $this->assertSame(
             'after',

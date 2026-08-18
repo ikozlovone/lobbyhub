@@ -93,7 +93,7 @@ class CatalogCountersTest extends TestCase
         $this->artisan('counters:refresh')->assertSuccessful();
         Http::fake();
 
-        $server->forceFill(['players_online' => 900])->save();
+        $server->state()->update(['players_online' => 900]);
 
         $this->artisan('counters:refresh')->assertSuccessful();
 

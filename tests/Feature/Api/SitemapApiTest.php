@@ -117,7 +117,7 @@ class SitemapApiTest extends TestCase
         $this->assertSame($server->details_synced_at->toIso8601String(), $before);
 
         // A poll lands: every timestamp the monitor owns moves.
-        $server->forceFill(['last_queried_at' => now(), 'players_online' => 80])->save();
+        $server->state()->update(['last_queried_at' => now(), 'players_online' => 80]);
 
         $this->assertSame($before, $this->getJson('/api/sitemap/servers')->json('data.0.lastmod'));
     }
@@ -130,7 +130,7 @@ class SitemapApiTest extends TestCase
         ]);
 
         $wipe = now()->subHour()->startOfSecond();
-        $server->forceFill(['wiped_at' => $wipe])->save();
+        $server->state()->update(['wiped_at' => $wipe]);
 
         $this->assertSame(
             $wipe->toIso8601String(),

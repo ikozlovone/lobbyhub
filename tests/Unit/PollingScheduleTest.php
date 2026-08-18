@@ -2,7 +2,6 @@
 
 namespace Tests\Unit;
 
-use App\Models\Server;
 use App\Services\Monitoring\PollingSchedule;
 use Tests\TestCase;
 
@@ -23,13 +22,13 @@ class PollingScheduleTest extends TestCase
      */
     public function test_the_interval_follows_how_busy_the_server_is(): void
     {
-        $this->assertSame(300, $this->intervalFor(500));
-        $this->assertSame(300, $this->intervalFor(100)); // boundary, inclusive
-        $this->assertSame(600, $this->intervalFor(99));
-        $this->assertSame(600, $this->intervalFor(10));
-        $this->assertSame(1800, $this->intervalFor(9));
-        $this->assertSame(1800, $this->intervalFor(1));
-        $this->assertSame(3600, $this->intervalFor(0));
+        $this->assertSame(300, $this->schedule->intervalFor(500, false));
+        $this->assertSame(300, $this->schedule->intervalFor(100, false)); // boundary, inclusive
+        $this->assertSame(600, $this->schedule->intervalFor(99, false));
+        $this->assertSame(600, $this->schedule->intervalFor(10, false));
+        $this->assertSame(1800, $this->schedule->intervalFor(9, false));
+        $this->assertSame(1800, $this->schedule->intervalFor(1, false));
+        $this->assertSame(3600, $this->schedule->intervalFor(0, false));
     }
 
     /**
@@ -47,24 +46,25 @@ class PollingScheduleTest extends TestCase
     public function test_an_empty_server_is_polled_far_less_often_than_a_busy_one(): void
     {
         // The spread is the whole point of tiering — it is what cuts the load.
-        $this->assertSame(12, intdiv($this->intervalFor(0), $this->intervalFor(500)));
+        $this->assertSame(
+            12,
+            intdiv($this->schedule->intervalFor(0, false), $this->schedule->intervalFor(500, false)),
+        );
     }
 
     public function test_a_promoted_server_stays_hot_even_when_empty(): void
     {
-        $server = Server::make(['players_online' => 0, 'promoted_until' => now()->addWeek()]);
-
         $this->assertSame(
             (int) config('monitoring.promoted_interval'),
-            $this->schedule->intervalFor($server),
+            $this->schedule->intervalFor(0, isPromoted: true),
         );
     }
 
     public function test_an_expired_promotion_gets_no_special_treatment(): void
     {
-        $server = Server::make(['players_online' => 0, 'promoted_until' => now()->subDay()]);
-
-        $this->assertSame(3600, $this->schedule->intervalFor($server));
+        // Promotion is decided by the caller — this method only knows the
+        // boolean it is given.
+        $this->assertSame(3600, $this->schedule->intervalFor(0, isPromoted: false));
     }
 
     /**
@@ -74,7 +74,7 @@ class PollingScheduleTest extends TestCase
      */
     public function test_the_busiest_tier_matches_the_backoff_base(): void
     {
-        $this->assertSame((int) config('monitoring.interval'), $this->intervalFor(500));
+        $this->assertSame((int) config('monitoring.interval'), $this->schedule->intervalFor(500, false));
     }
 
     public function test_backoff_doubles_with_every_failure(): void
@@ -108,12 +108,7 @@ class PollingScheduleTest extends TestCase
 
     public function test_expected_hourly_queries_matches_the_tier(): void
     {
-        $this->assertSame(12.0, $this->schedule->expectedHourlyQueries(Server::make(['players_online' => 500])));
-        $this->assertSame(1.0, $this->schedule->expectedHourlyQueries(Server::make(['players_online' => 0])));
-    }
-
-    private function intervalFor(int $players): int
-    {
-        return $this->schedule->intervalFor(Server::make(['players_online' => $players]));
+        $this->assertSame(12.0, $this->schedule->expectedHourlyQueries(500, false));
+        $this->assertSame(1.0, $this->schedule->expectedHourlyQueries(0, false));
     }
 }
