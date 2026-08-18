@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Game;
+use App\Observers\GameObserver;
 use App\Services\Geo\GeoResolver;
 use App\Services\Geo\MaxMindGeoResolver;
 use App\Services\Geo\NullGeoResolver;
@@ -36,6 +38,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // A new game gets a `server_states` partition the moment it is
+        // created. See the observer for why lazy creation would be worse.
+        Game::observe(GameObserver::class);
+
         /*
          * Every absolute URL this app hands out is built from APP_URL, not from
          * the address the request arrived on.
