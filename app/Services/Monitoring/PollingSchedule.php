@@ -12,15 +12,23 @@ use App\Models\Server;
  */
 class PollingSchedule
 {
-    /** Seconds until the next query of a server that just answered. */
-    public function intervalFor(Server $server): int
+    /**
+     * Seconds until the next query of a server that just answered.
+     *
+     * Takes the two inputs directly — player count and whether the server is
+     * a promoted one — rather than a Server or ServerState model. Player
+     * count lives in `server_states` now, and the sole caller
+     * (QueryServer::recordOnline) has the just-measured value in hand;
+     * loading state to read it back would be a needless round trip.
+     */
+    public function intervalFor(int $playersOnline, bool $isPromoted): int
     {
-        if ($server->isPromoted()) {
+        if ($isPromoted) {
             return (int) config('monitoring.promoted_interval');
         }
 
         foreach (config('monitoring.tiers', []) as $tier) {
-            if ($server->players_online >= $tier['min_players']) {
+            if ($playersOnline >= $tier['min_players']) {
                 return (int) $tier['interval'];
             }
         }
@@ -40,10 +48,10 @@ class PollingSchedule
         return (int) min($interval * 2 ** min($failures, 12), (int) config('monitoring.max_interval'));
     }
 
-    /** Queries per hour this server is expected to receive — used by monitoring:status. */
-    public function expectedHourlyQueries(Server $server): float
+    /** Queries per hour a server on this tier is expected to receive. */
+    public function expectedHourlyQueries(int $playersOnline, bool $isPromoted): float
     {
-        return 3600 / max(1, $this->intervalFor($server));
+        return 3600 / max(1, $this->intervalFor($playersOnline, $isPromoted));
     }
 
     /*
@@ -65,7 +73,7 @@ class PollingSchedule
 
         $cases = collect(config('monitoring.tiers', []))
             ->map(fn (array $tier) => sprintf(
-                'when players_online >= %d then 3600.0 / %d',
+                'when server_states.players_online >= %d then 3600.0 / %d',
                 (int) $tier['min_players'],
                 max(1, (int) $tier['interval']),
             ))
@@ -73,12 +81,16 @@ class PollingSchedule
             // placeholder is the first in the finished string. sqlite has no
             // now() and the admin page 500'd on it under test.
             ->prepend(sprintf(
-                'when promoted_until is not null and promoted_until > ? then 3600.0 / %d',
+                'when servers.promoted_until is not null and servers.promoted_until > ? then 3600.0 / %d',
                 $promoted,
             ))
             ->implode(' ');
 
         return (float) Server::query()->active()
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
             ->selectRaw("coalesce(sum(case {$cases} else 3600.0 / {$default} end), 0) as expected", [now()])
             ->value('expected');
     }

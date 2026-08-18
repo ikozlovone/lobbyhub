@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-use App\Enums\ServerStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -23,18 +23,10 @@ class Server extends Model
     protected function casts(): array
     {
         return [
-            'status' => ServerStatus::class,
-            'uptime_percent' => 'decimal:2',
             'rating_avg' => 'decimal:2',
             'is_active' => 'boolean',
             'details' => 'array',
             'details_synced_at' => 'datetime',
-            'wiped_at' => 'datetime',
-            'last_queried_at' => 'datetime',
-            'last_online_at' => 'datetime',
-            'last_offline_at' => 'datetime',
-            'vac_enabled' => 'boolean',
-            'next_query_at' => 'datetime',
             'claimed_at' => 'datetime',
             'promoted_until' => 'datetime',
         ];
@@ -111,27 +103,122 @@ class Server extends Model
         return $this->hasMany(ServerDailyStat::class);
     }
 
-    /** Qualified: these scopes are used inside joins, where `is_active` is ambiguous. */
-    public function scopeActive(Builder $query): void
+    /**
+     * The hot half of the row — status, players, MOTD, schedule, everything
+     * the monitor rewrites. Lives in `server_states`, partitioned by game.
+     *
+     * Lazy loading this crosses every partition because the query is by
+     * `server_id` alone. That is tolerable for a single-server view and
+     * intolerable for listings; listings must JOIN `server_states` on both
+     * `server_id` AND `game_id`, and pass the same `where game_id` to any
+     * eager load, so Postgres can prune to one partition.
+     */
+    public function state(): HasOne
     {
-        $query->where($query->qualifyColumn('is_active'), true);
+        return $this->hasOne(ServerState::class, 'server_id', 'id');
     }
 
-    public function scopeOnline(Builder $query): void
+    /** Load `state` with the `game_id` predicate that lets Postgres prune. */
+    public function loadState(): static
     {
-        $query->where($query->qualifyColumn('status'), ServerStatus::Online);
+        return $this->load(['state' => fn ($q) => $q->where('game_id', $this->game_id)]);
     }
 
     /**
-     * Servers we have reached ourselves at least once.
+     * Refresh both the row and its state, so a test that saved and re-reads
+     * this model sees whatever the writer just persisted, on both sides of
+     * the split.
      *
-     * Discovery imports candidates from second-hand sources with status
-     * `unknown`; they enter the catalog only after our own monitor confirms
-     * they exist.
+     * The base `refresh()` reloads attributes from the row's own table only.
+     * Every hot field the monitor writes now lives on `server_states`, and a
+     * test that expects `$server->refresh()->players_online` to be current
+     * would otherwise silently read stale data.
      */
-    public function scopeVerified(Builder $query): void
+    public function refresh()
     {
-        $query->where($query->qualifyColumn('status'), '!=', ServerStatus::Unknown);
+        $result = parent::refresh();
+
+        if ($this->exists) {
+            $this->loadState();
+        }
+
+        return $result;
+    }
+
+    /**
+     * Magic accessors for the hot fields that used to live on this table.
+     *
+     * These are a compatibility shim: prod code eager-loads state and reads
+     * `$server->state->players_online` explicitly. The tests, of which there
+     * are many, are all written against the pre-split shape — rewriting
+     * every assertion would be pure toil. So the model routes the old names
+     * through the state relation, and the tests read what they used to.
+     *
+     * A missing state relation triggers a lazy load — one query, no
+     * partition pruning. Under a test that is a couple of milliseconds; in
+     * prod every code path loads state ahead of time, so this branch is not
+     * meant to be taken. Deleted with the columns in phase 6.
+     */
+    public function __get($key)
+    {
+        // Only redirect saved models: an unsaved `Server::make(['players_online'
+        // => 5])` should keep answering 5, which is what tests around the
+        // probe/factory paths still expect. Once the row exists, the state
+        // relation is the truth.
+        if (array_key_exists($key, self::STATE_ATTRIBUTES) && $this->exists) {
+            $state = $this->stateForAccessor();
+
+            return $state?->{$key} ?? self::STATE_ATTRIBUTES[$key];
+        }
+
+        return parent::__get($key);
+    }
+
+    /** @var array<string, mixed> field name → default when state is missing */
+    private const STATE_ATTRIBUTES = [
+        'status' => null,
+        'players_online' => 0,
+        'players_max' => 0,
+        'players_queued' => 0,
+        'bots' => null,
+        'vac_enabled' => null,
+        'map' => null,
+        'reported_version' => null,
+        'motd' => null,
+        'wiped_at' => null,
+        'steam_id' => null,
+        'game_port' => null,
+        'last_queried_at' => null,
+        'last_online_at' => null,
+        'last_offline_at' => null,
+        'next_query_at' => null,
+        'failed_queries_count' => 0,
+        'steam_seen_at' => null,
+        'uptime_percent' => null,
+    ];
+
+    private function stateForAccessor(): ?ServerState
+    {
+        if ($this->relationLoaded('state')) {
+            return $this->state;
+        }
+
+        // No state loaded and no id to look one up by — a `Server::make`
+        // for a probe or a factory `make()`. Return null and let the accessor
+        // default handle it.
+        if (! $this->exists || $this->game_id === null) {
+            return null;
+        }
+
+        $this->loadState();
+
+        return $this->state;
+    }
+
+    /** Qualified: this scope runs inside JOINs, where `is_active` is ambiguous. */
+    public function scopeActive(Builder $query): void
+    {
+        $query->where($query->qualifyColumn('is_active'), true);
     }
 
     public function scopePromoted(Builder $query): void
@@ -162,15 +249,25 @@ class Server extends Model
         return $this->query_port ?? $this->port;
     }
 
-    /** Address a player connects to — not necessarily the one we query. */
     /** Round trip of the most recent successful check, for the server card. */
     public function latestLatency(): ?int
     {
         return $this->stats()->whereNotNull('latency_ms')->latest('recorded_at')->value('latency_ms');
     }
 
+    /**
+     * Address a player connects to — not necessarily the one we query.
+     *
+     * The reported `game_port` lives on the state row; falls back to the
+     * submitted `port` if the state isn't loaded or the server never reported
+     * one. Callers that show the address either JOIN state or eager-load it.
+     */
     public function address(): string
     {
-        return $this->host.':'.($this->game_port ?? $this->port);
+        $reported = $this->relationLoaded('state') && $this->state
+            ? $this->state->game_port
+            : null;
+
+        return $this->host.':'.($reported ?? $this->port);
     }
 }

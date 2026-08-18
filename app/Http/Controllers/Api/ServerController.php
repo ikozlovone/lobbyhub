@@ -103,7 +103,12 @@ class ServerController extends Controller
     {
         abort_unless($server->is_active, 404);
 
-        $server->load(['game', 'country', 'version', 'modes']);
+        // `state` with a `game_id` predicate so the query prunes to one
+        // partition instead of scanning every game.
+        $server->load([
+            'game', 'country', 'version', 'modes',
+            'state' => fn ($q) => $q->where('game_id', $server->game_id),
+        ]);
 
         return (new ServerDetailResource($server))->response();
     }
@@ -127,10 +132,14 @@ class ServerController extends Controller
     {
         abort_unless($server->is_active, 404);
 
-        $server->load(['game', 'country', 'version', 'modes']);
+        $server->load([
+            'game', 'country', 'version', 'modes',
+            'state' => fn ($q) => $q->where('game_id', $server->game_id),
+        ]);
 
-        $due = $server->last_queried_at === null
-            || $server->last_queried_at->addSeconds(self::REFRESH_COOLDOWN)->isPast();
+        // `last_queried_at` lives on state now; the cooldown is judged off it.
+        $lastQueried = $server->state?->last_queried_at;
+        $due = $lastQueried === null || $lastQueried->addSeconds(self::REFRESH_COOLDOWN)->isPast();
 
         if ($due && $manager->supports($server->game->query_protocol)) {
             // With the slow-moving facts, not only the player count: this button
@@ -138,14 +147,10 @@ class ServerController extends Controller
             // asking about what they are looking at.
             QueryServer::dispatchSync($server, null, true);
 
-            $server->refresh()->load(['game', 'country', 'version', 'modes']);
-
-            // Nothing to tell the frontend. This used to expire the server's
-            // page, which was a shell cached for minutes — reload it before the
-            // window turned and the map, the facts and the graph were all back
-            // to what they were, reading as a refresh that did not save. That
-            // page is read per request now, so the reload shows what this write
-            // just put in the database.
+            $server->refresh()->load([
+                'game', 'country', 'version', 'modes',
+                'state' => fn ($q) => $q->where('game_id', $server->game_id),
+            ]);
         }
 
         return (new ServerDetailResource($server))
@@ -171,19 +176,36 @@ class ServerController extends Controller
             ->unique()
             ->take(100);
 
-        $servers = Server::query()
+        // JOIN state with both `server_id` AND `game_id` so Postgres can
+        // prune. For a mixed-game slug list every relevant partition is
+        // visited exactly once — one per game — instead of every partition
+        // being scanned once per slug.
+        $rows = Server::query()
             ->active()
-            ->whereIn('slug', $slugs)
-            ->get(['slug', 'status', 'players_online', 'players_max', 'players_queued', 'last_queried_at']);
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->whereIn('servers.slug', $slugs)
+            ->get([
+                'servers.slug',
+                'server_states.status',
+                'server_states.players_online',
+                'server_states.players_max',
+                'server_states.players_queued',
+                'server_states.last_queried_at',
+            ]);
 
         return response()->json([
-            'data' => $servers->map(fn (Server $server) => [
-                'slug' => $server->slug,
-                'status' => $server->status->value,
-                'players' => $server->players_online,
-                'max_players' => $server->players_max,
-                'queued' => $server->players_queued,
-                'checked_at' => $server->last_queried_at?->toIso8601String(),
+            'data' => $rows->map(fn ($row) => [
+                'slug' => $row->slug,
+                'status' => $row->status,
+                'players' => (int) $row->players_online,
+                'max_players' => (int) $row->players_max,
+                'queued' => (int) $row->players_queued,
+                'checked_at' => $row->last_queried_at
+                    ? \Illuminate\Support\Carbon::parse($row->last_queried_at)->toIso8601String()
+                    : null,
             ])->all(),
         ]);
     }

@@ -9,6 +9,7 @@ use App\Models\Server;
 use App\Models\ServerStat;
 use App\Services\Geo\GeoResolver;
 use App\Services\Monitoring\PollingSchedule;
+use App\Services\Monitoring\ServerStatePartitionManager;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -57,11 +58,33 @@ class SteamCatalogSync
     /** @var Collection<string, int> */
     private Collection $countries;
 
-    /** @var list<array<string, mixed>> */
-    private array $updates = [];
+    /**
+     * State-row updates for existing servers. `servers` is not touched on
+     * sync — the hot fields all live here now.
+     *
+     * @var list<array<string, mixed>>
+     */
+    private array $stateUpdates = [];
 
-    /** @var list<array<string, mixed>> */
+    /** Cold-side (`servers`) rows for newly discovered servers. @var list<array<string, mixed>> */
     private array $inserts = [];
+
+    /**
+     * The DiscoveredServer that produced each pending insert, kept parallel
+     * to `$inserts` by index. Used by {@see flushInserts} to build state
+     * rows once `servers` has minted the ids.
+     *
+     * @var list<DiscoveredServer>
+     */
+    private array $pendingStates = [];
+
+    /**
+     * State rows for newly discovered servers. Written after `servers` so
+     * `server_id` can point at the id the insert minted.
+     *
+     * @var list<array<string, mixed>>
+     */
+    private array $stateInserts = [];
 
     /** @var list<array<string, mixed>> */
     private array $samples = [];
@@ -85,15 +108,21 @@ class SteamCatalogSync
     public function __construct(
         private readonly PollingSchedule $schedule,
         private readonly GeoResolver $geo,
+        private readonly ServerStatePartitionManager $partitions,
     ) {}
 
     public function run(Game $game, ServerSweep $sweep, bool $populatedOnly = false): SyncReport
     {
         $startedAt = hrtime(true);
 
+        // Idempotent — a `partition already exists` is normal here. Guards
+        // against a game that was created before this class shipped, or one
+        // whose partition was dropped by hand and the observer never re-ran.
+        $this->partitions->ensureFor($game);
+
         $this->game = $game;
         $this->now = now();
-        $this->updates = $this->inserts = $this->samples = [];
+        $this->stateUpdates = $this->inserts = $this->pendingStates = $this->stateInserts = $this->samples = [];
         $this->touched = [];
         $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0, 'skipped' => 0, 'duplicated' => 0];
         $this->spent = ['db' => 0.0, 'existing' => 0.0];
@@ -116,8 +145,9 @@ class SteamCatalogSync
 
         $result = $sweep->stream($game, fn (DiscoveredServer $found) => $this->write($found), $populatedOnly, $only);
 
-        $this->flushUpdates();
+        $this->flushStateUpdates();
         $this->flushInserts();
+        $this->flushStateInserts();
         $this->flushSamples();
 
         $totalMs = (hrtime(true) - $startedAt) / 1e6;
@@ -174,6 +204,10 @@ class SteamCatalogSync
             }
 
             $this->inserts[] = $this->newRow($found);
+            // Parallel to $inserts: the state row is built once the insert
+            // has minted an id, and the original numbers have to survive
+            // until then.
+            $this->pendingStates[] = $found;
             $this->counts['created']++;
         } else {
             [$id, $nextQueryAt] = $existing;
@@ -210,7 +244,7 @@ class SteamCatalogSync
 
             $due = $nextQueryAt === null || $nextQueryAt <= $this->now->getTimestamp();
 
-            $this->updates[] = $this->snapshot($found, $due, $id, $nextQueryAt);
+            $this->stateUpdates[] = $this->snapshot($found, $due, $id, $nextQueryAt);
             $this->counts['updated']++;
 
             if ($due) {
@@ -219,8 +253,8 @@ class SteamCatalogSync
             }
         }
 
-        if (count($this->updates) >= self::CHUNK) {
-            $this->flushUpdates();
+        if (count($this->stateUpdates) >= self::CHUNK) {
+            $this->flushStateUpdates();
         }
 
         if (count($this->inserts) >= self::CHUNK) {
@@ -309,18 +343,24 @@ class SteamCatalogSync
     }
 
     /**
-     * One row's worth of measurements.
+     * One state row's worth of measurements.
      *
-     * `next_query_at` is carried even when it is not moving, because an upsert
-     * writes the same column list for every row and leaving it out would strip
-     * the schedule off everything that was not due.
+     * `next_query_at` is carried even when it is not moving, because the
+     * UPDATE writes the same column list for every row and leaving it out
+     * would strip the schedule off everything that was not due.
+     *
+     * `ip_address` and `query_port` — used to be here — do not appear: they
+     * live on `servers`, which sync no longer touches for existing rows.
+     * An owner who submitted a domain that has moved to a new IP is
+     * corrected by the query job's own resolver, not by the sweep.
      *
      * @return array<string, mixed>
      */
     private function snapshot(DiscoveredServer $found, bool $due, int $id, ?int $nextQueryAt): array
     {
         $row = [
-            'id' => $id,
+            'server_id' => $id,
+            'game_id' => $this->game->id,
             'status' => ServerStatus::Online->value,
             'players_online' => $found->playersOnline,
             'players_max' => $found->playersMax,
@@ -329,9 +369,7 @@ class SteamCatalogSync
             'reported_version' => $found->version,
             'wiped_at' => $found->wipedAt,
             'motd' => $found->name,
-            'ip_address' => $found->ip,
             'game_port' => $found->gamePort,
-            'query_port' => $found->queryPort,
             'last_queried_at' => $this->now,
             'last_online_at' => $this->now,
             'steam_seen_at' => $this->now,
@@ -364,6 +402,12 @@ class SteamCatalogSync
     }
 
     /**
+     * The cold half of a newly discovered server, headed for `servers`.
+     *
+     * The state row is written afterwards, in {@see flushInserts}, once the
+     * insert has minted an id. Everything the monitor rewrites — status,
+     * players, map, schedule — belongs to that second write, not here.
+     *
      * @return array<string, mixed>
      */
     private function newRow(DiscoveredServer $found): array
@@ -377,38 +421,49 @@ class SteamCatalogSync
             'port' => $found->gamePort,
             'query_port' => $found->queryPort,
             'ip_address' => $found->ip,
-            'game_port' => $found->gamePort,
             'slug' => $this->slug($found),
             'name' => $found->name,
-            'motd' => $found->name,
-            'map' => $found->map,
-            'reported_version' => $found->version,
-            'wiped_at' => $found->wipedAt,
-            'players_queued' => $found->playersQueued ?? 0,
-            'players_online' => $found->playersOnline,
-            'players_max' => $found->playersMax,
-            'steam_id' => $found->steamId,
-            'bots' => $found->bots,
-            'vac_enabled' => $found->vacEnabled,
             'country_id' => $countryId,
             'city' => $location?->city,
-            /*
-             * Online, not unknown.
-             *
-             * Discovery used to write candidates and wait for our own query to
-             * publish them, because a row out of Steam's cache was hearsay. A
-             * sweep is not that: the server is in the list because it registered
-             * with Steam's master and is answering it, and the numbers are the
-             * same self-report a query would have returned. Holding twenty
-             * thousand of those back for a packet that adds nothing is the cost
-             * this path exists to remove.
-             */
+            'is_active' => true,
+            'created_at' => $this->now,
+            'updated_at' => $this->now,
+        ];
+    }
+
+    /**
+     * The hot half of a newly discovered server, headed for `server_states`.
+     *
+     * Written straight to `ServerStatus::Online` — an entry in the Steam list
+     * means the server registered with the master and is answering it, and
+     * the numbers are the same self-report a query would have returned.
+     * Discovery used to hold new rows at `unknown` and wait for a UDP packet,
+     * because a row out of Steam's cache was hearsay; a sweep is not that.
+     *
+     * @return array<string, mixed>
+     */
+    private function newState(int $serverId, DiscoveredServer $found): array
+    {
+        return [
+            'server_id' => $serverId,
+            'game_id' => $this->game->id,
             'status' => ServerStatus::Online->value,
+            'players_online' => $found->playersOnline,
+            'players_max' => $found->playersMax,
+            'players_queued' => $found->playersQueued ?? 0,
+            'bots' => $found->bots,
+            'vac_enabled' => $found->vacEnabled,
+            'map' => $found->map,
+            'reported_version' => $found->version,
+            'motd' => $found->name,
+            'wiped_at' => $found->wipedAt,
+            'steam_id' => $found->steamId,
+            'game_port' => $found->gamePort,
             'last_queried_at' => $this->now,
             'last_online_at' => $this->now,
             'steam_seen_at' => $this->now,
             'next_query_at' => $this->now->copy()->addSeconds($this->interval($found)),
-            'is_active' => true,
+            'failed_queries_count' => 0,
             'created_at' => $this->now,
             'updated_at' => $this->now,
         ];
@@ -455,7 +510,8 @@ class SteamCatalogSync
      * null would otherwise get wrong.
      */
     private const TYPES = [
-        'id' => 'bigint',
+        'server_id' => 'bigint',
+        'game_id' => 'bigint',
         'status' => 'varchar',
         'players_online' => 'integer',
         'players_max' => 'integer',
@@ -463,10 +519,8 @@ class SteamCatalogSync
         'map' => 'varchar',
         'reported_version' => 'varchar',
         'wiped_at' => 'timestamp',
-        'motd' => 'varchar',
-        'ip_address' => 'varchar',
+        'motd' => 'text',
         'game_port' => 'integer',
-        'query_port' => 'integer',
         'last_queried_at' => 'timestamp',
         'last_online_at' => 'timestamp',
         'steam_seen_at' => 'timestamp',
@@ -495,27 +549,32 @@ class SteamCatalogSync
      * columns it does not mention are simply not its business, and a row whose
      * id has since gone is a no-op rather than an error.
      */
-    private function flushUpdates(): void
+    private function flushStateUpdates(): void
     {
-        if ($this->updates === []) {
+        if ($this->stateUpdates === []) {
             return;
         }
 
         $started = hrtime(true);
 
         /*
-         * Sorted by id before it goes down. Five hundred rows is a cheap sort
-         * and it turns five hundred scattered heap pages into a walk in page
-         * order — the same reason a bulk load is written sorted.
+         * Sorted by (game_id, server_id) before it goes down. Five hundred
+         * rows is a cheap sort and it turns five hundred scattered heap
+         * pages into a walk in page order — the same reason a bulk load is
+         * written sorted. Under partitioning it also groups the batch by
+         * partition, so the join below hits one partition's index at a time.
          */
-        usort($this->updates, static fn (array $a, array $b) => $a['id'] <=> $b['id']);
+        usort(
+            $this->stateUpdates,
+            static fn (array $a, array $b) => [$a['game_id'], $a['server_id']] <=> [$b['game_id'], $b['server_id']],
+        );
 
-        foreach (array_chunk($this->updates, self::CHUNK) as $chunk) {
+        foreach (array_chunk($this->stateUpdates, self::CHUNK) as $chunk) {
             $this->updateChunk($chunk);
         }
 
         $this->spent['db'] += (hrtime(true) - $started) / 1e6;
-        $this->updates = [];
+        $this->stateUpdates = [];
     }
 
     /**
@@ -553,7 +612,9 @@ class SteamCatalogSync
     private function updateChunk(array $rows): void
     {
         $columns = array_keys($rows[0]);
-        $assign = array_values(array_diff($columns, ['id']));
+        // `server_id` and `game_id` are the composite match key on the parent
+        // partitioned table, not values to overwrite.
+        $assign = array_values(array_diff($columns, ['server_id', 'game_id']));
 
         $payload = [];
 
@@ -578,12 +639,24 @@ class SteamCatalogSync
 
         $set = implode(', ', array_map(
             fn (string $c) => in_array($c, self::SOFT, true)
-                ? "\"{$c}\" = coalesce(v.\"{$c}\", \"servers\".\"{$c}\")"
+                ? "\"{$c}\" = coalesce(v.\"{$c}\", \"server_states\".\"{$c}\")"
                 : "\"{$c}\" = v.\"{$c}\"",
             $assign,
         ));
 
-        DB::update('update "servers" set '.$set.' from '.$this->source($columns).' where "servers"."id" = v."id"', [$json]);
+        /*
+         * The `game_id` predicate is redundant on identity — `(game_id,
+         * server_id)` is the PK — but it is what lets Postgres prune to one
+         * partition per matched value instead of walking the parent's tuple
+         * routing. Since every batch is grouped by partition (see the sort in
+         * flushStateUpdates), an entire chunk usually hits one partition.
+         */
+        DB::update(
+            'update "server_states" set '.$set.' from '.$this->source($columns)
+            .' where "server_states"."server_id" = v."server_id"'
+            .' and "server_states"."game_id" = v."game_id"',
+            [$json],
+        );
     }
 
     /**
@@ -612,6 +685,11 @@ class SteamCatalogSync
         return "(select {$selects} from json_each(?)) as v";
     }
 
+    /**
+     * A batch of new servers gets three writes: `servers`, `server_states`,
+     * and a first `server_stats` sample. The state row can only be built
+     * once the server insert has minted its id — hence the pluck.
+     */
     private function flushInserts(): void
     {
         if ($this->inserts === []) {
@@ -622,9 +700,13 @@ class SteamCatalogSync
 
         $this->disambiguate($this->inserts);
 
-        $slugs = array_column($this->inserts, 'slug');
-        $players = array_column($this->inserts, 'players_online', 'slug');
-        $maxPlayers = array_column($this->inserts, 'players_max', 'slug');
+        // Keep the DiscoveredServer alongside its cold row so the state
+        // insert built afterwards has all the numbers it needs.
+        $bySlug = [];
+
+        foreach ($this->inserts as $index => $row) {
+            $bySlug[$row['slug']] = $this->pendingStates[$index] ?? null;
+        }
 
         foreach (array_chunk($this->inserts, self::CHUNK) as $chunk) {
             Server::query()->insert($chunk);
@@ -637,18 +719,51 @@ class SteamCatalogSync
          */
         $ids = DB::table('servers')
             ->where('game_id', $this->game->id)
-            ->whereIn('slug', $slugs)
+            ->whereIn('slug', array_column($this->inserts, 'slug'))
             ->pluck('id', 'slug');
 
         foreach ($ids as $slug => $id) {
-            $this->samples[] = $this->sample((int) $id, $players[$slug] ?? 0, $maxPlayers[$slug] ?? 0);
+            $found = $bySlug[$slug] ?? null;
+
+            if ($found === null) {
+                continue;
+            }
+
+            $this->stateInserts[] = $this->newState((int) $id, $found);
+            $this->samples[] = $this->sample((int) $id, $found->playersOnline, $found->playersMax);
             $this->counts['sampled']++;
         }
 
         $this->inserts = [];
+        $this->pendingStates = [];
         $this->spent['db'] += (hrtime(true) - $started) / 1e6;
 
+        $this->flushStateInserts();
         $this->flushSamples();
+    }
+
+    /**
+     * State rows for the servers this run just inserted.
+     *
+     * Straight batched INSERTs into the parent — Postgres routes each row to
+     * its partition by `game_id`. Sync only ever runs one game at a time, so
+     * every row in a batch is for the same partition; the router does no
+     * cross-partition work.
+     */
+    private function flushStateInserts(): void
+    {
+        if ($this->stateInserts === []) {
+            return;
+        }
+
+        $started = hrtime(true);
+
+        foreach (array_chunk($this->stateInserts, self::CHUNK) as $chunk) {
+            DB::table('server_states')->insert($chunk);
+        }
+
+        $this->stateInserts = [];
+        $this->spent['db'] += (hrtime(true) - $started) / 1e6;
     }
 
     private function flushSamples(): void

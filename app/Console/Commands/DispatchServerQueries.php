@@ -9,7 +9,9 @@ use App\Services\Monitoring\HostSpread;
 use App\Services\Monitoring\ServerQueryManager;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
@@ -124,10 +126,16 @@ class DispatchServerQueries extends Command
         }
 
         // pluck rather than modelKeys: the host spread hands back a plain
-        // collection, not an Eloquent one.
-        Server::query()
-            ->whereIn('id', $servers->pluck('id')->all())
-            ->update(['next_query_at' => now()->addSeconds((int) config('monitoring.interval'))]);
+        // collection, not an Eloquent one. Grouped by game so each update
+        // hits one partition.
+        $leaseUntil = now()->addSeconds((int) config('monitoring.interval'));
+
+        foreach ($servers->groupBy('game_id') as $gameId => $group) {
+            DB::table('server_states')
+                ->where('game_id', $gameId)
+                ->whereIn('server_id', $group->pluck('id')->all())
+                ->update(['next_query_at' => $leaseUntil]);
+        }
     }
 
     /**
@@ -150,9 +158,10 @@ class DispatchServerQueries extends Command
     private function dueServers(int $limit): Collection
     {
         return $this->due()
-            ->orderByRaw('last_queried_at is not null')
-            ->orderBy('next_query_at')
+            ->orderByRaw('server_states.last_queried_at is not null')
+            ->orderBy('server_states.next_query_at')
             ->limit($limit)
+            ->select('servers.*')
             ->get();
     }
 
@@ -173,7 +182,15 @@ class DispatchServerQueries extends Command
      */
     private function due(): Builder
     {
-        $query = Server::query()->active();
+        // JOIN state on both `server_id` AND `game_id` — without the second
+        // predicate Postgres cannot prune, and cross-partition scans of a
+        // catalog-wide table are exactly what partitioning was for.
+        $query = Server::query()
+            ->active()
+            ->join('server_states', function (JoinClause $join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            });
 
         if ($slug = $this->option('game')) {
             $query->whereHas('game', fn (Builder $game) => $game->where('slug', $slug));
@@ -212,15 +229,15 @@ class DispatchServerQueries extends Command
         $quiet = now()->subSeconds((int) config('monitoring.steam_trust_quiet'));
 
         return $query
-            ->where('next_query_at', '<=', now())
+            ->where('server_states.next_query_at', '<=', now())
             ->where(fn (Builder $gate) => $gate
-                ->whereNull('steam_seen_at')
+                ->whereNull('server_states.steam_seen_at')
                 ->orWhere(fn (Builder $busy) => $busy
-                    ->where('players_online', '>', 0)
-                    ->where('steam_seen_at', '<', $populated))
+                    ->where('server_states.players_online', '>', 0)
+                    ->where('server_states.steam_seen_at', '<', $populated))
                 ->orWhere(fn (Builder $empty) => $empty
-                    ->where('players_online', '=', 0)
-                    ->where('steam_seen_at', '<', $quiet)));
+                    ->where('server_states.players_online', '=', 0)
+                    ->where('server_states.steam_seen_at', '<', $quiet)));
     }
 
     /**

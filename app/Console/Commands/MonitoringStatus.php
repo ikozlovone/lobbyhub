@@ -18,17 +18,23 @@ class MonitoringStatus extends Command
 
     public function handle(PollingSchedule $schedule): int
     {
-        $active = Server::query()->active();
+        // `active + JOINed state` is the shape every read below needs.
+        // Cloning is cheap; each clone reuses the join.
+        $active = fn () => Server::query()->active()
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            });
 
-        $due = (clone $active)->where('next_query_at', '<=', now())->count();
-        $oldest = (clone $active)->where('next_query_at', '<=', now())->min('next_query_at');
-        $neverQueried = (clone $active)->whereNull('last_queried_at')->count();
+        $due = $active()->where('server_states.next_query_at', '<=', now())->count();
+        $oldest = $active()->where('server_states.next_query_at', '<=', now())->min('server_states.next_query_at');
+        $neverQueried = $active()->whereNull('server_states.last_queried_at')->count();
 
         $this->line('');
         $this->components->twoColumnDetail('<fg=gray>servers</>', '');
-        $this->components->twoColumnDetail('  active', (string) (clone $active)->count());
-        $this->components->twoColumnDetail('  online', (string) (clone $active)->where('status', ServerStatus::Online)->count());
-        $this->components->twoColumnDetail('  offline', (string) (clone $active)->where('status', ServerStatus::Offline)->count());
+        $this->components->twoColumnDetail('  active', (string) Server::query()->active()->count());
+        $this->components->twoColumnDetail('  online', (string) $active()->where('server_states.status', ServerStatus::Online->value)->count());
+        $this->components->twoColumnDetail('  offline', (string) $active()->where('server_states.status', ServerStatus::Offline->value)->count());
         $this->components->twoColumnDetail('  never queried', (string) $neverQueried);
 
         /*
@@ -45,20 +51,20 @@ class MonitoringStatus extends Command
         $populated = now()->subSeconds((int) config('monitoring.steam_trust_populated'));
         $quiet = now()->subSeconds((int) config('monitoring.steam_trust_quiet'));
 
-        $covered = (clone $active)
-            ->whereNotNull('steam_seen_at')
+        $covered = $active()
+            ->whereNotNull('server_states.steam_seen_at')
             ->where(fn ($query) => $query
-                ->where(fn ($busy) => $busy->where('players_online', '>', 0)->where('steam_seen_at', '>=', $populated))
-                ->orWhere(fn ($empty) => $empty->where('players_online', '=', 0)->where('steam_seen_at', '>=', $quiet)))
+                ->where(fn ($busy) => $busy->where('server_states.players_online', '>', 0)->where('server_states.steam_seen_at', '>=', $populated))
+                ->orWhere(fn ($empty) => $empty->where('server_states.players_online', '=', 0)->where('server_states.steam_seen_at', '>=', $quiet)))
             ->count();
 
         $this->line('');
         $this->components->twoColumnDetail('<fg=gray>source</>', '<fg=gray>steam sweep</>');
         $this->components->twoColumnDetail('  covered by the sweep', (string) $covered);
-        $this->components->twoColumnDetail('  left to the poller', (string) ((clone $active)->count() - $covered));
+        $this->components->twoColumnDetail('  left to the poller', (string) (Server::query()->active()->count() - $covered));
         $this->components->twoColumnDetail(
             '  last seen in a list',
-            ($seen = (clone $active)->max('steam_seen_at'))
+            ($seen = $active()->max('server_states.steam_seen_at'))
                 ? now()->diffInSeconds(Carbon::parse($seen), absolute: true).'s ago'
                 : '—',
         );
@@ -76,7 +82,7 @@ class MonitoringStatus extends Command
          * stale: they are not in any listing yet, and they have their own line
          * above.
          */
-        $stalest = (clone $active)->whereNotNull('last_queried_at')->min('last_queried_at');
+        $stalest = $active()->whereNotNull('server_states.last_queried_at')->min('server_states.last_queried_at');
 
         $this->line('');
         $this->components->twoColumnDetail('<fg=gray>schedule</>', '');

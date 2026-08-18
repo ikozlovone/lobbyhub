@@ -16,6 +16,7 @@ class ServerDetailResource extends ServerResource
     public function toArray(Request $request): array
     {
         $info = app(ServerInfo::class);
+        $state = $this->state;
 
         /*
          * array_merge, not `+`.
@@ -34,15 +35,15 @@ class ServerDetailResource extends ServerResource
             // The owner's own text wins; otherwise whatever the server publishes.
             'description' => $this->description ?? $info->description($this->resource),
             'host' => $this->host,
-            'port' => $this->game_port ?? $this->port,
+            'port' => $state?->game_port ?? $this->port,
             // Two different addresses, and players confuse them constantly: one
             // is typed into the game client, the other is what we query.
             'connect_address' => $this->address(),
             'query_address' => $this->host.':'.$this->queryPort(),
             'connect_hostname' => $info->for($this->resource)['connect_hostname'] ?? null,
-            'steam_id' => $this->steam_id,
-            'bots' => $this->bots,
-            'vac' => $this->vac_enabled === null ? null : (bool) $this->vac_enabled,
+            'steam_id' => $state?->steam_id,
+            'bots' => $state?->bots,
+            'vac' => $state?->vac_enabled === null ? null : (bool) $state->vac_enabled,
             // Inferred, not reported — see ServerLanguage for what from.
             'language' => app(ServerLanguage::class)->for($this->resource),
             'info' => $info->for($this->resource),
@@ -83,8 +84,8 @@ class ServerDetailResource extends ServerResource
             ],
             'claimed' => $this->isClaimed(),
             'first_seen_at' => $this->created_at?->toIso8601String(),
-            'last_online_at' => $this->last_online_at?->toIso8601String(),
-            'last_offline_at' => $this->last_offline_at?->toIso8601String(),
+            'last_online_at' => $state?->last_online_at?->toIso8601String(),
+            'last_offline_at' => $state?->last_offline_at?->toIso8601String(),
         ]);
     }
 }

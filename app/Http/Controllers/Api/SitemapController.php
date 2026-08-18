@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ServerStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Server;
 use Illuminate\Http\JsonResponse;
@@ -39,24 +40,40 @@ class SitemapController extends Controller
         $perPage = (int) ($validated['per_page'] ?? self::DEFAULT_PER_PAGE);
 
         /*
-         * `verified`, not merely `active`.
-         *
-         * A server we have written down but never reached has a page that
-         * answers, and no listing links to it — Server::scopeVerified is what
-         * keeps it out of them until our own query confirms it exists. Putting
-         * it in the sitemap would be submitting a page the site itself does not
-         * consider real yet, and orphaned thin pages are what a catalog domain
-         * gets marked down for. It arrives here the moment it is reached.
+         * "Verified" now means "has a state row that is not `unknown`". A
+         * server we have written down but never reached has a page that
+         * answers, and no listing links to it; putting it in the sitemap
+         * would be submitting a page the site itself does not consider real
+         * yet, and orphaned thin pages are what a catalog domain gets marked
+         * down for. It arrives here the moment it is reached.
          *
          * Ordered by id, which is stable under insertion in a way `slug` and
          * every measured column are not: page 2 must not hand back rows page 1
          * already had because something was renamed between the two requests.
+         *
+         * `wiped_at` is on the state row now, so it is aliased in via the
+         * JOIN for lastModified() to read below.
          */
         $servers = Server::query()
             ->active()
-            ->verified()
-            ->orderBy('id')
-            ->paginate($perPage, ['id', 'slug', 'wiped_at', 'details_synced_at', 'created_at'], 'page', $validated['page'] ?? 1);
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->where('server_states.status', '!=', ServerStatus::Unknown->value)
+            ->orderBy('servers.id')
+            ->paginate(
+                $perPage,
+                [
+                    'servers.id',
+                    'servers.slug',
+                    'servers.details_synced_at',
+                    'servers.created_at',
+                    'server_states.wiped_at',
+                ],
+                'page',
+                $validated['page'] ?? 1,
+            );
 
         return response()->json([
             'data' => $servers->getCollection()->map(fn (Server $server) => [
@@ -90,9 +107,14 @@ class SitemapController extends Controller
      */
     private function lastModified(Server $server): ?Carbon
     {
+        // `wiped_at` arrives here through a JOIN, so it is a raw string
+        // rather than a cast Carbon — parse defensively rather than assume
+        // the caster ran.
+        $wipedAt = $server->wiped_at ? Carbon::parse($server->wiped_at) : null;
+
         $candidates = array_filter([
             $server->details_synced_at,
-            $server->wiped_at,
+            $wipedAt,
             $server->created_at,
         ]);
 

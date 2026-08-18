@@ -6,6 +6,7 @@ use App\Enums\ServerStatus;
 use App\Models\Country;
 use App\Models\Server;
 use App\Models\ServerStat;
+use App\Models\ServerState;
 use App\Services\Geo\GeoResolver;
 use App\Services\Monitoring\Contracts\ProvidesServerDetails;
 use App\Services\Monitoring\Contracts\ServerQueryDriver;
@@ -157,9 +158,14 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             return false;
         }
 
-        $lastQueried = $this->server->last_queried_at;
+        // `last_queried_at` lives on the state row now. A single point read
+        // by (game_id, server_id) is one partition, one PK lookup.
+        $lastQueried = ServerState::query()
+            ->where('game_id', $this->server->game_id)
+            ->where('server_id', $this->server->id)
+            ->value('last_queried_at');
 
-        return $lastQueried !== null && $lastQueried->greaterThan($this->queuedAt);
+        return $lastQueried !== null && Carbon::parse($lastQueried)->greaterThan($this->queuedAt);
     }
 
     /**
@@ -215,13 +221,14 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
     {
         $now = now();
 
-        // Asked before anything is filled in: the result can carry a game_port,
-        // and address() reads it, so a moment later this comparison would be
-        // against a different string than the one the row was named with.
+        // Asked before anything is filled in: `game_port` might be about to
+        // change on the state row, address() reads it, and a moment later
+        // this comparison would be against a different string than the one
+        // the row was named with.
         $unnamed = $this->isStillNamedAfterItsAddress();
 
-        $attributes = [
-            'status' => ServerStatus::Online,
+        $state = [
+            'status' => ServerStatus::Online->value,
             'players_online' => $result->playersOnline,
             'players_max' => $result->playersMax,
             'reported_version' => $result->version,
@@ -243,20 +250,34 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             'vac_enabled' => $result->vacEnabled,
         ] as $column => $value) {
             if ($value !== null) {
-                $attributes[$column] = $value;
+                $state[$column] = $value;
             }
         }
 
-        if ($result->ipAddress !== null) {
-            $attributes['ip_address'] = $result->ipAddress;
-            $attributes += $this->resolveLocation($result->ipAddress, $geo);
+        // Pick the tier off the numbers we just got — the state row has not
+        // been updated yet, and the model no longer carries player counts.
+        $state['next_query_at'] = $now->copy()->addSeconds(
+            $schedule->intervalFor($result->playersOnline, $this->server->isPromoted()),
+        );
+        $state['updated_at'] = $now;
+
+        $this->writeState($state);
+
+        // Cold-side writes only when they actually changed: `ip_address` and
+        // location move rarely, and the sweep does not touch `servers` on the
+        // hot path, so this is the sole place they can change now.
+        $cold = [];
+
+        if ($result->ipAddress !== null && $result->ipAddress !== $this->server->ip_address) {
+            $cold['ip_address'] = $result->ipAddress;
+            $cold += $this->resolveLocation($result->ipAddress, $geo);
         }
 
-        // Fill first, then pick the tier: it reads the player count we just got.
-        $this->server->forceFill($attributes);
-        $this->server->next_query_at = $now->copy()->addSeconds($schedule->intervalFor($this->server));
-        $this->adoptReportedName($result, $unnamed);
-        $this->server->save();
+        $cold += $this->adoptReportedName($result, $unnamed);
+
+        if ($cold !== []) {
+            $this->server->forceFill($cold)->save();
+        }
 
         $this->recordSample($now, true, $result);
     }
@@ -278,18 +299,24 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
      * Renaming rewrites the slug, which is a public URL, and doing that would
      * normally be unacceptable. It is safe here precisely because it has never
      * been public: until this query lands the row is `unknown`, and every
-     * listing filters those out (Server::scopeVerified).
+     * listing filters those out (see verified-only reads in ServerListing).
+     *
+     * @return array<string, mixed>  fields for the caller to merge into a
+     *                               single cold-side write; empty when nothing
+     *                               is being adopted.
      */
-    private function adoptReportedName(QueryResult $result, bool $unnamed): void
+    private function adoptReportedName(QueryResult $result, bool $unnamed): array
     {
         $reported = trim((string) ($result->motd ?? ''));
 
         if (! $unnamed || $reported === '') {
-            return;
+            return [];
         }
 
-        $this->server->name = mb_substr($reported, 0, 255);
-        $this->server->slug = Server::slugFor($this->server->name, $this->server->host, $this->server->port);
+        $name = mb_substr($reported, 0, 255);
+        $slug = Server::slugFor($name, $this->server->host, $this->server->port);
+
+        return ['name' => $name, 'slug' => $slug];
     }
 
     /**
@@ -310,10 +337,19 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
     private function recordOffline(PollingSchedule $schedule): void
     {
         $now = now();
-        $failures = min($this->server->failed_queries_count + 1, 65535);
 
-        $this->server->forceFill([
-            'status' => ServerStatus::Offline,
+        // Read the current counter off the state row rather than the model
+        // (which no longer carries it), so we increment the right value even
+        // if the server was just queried by somebody else.
+        $currentFailures = (int) ServerState::query()
+            ->where('game_id', $this->server->game_id)
+            ->where('server_id', $this->server->id)
+            ->value('failed_queries_count');
+
+        $failures = min($currentFailures + 1, 65535);
+
+        $this->writeState([
+            'status' => ServerStatus::Offline->value,
             'players_online' => 0,
             'last_queried_at' => $now,
             // Every failure, not only the first of a run: this answers "when was
@@ -321,9 +357,38 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             'last_offline_at' => $now,
             'failed_queries_count' => $failures,
             'next_query_at' => $now->copy()->addSeconds($schedule->backoffFor($failures)),
-        ])->save();
+            'updated_at' => $now,
+        ]);
 
         $this->recordSample($now, false);
+    }
+
+    /**
+     * Upsert the state row for the current server.
+     *
+     * `ON CONFLICT (game_id, server_id) DO UPDATE` is safe: the composite PK
+     * matches the partition's primary key, and this handler always has both
+     * keys. `game_id` in the INSERT also gives Postgres the partition to
+     * route the write to without walking the tuple router.
+     *
+     * @param  array<string, mixed>  $columns
+     */
+    private function writeState(array $columns): void
+    {
+        $row = [
+            'server_id' => $this->server->id,
+            'game_id' => $this->server->game_id,
+        ] + $columns;
+
+        // `created_at` on insert only — a state row exists for the lifetime
+        // of its server, so this is normally the discovery moment.
+        $row['created_at'] ??= $row['updated_at'] ?? now();
+
+        ServerState::query()->upsert(
+            [$row],
+            uniqueBy: ['game_id', 'server_id'],
+            update: array_keys($columns),
+        );
     }
 
     /**

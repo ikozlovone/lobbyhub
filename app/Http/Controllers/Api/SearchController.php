@@ -55,20 +55,32 @@ class SearchController extends Controller
     {
         return Server::query()
             ->active()
-            ->verified()
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->where('server_states.status', '!=', \App\Enums\ServerStatus::Unknown->value)
             ->where(fn ($query) => $query
-                ->where('name', 'like', "%{$term}%")
-                ->orWhere('host', 'like', "%{$term}%"))
-            ->orderByDesc('players_online')
+                ->where('servers.name', 'like', "%{$term}%")
+                ->orWhere('servers.host', 'like', "%{$term}%"))
+            ->orderByDesc('server_states.players_online')
             ->limit(10)
             ->with('game:id,slug,name')
+            ->select([
+                'servers.id',
+                'servers.slug',
+                'servers.name',
+                'servers.game_id',
+                'server_states.players_online',
+                'server_states.status',
+            ])
             ->get()
-            ->map(fn (Server $server) => [
+            ->map(fn ($server) => [
                 'slug' => $server->slug,
                 'name' => $server->name,
                 'game' => $server->game->slug,
-                'players' => $server->players_online,
-                'status' => $server->status->value,
+                'players' => (int) $server->players_online,
+                'status' => $server->status,
             ])
             ->all();
     }

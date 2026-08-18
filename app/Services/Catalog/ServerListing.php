@@ -9,29 +9,33 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\DB;
 
 class ServerListing
 {
     /**
-     * Only these are accepted.
+     * Sort key → [column, direction, table it lives in].
      *
-     * `players` and `rank` are the two that carry the traffic and the two that
-     * have a partial index behind them; the rest still sort the game out of the
-     * heap. That is deliberate — see the migration — and the moment one of them
-     * shows up in the slow log it wants an index of its own, not a rewrite.
+     * The third element is what routes each sort to the right side of the
+     * `servers` / `server_states` split. `players`, `uptime` and `wiped`
+     * moved to the state row; the rest are catalog facts and stay put.
+     *
+     * `players` and `rank` are the two that carry the traffic and the two
+     * that have a partial index behind them; the rest still sort the game
+     * out of the heap. See the listing-indexes migrations for the map.
      */
     private const SORTS = [
-        'players' => ['players_online', 'desc'],
-        'rank' => ['rank_score', 'desc'],
-        'votes' => ['votes_count', 'desc'],
-        'uptime' => ['uptime_percent', 'desc'],
-        'wiped' => ['wiped_at', 'desc'],
-        'name' => ['name', 'asc'],
+        'players' => ['players_online', 'desc', 'server_states'],
+        'rank' => ['rank_score', 'desc', 'servers'],
+        'votes' => ['votes_count', 'desc', 'servers'],
+        'uptime' => ['uptime_percent', 'desc', 'server_states'],
+        'wiped' => ['wiped_at', 'desc', 'server_states'],
+        'name' => ['name', 'asc', 'servers'],
         // Insertion order, by primary key rather than created_at: the same
         // ordering, on an index that already exists.
-        'newest' => ['id', 'desc'],
+        'newest' => ['id', 'desc', 'servers'],
     ];
 
     /**
@@ -145,29 +149,42 @@ class ServerListing
      */
     public function query(?Game $game, array $filters): Builder
     {
+        // Every listing needs state for status, players and MOTD — so JOIN
+        // once, upfront, and let all filters and sorts reference it by name.
+        // The `game_id` JOIN predicate is what lets Postgres prune to one
+        // partition of `server_states` per query.
         $query = Server::query()
             ->active()
-            ->verified()
-            ->with(['country:id,code,name,slug', 'version:id,slug,name']);
+            ->join('server_states', function (JoinClause $join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->where('server_states.status', '!=', ServerStatus::Unknown->value)
+            ->with(['country:id,code,name,slug', 'version:id,slug,name'])
+            ->select('servers.*');
 
         if ($game !== null) {
-            $query->where('game_id', $game->id);
+            $query->where('servers.game_id', $game->id);
+
+            // Eager-load state with the same game_id so the follow-up query
+            // Laravel runs for `with('state')` prunes to one partition too.
+            $query->with(['state' => fn ($q) => $q->where('game_id', $game->id)]);
         } else {
             // Cross-game rows are useless without saying which game they are
             // from, and the frontend needs the protocol to know whether a
             // "Connect" button can be a steam:// link.
-            $query->with('game:id,slug,name,query_protocol');
+            $query->with(['game:id,slug,name,query_protocol', 'state']);
         }
 
-        [$column, $direction] = self::SORTS[$filters['sort'] ?? 'players'] ?? self::SORTS['players'];
-        $query->orderBy($column, $direction);
+        [$column, $direction, $table] = self::SORTS[$filters['sort'] ?? 'players'] ?? self::SORTS['players'];
+        $query->orderBy("{$table}.{$column}", $direction);
 
         // A rank of zero is the normal state for a server nobody has voted for
         // and that we have not watched for a full week yet. Without a tiebreak,
         // the ranked listing of a young catalog is ordered by insertion — which
         // is to say, not ordered at all.
         if ($column === 'rank_score') {
-            $query->orderBy('players_online', 'desc');
+            $query->orderBy('server_states.players_online', 'desc');
         }
 
         // Every sort ends on the primary key, so equal values come out in the
@@ -177,7 +194,7 @@ class ServerListing
         // `order by id desc, id asc` — a second key that can never be reached,
         // and one no index could be shaped like.
         if ($column !== 'id') {
-            $query->orderBy('id');
+            $query->orderBy('servers.id');
         }
 
         return $this->applyFilters($query, $game, $filters);
@@ -200,9 +217,9 @@ class ServerListing
         if (($filters['wiped'] ?? null) !== null) {
             $days = max(1, min((int) $filters['wiped'], 90));
 
-            $query->whereNotNull('wiped_at')
-                ->where('wiped_at', '>=', now()->subDays($days))
-                ->where('wiped_at', '<=', now());
+            $query->whereNotNull('server_states.wiped_at')
+                ->where('server_states.wiped_at', '>=', now()->subDays($days))
+                ->where('server_states.wiped_at', '<=', now());
         }
 
         if ($mode = $filters['mode'] ?? null) {
@@ -224,7 +241,7 @@ class ServerListing
         // The literal string the server reported, because that is what the map
         // facet lists — these names have no canonical form to slug towards.
         if ($map = $filters['map'] ?? null) {
-            $query->where('map', $map);
+            $query->where('server_states.map', $map);
         }
 
         if ($search = trim((string) ($filters['q'] ?? ''))) {
@@ -234,8 +251,8 @@ class ServerListing
             $needle = '%'.mb_strtolower($search).'%';
 
             $query->where(function (Builder $q) use ($needle) {
-                $q->whereRaw('lower(name) like ?', [$needle])
-                    ->orWhereRaw('lower(host) like ?', [$needle]);
+                $q->whereRaw('lower(servers.name) like ?', [$needle])
+                    ->orWhereRaw('lower(servers.host) like ?', [$needle]);
             });
         }
 
@@ -249,15 +266,22 @@ class ServerListing
      */
     private function applyStatus(Builder $query, string $status): void
     {
+        $online = ServerStatus::Online->value;
+
         match ($status) {
-            'online' => $query->online(),
-            'offline' => $query->where($query->qualifyColumn('status'), ServerStatus::Offline),
-            'empty' => $query->online()->where('players_online', 0),
-            'players' => $query->online()->where('players_online', '>', 0),
+            'online' => $query->where('server_states.status', $online),
+            'offline' => $query->where('server_states.status', ServerStatus::Offline->value),
+            'empty' => $query
+                ->where('server_states.status', $online)
+                ->where('server_states.players_online', 0),
+            'players' => $query
+                ->where('server_states.status', $online)
+                ->where('server_states.players_online', '>', 0),
             // Servers that report no capacity would otherwise all count as full.
-            'full' => $query->online()
-                ->where('players_max', '>', 0)
-                ->whereColumn('players_online', '>=', 'players_max'),
+            'full' => $query
+                ->where('server_states.status', $online)
+                ->where('server_states.players_max', '>', 0)
+                ->whereColumn('server_states.players_online', '>=', 'server_states.players_max'),
             default => null,
         };
     }
@@ -296,16 +320,22 @@ class ServerListing
     {
         $online = ServerStatus::Online->value;
 
-        $row = Server::query()
-            ->active()
-            ->verified()
-            ->where('game_id', $game->id)
+        $row = DB::table('server_states')
+            ->where('server_states.game_id', $game->id)
+            ->where('server_states.status', '!=', ServerStatus::Unknown->value)
+            ->join('servers', function (JoinClause $join) use ($game) {
+                $join->on('servers.id', '=', 'server_states.server_id')
+                    ->where('servers.game_id', $game->id)
+                    ->where('servers.is_active', true)
+                    ->whereNull('servers.deleted_at');
+            })
             ->selectRaw(<<<'SQL'
-                sum(case when status = ? then 1 else 0 end) as online_count,
-                sum(case when status = ? then 1 else 0 end) as offline_count,
-                sum(case when status = ? and players_online = 0 then 1 else 0 end) as empty_count,
-                sum(case when status = ? and players_online > 0 then 1 else 0 end) as players_count,
-                sum(case when status = ? and players_max > 0 and players_online >= players_max
+                sum(case when server_states.status = ? then 1 else 0 end) as online_count,
+                sum(case when server_states.status = ? then 1 else 0 end) as offline_count,
+                sum(case when server_states.status = ? and server_states.players_online = 0 then 1 else 0 end) as empty_count,
+                sum(case when server_states.status = ? and server_states.players_online > 0 then 1 else 0 end) as players_count,
+                sum(case when server_states.status = ? and server_states.players_max > 0
+                    and server_states.players_online >= server_states.players_max
                     then 1 else 0 end) as full_count
             SQL, [$online, ServerStatus::Offline->value, $online, $online, $online])
             ->first();
@@ -331,17 +361,22 @@ class ServerListing
      */
     private function mapFacets(Game $game): array
     {
-        return Server::query()
-            ->active()
-            ->verified()
-            ->where('game_id', $game->id)
-            ->whereNotNull('map')
-            ->where('map', '!=', '')
-            ->groupBy('map')
+        return DB::table('server_states')
+            ->where('server_states.game_id', $game->id)
+            ->where('server_states.status', '!=', ServerStatus::Unknown->value)
+            ->whereNotNull('server_states.map')
+            ->where('server_states.map', '!=', '')
+            ->join('servers', function (JoinClause $join) use ($game) {
+                $join->on('servers.id', '=', 'server_states.server_id')
+                    ->where('servers.game_id', $game->id)
+                    ->where('servers.is_active', true)
+                    ->whereNull('servers.deleted_at');
+            })
+            ->groupBy('server_states.map')
             ->orderByRaw('count(*) desc')
-            ->orderBy('map')
+            ->orderBy('server_states.map')
             ->limit(self::MAX_MAP_FACETS)
-            ->get(['map', DB::raw('count(*) as servers_count')])
+            ->get(['server_states.map', DB::raw('count(*) as servers_count')])
             ->map(fn ($row) => [
                 'slug' => $row->map,
                 'name' => $row->map,

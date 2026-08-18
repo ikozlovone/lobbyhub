@@ -93,7 +93,9 @@ class ServerLanguage
     /** @return array{code: string, name: string}|null */
     public function for(Server $server): ?array
     {
-        return $this->detect($server->name, $server->motd, $server->description);
+        // MOTD lives on the state row now — the caller (ServerDetailResource)
+        // eager-loads it, so `state` is present.
+        return $this->detect($server->name, $server->state?->motd, $server->description);
     }
 
     /**

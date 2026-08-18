@@ -84,11 +84,11 @@ class CatalogCounters
         $before = DB::table('games')->pluck('servers_count', 'slug');
 
         $aggregates = $this->activeServers()
-            ->selectRaw('game_id as key')
+            ->selectRaw('servers.game_id as key')
             ->selectRaw('count(*) as servers_count')
             ->selectRaw($this->onlineCount().' as online_servers_count')
             ->selectRaw($this->onlinePlayers().' as players_online')
-            ->groupBy('game_id')
+            ->groupBy('servers.game_id')
             ->get();
 
         $rows = $this->apply('games', $aggregates, ['servers_count', 'online_servers_count', 'players_online'], [
@@ -119,11 +119,11 @@ class CatalogCounters
     private function refreshVersions(): int
     {
         $aggregates = $this->activeServers()
-            ->whereNotNull('game_version_id')
-            ->selectRaw('game_version_id as key')
+            ->whereNotNull('servers.game_version_id')
+            ->selectRaw('servers.game_version_id as key')
             ->selectRaw('count(*) as servers_count')
             ->selectRaw($this->onlinePlayers().' as players_online')
-            ->groupBy('game_version_id')
+            ->groupBy('servers.game_version_id')
             ->get();
 
         return $this->apply('game_versions', $aggregates, ['servers_count', 'players_online']);
@@ -132,10 +132,10 @@ class CatalogCounters
     private function refreshCountries(): int
     {
         $aggregates = $this->activeServers()
-            ->whereNotNull('country_id')
-            ->selectRaw('country_id as key')
+            ->whereNotNull('servers.country_id')
+            ->selectRaw('servers.country_id as key')
             ->selectRaw('count(*) as servers_count')
-            ->groupBy('country_id')
+            ->groupBy('servers.country_id')
             ->get();
 
         return $this->apply('countries', $aggregates, ['servers_count']);
@@ -179,21 +179,25 @@ class CatalogCounters
     private function activeServers(): Builder
     {
         return DB::table('servers')
-            ->whereNull('deleted_at')
-            ->where('is_active', true)
-            ->where('status', '!=', ServerStatus::Unknown->value);
+            ->whereNull('servers.deleted_at')
+            ->where('servers.is_active', true)
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->where('server_states.status', '!=', ServerStatus::Unknown->value);
     }
 
     /** Portable conditional aggregate: sqlite has no FILTER in older builds. */
     private function onlineCount(): string
     {
-        return "sum(case when status = '".ServerStatus::Online->value."' then 1 else 0 end)";
+        return "sum(case when server_states.status = '".ServerStatus::Online->value."' then 1 else 0 end)";
     }
 
     /** Offline servers report zero players, but be explicit rather than trusting that. */
     private function onlinePlayers(): string
     {
-        return "sum(case when status = '".ServerStatus::Online->value."' then players_online else 0 end)";
+        return "sum(case when server_states.status = '".ServerStatus::Online->value."' then server_states.players_online else 0 end)";
     }
 
     /**

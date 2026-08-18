@@ -39,6 +39,12 @@ class FavoriteController extends Controller
                 'game:id,slug,name,accent_color,icon_path,cover_path,query_protocol,sort_order',
                 'country:id,code,name,slug',
                 'version:id,slug,name',
+                // Favourites cross games — one user can star Rust and CS at
+                // the same time — so the state eager load has no single
+                // `game_id` to bind to. Postgres will visit every partition
+                // once to satisfy `WHERE server_id IN (...)`, which is
+                // tolerable for a typical favourites list (dozens).
+                'state',
             ])
             // Delisted or soft-deleted servers stay starred but are not shown:
             // the row is kept so that a server coming back brings its stars with

@@ -5,6 +5,7 @@ namespace App\Services\Catalog;
 use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
+use App\Models\ServerState;
 use Illuminate\Support\Collection;
 
 /**
@@ -115,13 +116,9 @@ class BulkServerImport
                 'query_port' => $queryPort,
                 'deleted_at' => null,
                 'is_active' => true,
-                'next_query_at' => now(),
-                // Back to the front of the queue with the rest of this import:
-                // see DispatchServerQueries, which serves never-queried rows
-                // first, and this is how a restored row rejoins them.
-                'last_queried_at' => null,
-                'status' => ServerStatus::Unknown,
             ])->save();
+
+            $this->stateForRestore($existing);
 
             $report->restored($number, $host, $existing->slug);
 
@@ -146,13 +143,58 @@ class BulkServerImport
             // a placeholder either way — the first successful query replaces
             // both the name and the slug, and until then the row is invisible.
             'slug' => Server::slugFor('', $parsed->host, $parsed->port),
-            'status' => ServerStatus::Unknown,
+        ]);
+
+        $this->stateForFresh($server);
+
+        $report->add($number, $host, $server->slug);
+    }
+
+    /**
+     * A brand-new imported server starts at `unknown` with `next_query_at =
+     * now()`, so the picker gets to it in the current cycle rather than the
+     * next tier interval.
+     */
+    private function stateForFresh(Server $server): void
+    {
+        ServerState::query()->insert([
+            'server_id' => $server->id,
+            'game_id' => $server->game_id,
+            'status' => ServerStatus::Unknown->value,
             'players_online' => 0,
             'players_max' => 0,
             'next_query_at' => now(),
+            'failed_queries_count' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
+    }
 
-        $report->add($number, $host, $server->slug);
+    /**
+     * Restore the state row for a resurrected server the same way discovery
+     * would write a fresh one, with two twists: `last_queried_at` is cleared
+     * so DispatchServerQueries's "never-queried first" ordering picks it up
+     * immediately, and the status resets to `unknown` so listings hide it
+     * until the monitor confirms it exists.
+     */
+    private function stateForRestore(Server $server): void
+    {
+        ServerState::query()->upsert(
+            [[
+                'server_id' => $server->id,
+                'game_id' => $server->game_id,
+                'status' => ServerStatus::Unknown->value,
+                'players_online' => 0,
+                'players_max' => 0,
+                'next_query_at' => now(),
+                'last_queried_at' => null,
+                'failed_queries_count' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]],
+            uniqueBy: ['game_id', 'server_id'],
+            update: ['status', 'next_query_at', 'last_queried_at', 'failed_queries_count', 'updated_at'],
+        );
     }
 
     /**

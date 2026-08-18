@@ -7,12 +7,14 @@ use App\Enums\ServerStatus;
 use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
+use App\Models\ServerState;
 use App\Models\User;
 use App\Services\Catalog\Exceptions\ServerAlreadyListed;
 use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\Exceptions\UnsupportedProtocol;
 use App\Services\Monitoring\QueryResult;
 use App\Services\Monitoring\ServerQueryManager;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -81,33 +83,10 @@ class ServerSubmission
             'ip_address' => $result->ipAddress ?? $ip,
             'deleted_at' => null,
             'is_active' => true,
-            // Unknown only for the instant between this save and the recording
-            // below, which needs a row to write to. What leaves this method is
-            // an online server.
-            'status' => ServerStatus::Unknown,
-            'players_online' => 0,
             // Only ever set, never cleared: a resubmission by a stranger of a
             // server somebody else added does not rewrite who added it.
             'submitted_by_user_id' => $server->submitted_by_user_id ?? $submitter?->id,
-            'players_max' => $result->playersMax,
-            'next_query_at' => now(),
         ]);
-
-        // Whatever the server told us about itself, without overwriting fields
-        // its protocol cannot report.
-        foreach ([
-            'motd' => $result->motd,
-            'map' => $result->map,
-            'reported_version' => $result->version,
-            'game_port' => $result->gamePort,
-            'steam_id' => $result->steamId,
-            'wiped_at' => $result->wipedAt,
-            'players_queued' => $result->playersQueued,
-        ] as $column => $value) {
-            if ($value !== null) {
-                $server->{$column} = $value;
-            }
-        }
 
         if (! $server->exists) {
             $name = trim((string) ($result->motd ?? '')) ?: $parsed->toString();
@@ -116,6 +95,31 @@ class ServerSubmission
         }
 
         $server->save();
+
+        /*
+         * The state row exists from the moment the server does — QueryServer
+         * writes it as `online` a heartbeat later, but until it does, admin
+         * screens and the polling picker still need somewhere to read from.
+         *
+         * `Unknown` here is the same instant-then-gone status the discovery
+         * path used to write. Upsert because a resurrected soft-deleted server
+         * already has one.
+         */
+        ServerState::query()->upsert(
+            [[
+                'server_id' => $server->id,
+                'game_id' => $server->game_id,
+                'status' => ServerStatus::Unknown->value,
+                'players_online' => 0,
+                'players_max' => $result->playersMax,
+                'next_query_at' => now(),
+                'failed_queries_count' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]],
+            uniqueBy: ['game_id', 'server_id'],
+            update: ['players_max', 'next_query_at', 'updated_at'],
+        );
 
         /*
          * Inline, not queued, and with the answer we already got.

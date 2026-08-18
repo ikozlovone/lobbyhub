@@ -115,19 +115,29 @@ class RollupServerStats extends Command
     {
         $since = now()->subDays(max(1, $windowDays))->startOfDay()->toDateString();
 
+        /*
+         * The rollup carries `game_id` through the subquery — pulled from
+         * `servers` — so the UPDATE has both halves of `server_states`'s
+         * composite key. Without it Postgres has to walk every partition
+         * looking for `server_id`, which is exactly what partitioning was
+         * meant to avoid.
+         */
         $updated = DB::update(<<<'SQL'
-            update "servers"
+            update "server_states"
             set "uptime_percent" = round(v."online_samples" * 100.0 / v."samples", 2)
             from (
-                select "server_id",
-                       sum("online_samples_count") as "online_samples",
-                       sum("samples_count") as "samples"
-                from "server_daily_stats"
-                where "date" >= ?
-                group by "server_id"
-                having sum("samples_count") > 0
+                select "sds"."server_id",
+                       "s"."game_id",
+                       sum("sds"."online_samples_count") as "online_samples",
+                       sum("sds"."samples_count") as "samples"
+                from "server_daily_stats" as "sds"
+                inner join "servers" as "s" on "s"."id" = "sds"."server_id"
+                where "sds"."date" >= ?
+                group by "sds"."server_id", "s"."game_id"
+                having sum("sds"."samples_count") > 0
             ) as v
-            where "servers"."id" = v."server_id"
+            where "server_states"."server_id" = v."server_id"
+              and "server_states"."game_id" = v."game_id"
         SQL, [$since]);
 
         $this->info("uptime refreshed for {$updated} server(s) over a {$windowDays}-day window");

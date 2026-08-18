@@ -34,9 +34,17 @@ class MonitoringReport
      */
     public function statuses(): array
     {
-        $counts = Server::query()->active()
-            ->select('status', DB::raw('count(*) as total'))
-            ->groupBy('status')
+        // Counts group by the state's status; both is_active (servers) and
+        // status (states) are needed, so JOIN.
+        $counts = DB::table('servers')
+            ->where('servers.is_active', true)
+            ->whereNull('servers.deleted_at')
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->select('server_states.status', DB::raw('count(*) as total'))
+            ->groupBy('server_states.status')
             ->pluck('total', 'status');
 
         $total = (int) $counts->sum();
@@ -46,7 +54,15 @@ class MonitoringReport
             'online' => (int) ($counts[ServerStatus::Online->value] ?? 0),
             'offline' => (int) ($counts[ServerStatus::Offline->value] ?? 0),
             'unknown' => (int) ($counts[ServerStatus::Unknown->value] ?? 0),
-            'never_queried' => (int) Server::query()->active()->whereNull('last_queried_at')->count(),
+            'never_queried' => (int) DB::table('servers')
+                ->where('servers.is_active', true)
+                ->whereNull('servers.deleted_at')
+                ->join('server_states', function ($join) {
+                    $join->on('server_states.server_id', '=', 'servers.id')
+                        ->on('server_states.game_id', '=', 'servers.game_id');
+                })
+                ->whereNull('server_states.last_queried_at')
+                ->count(),
             'inactive' => (int) Server::query()->where('is_active', false)->count(),
         ];
     }
@@ -61,7 +77,11 @@ class MonitoringReport
      */
     public function throughput(): array
     {
-        $active = Server::query()->active();
+        $activeWithState = fn () => Server::query()->active()
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            });
 
         $expected = $this->schedule->expectedHourlyQueriesForActive();
 
@@ -80,8 +100,8 @@ class MonitoringReport
             'actual_last_hour' => $actual,
             'window_minutes' => (int) $minutes,
             'ratio' => $scaled > 0 ? round($actual / $scaled * 100) : null,
-            'due_now' => (int) (clone $active)->where('next_query_at', '<=', now())->count(),
-            'oldest_due_at' => (clone $active)->where('next_query_at', '<=', now())->min('next_query_at'),
+            'due_now' => (int) $activeWithState()->where('server_states.next_query_at', '<=', now())->count(),
+            'oldest_due_at' => $activeWithState()->where('server_states.next_query_at', '<=', now())->min('server_states.next_query_at'),
             'batch_size' => (int) config('monitoring.batch_size'),
         ];
     }
@@ -116,7 +136,15 @@ class MonitoringReport
             // Not the configured interval but the one that happened: samples in
             // a day divided across the servers that produced them.
             'checks_per_server_24h' => $samples > 0
-                ? round($samples / max(1, (int) Server::query()->active()->whereNotNull('last_queried_at')->count()), 1)
+                ? round($samples / max(1, (int) DB::table('servers')
+                    ->where('servers.is_active', true)
+                    ->whereNull('servers.deleted_at')
+                    ->join('server_states', function ($join) {
+                        $join->on('server_states.server_id', '=', 'servers.id')
+                            ->on('server_states.game_id', '=', 'servers.game_id');
+                    })
+                    ->whereNotNull('server_states.last_queried_at')
+                    ->count()), 1)
                 : null,
         ];
     }
@@ -137,13 +165,17 @@ class MonitoringReport
                     ->whereNull('servers.deleted_at')
                     ->where('servers.is_active', true);
             })
+            ->leftJoin('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
             ->groupBy('games.id', 'games.name', 'games.slug', 'games.query_protocol')
             ->select('games.name', 'games.slug', 'games.query_protocol')
             ->selectRaw('count(servers.id) as total')
-            ->selectRaw("sum(case when servers.status = ? then 1 else 0 end) as online", [ServerStatus::Online->value])
-            ->selectRaw("sum(case when servers.status = ? then 1 else 0 end) as offline", [ServerStatus::Offline->value])
-            ->selectRaw("sum(case when servers.status = ? then 1 else 0 end) as unknown", [ServerStatus::Unknown->value])
-            ->selectRaw('sum(case when servers.next_query_at <= ? then 1 else 0 end) as due', [now()])
+            ->selectRaw('sum(case when server_states.status = ? then 1 else 0 end) as online', [ServerStatus::Online->value])
+            ->selectRaw('sum(case when server_states.status = ? then 1 else 0 end) as offline', [ServerStatus::Offline->value])
+            ->selectRaw('sum(case when server_states.status = ? then 1 else 0 end) as unknown', [ServerStatus::Unknown->value])
+            ->selectRaw('sum(case when server_states.next_query_at <= ? then 1 else 0 end) as due', [now()])
             ->orderByDesc('total')
             ->get();
     }
@@ -178,10 +210,22 @@ class MonitoringReport
     public function longestOffline(int $limit = 10): Collection
     {
         return Server::query()->active()
-            ->where('status', ServerStatus::Offline)
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->where('server_states.status', ServerStatus::Offline->value)
             ->with('game:id,name,slug')
-            ->orderBy('last_online_at')
+            ->orderBy('server_states.last_online_at')
             ->limit($limit)
-            ->get(['id', 'game_id', 'slug', 'name', 'last_online_at', 'last_queried_at', 'failed_queries_count']);
+            ->get([
+                'servers.id',
+                'servers.game_id',
+                'servers.slug',
+                'servers.name',
+                'server_states.last_online_at',
+                'server_states.last_queried_at',
+                'server_states.failed_queries_count',
+            ]);
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services\Catalog;
 
+use App\Enums\ServerStatus;
 use App\Models\Server;
 use Illuminate\Support\Facades\DB;
 
@@ -88,9 +89,21 @@ class ServerRanking
 
         $updated = 0;
 
+        // `uptime_percent` lives on the state row now, so it's carried as
+        // an aliased column off the join rather than off the server itself.
         Server::query()
             ->active()
-            ->select(['id', 'uptime_percent', 'promoted_until', 'rank_score', 'votes_count'])
+            ->join('server_states', function ($join) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id');
+            })
+            ->select([
+                'servers.id',
+                'servers.promoted_until',
+                'servers.rank_score',
+                'servers.votes_count',
+                'server_states.uptime_percent',
+            ])
             ->chunkById(self::READ_CHUNK, function ($servers) use ($recentVotes, $allVotes, $averagePlayers, &$updated) {
                 $changed = [];
 
@@ -116,7 +129,7 @@ class ServerRanking
                 }
 
                 $updated += $this->write($changed);
-            });
+            }, column: 'servers.id', alias: 'id');
 
         return $updated;
     }
@@ -183,13 +196,23 @@ class ServerRanking
      */
     public function standing(Server $server): array
     {
-        $peers = Server::query()->active()->verified()->where('game_id', $server->game_id);
+        // "Verified" = has a state row and is not `unknown` there. JOIN keeps
+        // the peer set consistent with what the listings show.
+        $peers = Server::query()
+            ->active()
+            ->join('server_states', function ($join) use ($server) {
+                $join->on('server_states.server_id', '=', 'servers.id')
+                    ->on('server_states.game_id', '=', 'servers.game_id')
+                    ->where('server_states.game_id', $server->game_id);
+            })
+            ->where('server_states.status', '!=', ServerStatus::Unknown->value)
+            ->where('servers.game_id', $server->game_id);
 
         return [
-            'position' => (clone $peers)->where('rank_score', '>', $server->rank_score)->count() + 1,
+            'position' => (clone $peers)->where('servers.rank_score', '>', $server->rank_score)->count() + 1,
             'total' => (clone $peers)->count(),
             'points' => $server->rank_score,
-            'leader_points' => (int) (clone $peers)->max('rank_score'),
+            'leader_points' => (int) (clone $peers)->max('servers.rank_score'),
         ];
     }
 }

@@ -16,10 +16,14 @@ class ServerResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        // Every listing loads this — the resource cannot render without hot
+        // fields, and lazy-loading here would cross partitions once per row.
+        $state = $this->state;
+
         return [
             'slug' => $this->slug,
             'name' => $this->name,
-            'motd' => $this->motd,
+            'motd' => $state?->motd,
             /**
              * Only present on the catalog-wide listing, which is the only one
              * that eager-loads it — inside a game the caller already knows.
@@ -31,8 +35,8 @@ class ServerResource extends JsonResource
             ]),
             // What a player connects to — reported by the server when it can.
             'address' => $this->address(),
-            'map' => $this->map,
-            'version' => $this->reported_version,
+            'map' => $state?->map,
+            'version' => $state?->reported_version,
             'country' => $this->whenLoaded('country', fn () => [
                 'code' => $this->country?->code,
                 'name' => $this->country?->name,
@@ -44,16 +48,16 @@ class ServerResource extends JsonResource
             'votes' => $this->votes_count,
             'rating' => $this->rating_avg === null ? null : (float) $this->rating_avg,
             'promoted' => $this->isPromoted(),
-            'wiped_at' => $this->wiped_at?->toIso8601String(),
+            'wiped_at' => $state?->wiped_at?->toIso8601String(),
             /** When the catalog first got this address — what "latest added" sorts on. */
             'added_at' => $this->created_at?->toIso8601String(),
             'live' => [
-                'status' => $this->status->value,
-                'players' => $this->players_online,
-                'max_players' => $this->players_max,
-                'queued' => $this->players_queued,
-                'uptime' => $this->uptime_percent === null ? null : (float) $this->uptime_percent,
-                'checked_at' => $this->last_queried_at?->toIso8601String(),
+                'status' => $state?->status?->value,
+                'players' => $state?->players_online ?? 0,
+                'max_players' => $state?->players_max ?? 0,
+                'queued' => $state?->players_queued ?? 0,
+                'uptime' => $state?->uptime_percent === null ? null : (float) $state->uptime_percent,
+                'checked_at' => $state?->last_queried_at?->toIso8601String(),
             ],
         ];
     }
