@@ -472,17 +472,15 @@ class SteamCatalogSync
     /**
      * The tier for a server we have no model of.
      *
-     * PollingSchedule reads one field off an unpromoted server, and hydrating
-     * forty thousand Eloquent objects to hand it over is exactly the cost this
-     * class exists to avoid.
+     * Discovery cannot know whether a candidate is promoted — promotion is a
+     * catalog fact on `servers` that this class does not fetch. `false` is
+     * the right default: for a server the sync is meeting for the first time
+     * there is nothing paid for; for one it is refreshing, the schedule will
+     * be recalculated on the next real query.
      */
     private function interval(DiscoveredServer $found): int
     {
-        $proxy = new Server;
-        $proxy->players_online = $found->playersOnline;
-        $proxy->promoted_until = null;
-
-        return $this->schedule->intervalFor($proxy);
+        return $this->schedule->intervalFor($found->playersOnline, false);
     }
 
     /**
