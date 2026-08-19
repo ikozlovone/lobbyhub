@@ -196,6 +196,20 @@ class ServerRanking
      */
     public function standing(Server $server): array
     {
+        // Kill switch: the three peer aggregates below run per detail hit and
+        // dominate CPU on a bot sweep of the catalog. Off, the payload keeps
+        // its shape — `points` is the server's own column and stays honest —
+        // but `position`, `total` and `leader_points` are zeroed so the panel
+        // renders without a query. Flip via SERVER_LISTING_AGGREGATES_ENABLED.
+        if (! config('ranking.standing_enabled')) {
+            return [
+                'position' => 0,
+                'total' => 0,
+                'points' => $server->rank_score,
+                'leader_points' => 0,
+            ];
+        }
+
         // "Verified" = has a state row and is not `unknown` there. JOIN keeps
         // the peer set consistent with what the listings show.
         $peers = Server::query()

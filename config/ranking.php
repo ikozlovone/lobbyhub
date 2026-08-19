@@ -31,4 +31,15 @@ return [
     /** A paid placement's equivalent of the competitor's "boost". */
     'promoted_points' => (int) env('RANKING_PROMOTED_POINTS', 2000),
 
+    /*
+     * Kill switch for ServerRanking::standing() — the two COUNTs and one MAX
+     * over servers ⋈ server_states run per detail hit. Off, the payload keeps
+     * its shape with zeroed peer stats, so the panel renders without a query.
+     * Flip via SERVER_LISTING_AGGREGATES_ENABLED in .env.
+     */
+    'standing_enabled' => filter_var(
+        env('SERVER_LISTING_AGGREGATES_ENABLED', true),
+        FILTER_VALIDATE_BOOLEAN,
+    ),
+
 ];
