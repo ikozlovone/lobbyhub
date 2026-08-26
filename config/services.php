@@ -139,4 +139,29 @@ return [
         'contact_to' => env('CONTACT_TO'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | ClickHouse
+    |--------------------------------------------------------------------------
+    |
+    | Storage for per-server player-count history. Written to by a2s-benchmark
+    | (native protocol on port 9000), read from Laravel over HTTP on 8123 —
+    | the same rules Postgres has for its own port split. The Go sweeper reads
+    | CH_PORT for its 9000 dial; Laravel needs CH_PORT_HTTP for 8123, hence
+    | two variables sharing the same server.
+    |
+    | Empty CH_HOST leaves everything nulled — the reader in ServerHistory
+    | catches the missing config and returns an empty graph, so a Laravel
+    | install without ClickHouse still boots.
+    |
+    */
+
+    'clickhouse' => [
+        'host' => env('CH_HOST'),
+        'port_http' => (int) env('CH_PORT_HTTP', 8123),
+        'database' => env('CH_DATABASE', 'lobbyhub_stats'),
+        'username' => env('CH_USERNAME', 'default'),
+        'password' => env('CH_PASSWORD', ''),
+    ],
+
 ];

@@ -7,6 +7,7 @@ use App\Observers\GameObserver;
 use App\Services\Geo\GeoResolver;
 use App\Services\Geo\MaxMindGeoResolver;
 use App\Services\Geo\NullGeoResolver;
+use App\Services\Stats\ClickHouseClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -30,6 +31,22 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return new NullGeoResolver;
+        });
+
+        // ClickHouse holds the per-server player-count history graphs read
+        // from. A single client instance per process is fine — everything
+        // beneath uses Laravel's shared Http:: manager, and there is no
+        // per-request state on the client itself.
+        $this->app->singleton(ClickHouseClient::class, function () {
+            $cfg = (array) config('services.clickhouse', []);
+
+            return new ClickHouseClient(
+                host: $cfg['host'] ?? null,
+                port: (int) ($cfg['port_http'] ?? 8123),
+                database: (string) ($cfg['database'] ?? 'lobbyhub_stats'),
+                username: (string) ($cfg['username'] ?? 'default'),
+                password: (string) ($cfg['password'] ?? ''),
+            );
         });
     }
 
