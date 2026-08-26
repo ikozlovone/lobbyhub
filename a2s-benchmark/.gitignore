@@ -1,0 +1,7 @@
+# Compiled binaries — leading slash pins to the module root so we do not
+# accidentally ignore the `cmd/a2s-benchmark/` source directory too.
+/a2s-benchmark
+/a2s-benchmark.exe
+/chstats-backfill
+/chstats-backfill.exe
+/results/
