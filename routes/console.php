@@ -76,11 +76,6 @@ Artisan::command('inspire', function () {
 //     ->everyFiveMinutes()
 //     ->withoutOverlapping();
 
-// Re-rolls today (partial) and yesterday, so graphs stay current intraday.
-// Schedule::command('stats:rollup --days=2')
-//     ->hourly()
-//     ->withoutOverlapping();
-
 /*
  * Tagged cache entries expire on their own; the sets that remember which keys
  * carried a tag do not. Redis is the only store where tags work at all, and it

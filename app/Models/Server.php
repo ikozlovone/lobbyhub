@@ -91,18 +91,6 @@ class Server extends Model
         return $this->hasMany(Vote::class);
     }
 
-    /** Raw monitoring samples (short retention). */
-    public function stats(): HasMany
-    {
-        return $this->hasMany(ServerStat::class);
-    }
-
-    /** Daily rollups (kept forever). */
-    public function dailyStats(): HasMany
-    {
-        return $this->hasMany(ServerDailyStat::class);
-    }
-
     /**
      * The hot half of the row — status, players, MOTD, schedule, everything
      * the monitor rewrites. Lives in `server_states`, partitioned by game.

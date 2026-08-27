@@ -7,7 +7,6 @@ use App\Jobs\QueryServer;
 use App\Models\Country;
 use App\Models\Game;
 use App\Models\Server;
-use App\Models\ServerStat;
 use App\Services\Geo\GeoLocation;
 use App\Services\Geo\GeoResolver;
 use App\Services\Geo\NullGeoResolver;

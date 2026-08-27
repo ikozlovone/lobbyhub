@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\ServerStatus;
 use App\Models\Server;
-use App\Models\ServerStat;
+use App\Models\ServerState;
 use App\Services\Monitoring\PollingSchedule;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -101,7 +101,12 @@ class MonitoringStatus extends Command
         $expected = $schedule->expectedHourlyQueriesForActive();
 
         $since = now()->subHour();
-        $actual = ServerStat::where('recorded_at', '>=', $since)->count();
+        // Per-query samples used to live in `server_stats`; that path was
+        // retired when the Go sweeper took over. `server_states.last_queried_at`
+        // moves once per server per sweep cycle instead — a rougher signal
+        // (one poll per server per ~10 min, not per attempt) but the same
+        // question: is anything actually reaching the servers?
+        $actual = ServerState::where('last_queried_at', '>=', $since)->count();
 
         /*
          * Scale the expectation to the window we actually have data for.
@@ -110,7 +115,7 @@ class MonitoringStatus extends Command
          * started two minutes ago reports 4% and looks like a failure — which is
          * exactly when someone runs this command.
          */
-        $firstSample = ServerStat::where('recorded_at', '>=', $since)->min('recorded_at');
+        $firstSample = ServerState::where('last_queried_at', '>=', $since)->min('last_queried_at');
         $covered = $firstSample
             ? max(60, now()->diffInSeconds(Carbon::parse($firstSample), absolute: true))
             : 3600;

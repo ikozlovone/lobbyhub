@@ -5,7 +5,6 @@ namespace Tests\Feature\Admin;
 use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
-use App\Models\ServerStat;
 use App\Models\SocialAccount;
 use App\Models\User;
 use App\Models\Vote;

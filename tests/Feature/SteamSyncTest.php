@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
-use App\Models\ServerStat;
 use App\Services\Discovery\DiscoveredServer;
 use App\Services\Discovery\SteamCatalogSync;
 use App\Services\Discovery\SteamServerSweep;

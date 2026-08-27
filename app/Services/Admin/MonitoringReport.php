@@ -5,7 +5,7 @@ namespace App\Services\Admin;
 use App\Enums\ServerStatus;
 use App\Models\Game;
 use App\Models\Server;
-use App\Models\ServerStat;
+use App\Models\ServerState;
 use App\Services\Monitoring\PollingSchedule;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -86,12 +86,15 @@ class MonitoringReport
         $expected = $this->schedule->expectedHourlyQueriesForActive();
 
         $since = now()->subHour();
-        $actual = ServerStat::where('recorded_at', '>=', $since)->count();
+        // `server_stats` is retired; `server_states.last_queried_at` is the
+        // per-server "when did we last reach it" and gives the throughput
+        // signal one poll per server per ~10 min sweep.
+        $actual = ServerState::where('last_queried_at', '>=', $since)->count();
 
         // The window is only as long as there is data for. Comparing an hour of
         // expectation against a monitor started two minutes ago reports 4% and
         // reads as a failure — which is exactly when someone opens this page.
-        $firstSample = ServerStat::where('recorded_at', '>=', $since)->min('recorded_at');
+        $firstSample = ServerState::where('last_queried_at', '>=', $since)->min('last_queried_at');
         $minutes = $firstSample ? max(1, now()->diffInMinutes($firstSample, absolute: true)) : 60;
         $scaled = $expected * min(1, $minutes / 60);
 
@@ -107,45 +110,25 @@ class MonitoringReport
     }
 
     /**
-     * How long a check takes, and how often one fails.
+     * Per-query latency and failure rate lived on `server_stats` — a table
+     * the Go sweeper does not fill. The Go sweeper's own log has both
+     * numbers per game per sweep (`sweep done` events in
+     * /var/log/lobbyhub-sweep.log); a real replacement would query
+     * ClickHouse or parse those logs, and is left for the admin-dashboard
+     * rewrite that will happen alongside the tables being dropped.
      *
-     * Latency is the server's own response time, not ours: the socket is open
-     * for as long as the machine on the other end takes to answer. It is the
-     * number that tells a slow host from a busy one.
+     * Everything null'd here rather than dropped so the dashboard shape
+     * (and any code reading the array) stays stable.
      */
     public function timings(): array
     {
-        $since = now()->subDay();
-
-        $row = ServerStat::where('recorded_at', '>=', $since)
-            ->selectRaw('count(*) as samples')
-            ->selectRaw('avg(latency_ms) as avg_latency')
-            ->selectRaw('max(latency_ms) as max_latency')
-            ->selectRaw("sum(case when is_online then 0 else 1 end) as failures")
-            ->first();
-
-        $samples = (int) ($row->samples ?? 0);
-        $failures = (int) ($row->failures ?? 0);
-
         return [
-            'samples_24h' => $samples,
-            'avg_latency_ms' => $row?->avg_latency !== null ? (int) round((float) $row->avg_latency) : null,
-            'max_latency_ms' => $row?->max_latency !== null ? (int) $row->max_latency : null,
-            'failures_24h' => $failures,
-            'failure_rate' => $samples > 0 ? round($failures / $samples * 100, 1) : null,
-            // Not the configured interval but the one that happened: samples in
-            // a day divided across the servers that produced them.
-            'checks_per_server_24h' => $samples > 0
-                ? round($samples / max(1, (int) DB::table('servers')
-                    ->where('servers.is_active', true)
-                    ->whereNull('servers.deleted_at')
-                    ->join('server_states', function ($join) {
-                        $join->on('server_states.server_id', '=', 'servers.id')
-                            ->on('server_states.game_id', '=', 'servers.game_id');
-                    })
-                    ->whereNotNull('server_states.last_queried_at')
-                    ->count()), 1)
-                : null,
+            'samples_24h' => null,
+            'avg_latency_ms' => null,
+            'max_latency_ms' => null,
+            'failures_24h' => null,
+            'failure_rate' => null,
+            'checks_per_server_24h' => null,
         ];
     }
 
@@ -181,29 +164,14 @@ class MonitoringReport
     }
 
     /**
-     * The slowest servers to answer, averaged over the day.
-     *
-     * From the samples rather than from `servers`, which keeps no latency of
-     * its own — and an average over a day is the honest number anyway: a single
-     * check catches whatever the host was doing that second.
+     * Ranked by latency, this was the "who is slow to answer" list; the
+     * per-query latency it needs is not persisted anywhere the app can
+     * read. Empty collection keeps the dashboard from crashing; see
+     * timings() for the same story.
      */
     public function slowest(int $limit = 10): Collection
     {
-        return ServerStat::query()
-            ->where('server_stats.recorded_at', '>=', now()->subDay())
-            ->where('server_stats.is_online', true)
-            ->join('servers', 'servers.id', '=', 'server_stats.server_id')
-            ->join('games', 'games.id', '=', 'servers.game_id')
-            ->whereNull('servers.deleted_at')
-            ->where('servers.is_active', true)
-            ->groupBy('servers.id', 'servers.slug', 'servers.name', 'games.name')
-            ->select('servers.slug', 'servers.name', 'games.name as game')
-            ->selectRaw('avg(server_stats.latency_ms) as avg_latency')
-            ->selectRaw('count(*) as samples')
-            ->havingRaw('avg(server_stats.latency_ms) is not null')
-            ->orderByDesc('avg_latency')
-            ->limit($limit)
-            ->get();
+        return collect();
     }
 
     /** Servers the monitor has failed to reach for the longest. */

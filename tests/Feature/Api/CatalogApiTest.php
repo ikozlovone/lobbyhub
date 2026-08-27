@@ -6,7 +6,6 @@ use App\Enums\ServerStatus;
 use App\Models\Country;
 use App\Models\Game;
 use App\Models\Server;
-use App\Models\ServerStat;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
