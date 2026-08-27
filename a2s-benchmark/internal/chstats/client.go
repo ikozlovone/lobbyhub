@@ -108,17 +108,22 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// NewGameWriter returns a per-game collector for one sweep. The
-// timestamp on every row is captured now, truncated down to the
-// nearest ten-minute boundary — so all rows in one sweep share the
-// same ts and drop into the same time bucket in ClickHouse regardless
-// of how long the sweep itself took.
-func (c *Client) NewGameWriter(gameID uint32) *Writer {
+// NewSweepWriter returns a single collector shared across every game in
+// a sweep. The timestamp on every row is captured now, truncated down
+// to the nearest ten-minute boundary — so all rows in one sweep share
+// the same ts and drop into the same time bucket in ClickHouse
+// regardless of how long the sweep itself took.
+//
+// game_id lives on each queued point (see writer.go) rather than on the
+// Writer itself, so main only creates one of these per --all-games run.
+// One PrepareBatch/Send per sweep replaces the 46 the earlier per-game
+// design used to do — the same rows land in ClickHouse as one large
+// part instead of forty-six small ones.
+func (c *Client) NewSweepWriter() *Writer {
 	return &Writer{
 		client: c,
-		gameID: gameID,
 		ts:     time.Now().UTC().Truncate(10 * time.Minute),
-		points: make([]point, 0, 4096),
+		points: make([]point, 0, 262144),
 	}
 }
 

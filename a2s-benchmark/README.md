@@ -24,23 +24,28 @@ See `../a2s-benchmark.txt` for the specification.
 
 ```
 cd a2s-benchmark
-go build ./cmd/a2s-benchmark
+go build -o a2s-benchmark.bin ./cmd/a2s-benchmark
+go build -o chstats-backfill.bin ./cmd/chstats-backfill
 ```
+
+The `.bin` suffix keeps the binary distinguishable from the source
+directory of the same name — running the binary from the parent directory
+would otherwise clash with the `a2s-benchmark/` folder.
 
 ## Run
 
 ```
 ulimit -n 65536
-cd /var/www/lobbyhub
+cd /var/www/lobbyhub/a2s-benchmark
 
 # whole catalog, production write mode, optimal values
-./a2s-benchmark --all-games --concurrency=3000 --timeout=500ms --write
+./a2s-benchmark.bin --all-games --concurrency=3000 --timeout=500ms --write
 
 # one game
-./a2s-benchmark --game=counter-strike-2 --concurrency=3000 --timeout=500ms --write
+./a2s-benchmark.bin --game=counter-strike-2 --concurrency=3000 --timeout=500ms --write
 ```
 
-Run `./a2s-benchmark --help` for the full list of flags and more examples.
+Run `./a2s-benchmark.bin --help` for the full list of flags and more examples.
 
 ## Configuration
 

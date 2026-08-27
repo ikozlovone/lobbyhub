@@ -8,8 +8,13 @@ import (
 )
 
 // point is one row queued for the INSERT — kept internal so callers can
-// only push via Enqueue, which validates and captures the sweep-wide ts.
+// only push via Enqueue. game_id sits per-row now that one Writer is
+// shared across every game in a sweep — one PrepareBatch per --all-games
+// run instead of one per game, so ClickHouse sees a single large part
+// per cycle instead of forty-six small ones. Fewer parts, less merge
+// work, tighter steady-state memory.
 type point struct {
+	gameID   uint32
 	serverID uint64
 	players  uint16
 }
@@ -22,15 +27,15 @@ type Stats struct {
 	FlushMs  int64
 }
 
-// Writer collects one game's online-player samples during a sweep and
-// flushes them as one batched INSERT at the end. Fail-open: a rejected
-// flush is counted and dropped, no error is returned up.
+// Writer collects online-player samples during a sweep — across every
+// game the sweep touches — and flushes them as one batched INSERT at
+// the end. Fail-open: a rejected flush is counted and dropped, no
+// error is returned up.
 //
-// One Writer per game per sweep. Cheap to create (no allocation-heavy
-// work in constructor) and Flush is what actually spends the network.
+// One Writer per process invocation. Cheap to create (no allocation-heavy
+// work in the constructor) and Flush is what actually spends the network.
 type Writer struct {
 	client *Client
-	gameID uint32
 	ts     time.Time
 
 	mu     sync.Mutex
@@ -44,16 +49,16 @@ type Writer struct {
 //
 // serverID > 0 is enforced upstream (a zero id is a caller bug, not our
 // job to filter here).
-func (w *Writer) Enqueue(serverID uint64, players uint16) {
+func (w *Writer) Enqueue(gameID uint32, serverID uint64, players uint16) {
 	w.mu.Lock()
-	w.points = append(w.points, point{serverID: serverID, players: players})
+	w.points = append(w.points, point{gameID: gameID, serverID: serverID, players: players})
 	w.stats.Enqueued++
 	w.mu.Unlock()
 }
 
 // Flush pushes every collected row as one INSERT and returns the CH
-// error verbatim. Called after the sweep goroutines have all finished,
-// so no mutex contention: we take the slice, release the lock, run the
+// error verbatim. Called after every sweep in the run has finished, so
+// no mutex contention: we take the slice, release the lock, run the
 // insert.
 //
 // After Flush the writer holds no rows; a second call is a no-op.
@@ -87,21 +92,21 @@ func (w *Writer) Flush(ctx context.Context) error {
 		"INSERT INTO server_players_raw (ts, game_id, server_id, players_online)")
 	if err != nil {
 		w.recordError()
-		slog.Warn("chstats prepare failed", "game_id", w.gameID, "err", err)
+		slog.Warn("chstats prepare failed", "err", err)
 		return err
 	}
 
 	for _, p := range batch {
-		if err := prep.Append(w.ts, w.gameID, p.serverID, p.players); err != nil {
+		if err := prep.Append(w.ts, p.gameID, p.serverID, p.players); err != nil {
 			w.recordError()
-			slog.Warn("chstats append failed", "game_id", w.gameID, "err", err)
+			slog.Warn("chstats append failed", "err", err)
 			return err
 		}
 	}
 
 	if err := prep.Send(); err != nil {
 		w.recordError()
-		slog.Warn("chstats send failed", "game_id", w.gameID, "rows", len(batch), "err", err)
+		slog.Warn("chstats send failed", "rows", len(batch), "err", err)
 		return err
 	}
 

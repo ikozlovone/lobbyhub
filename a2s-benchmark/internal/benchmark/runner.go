@@ -22,6 +22,7 @@ import (
 type Config struct {
 	GameSlug    string
 	GameName    string
+	GameID      uint32
 	Concurrency int
 	Timeout     time.Duration
 	Retries     int
@@ -136,7 +137,7 @@ func Run(ctx context.Context, cfg Config, servers []repository.Server, loaded re
 			// nothing to a per-server player-history graph and would just
 			// inflate ClickHouse with zeros.
 			if cfg.Stats != nil && result.Outcome == snapshot.OutcomeResponded && result.Info != nil {
-				cfg.Stats.Enqueue(uint64(server.ID), uint16(result.Info.PlayersOnline))
+				cfg.Stats.Enqueue(cfg.GameID, uint64(server.ID), uint16(result.Info.PlayersOnline))
 			}
 		}()
 	}
@@ -155,16 +156,10 @@ func Run(ctx context.Context, cfg Config, servers []repository.Server, loaded re
 		cancel()
 	}
 
-	// Flush stats after the state writer — reader-friendly ordering: if
-	// both fail, the message from the more critical (state) writer shows
-	// up first. Fail-open, counted in the summary either way.
-	if cfg.Stats != nil {
-		flushCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		if err := cfg.Stats.Flush(flushCtx); err != nil {
-			slog.Warn("stats flush failed", "game", cfg.GameSlug, "err", err)
-		}
-		cancel()
-	}
+	// cfg.Stats is intentionally NOT flushed here — one Writer is shared
+	// across every game in a --all-games run, so main flushes it once at
+	// the very end. Flushing per game would defeat the point of the
+	// shared writer (one big INSERT into ClickHouse instead of many).
 
 	elapsed := time.Since(counters.StartedAt)
 	sorted, buckets := hist.Snapshot()
@@ -174,10 +169,9 @@ func Run(ctx context.Context, cfg Config, servers []repository.Server, loaded re
 		s := cfg.Writer.Stats()
 		report.Writer = &s
 	}
-	if cfg.Stats != nil {
-		s := cfg.Stats.Snapshot()
-		report.Stats = &s
-	}
+	// cfg.Stats is a shared writer flushed by main after every game — no
+	// meaningful per-game snapshot lives here; the sweep-done log gets the
+	// delta from main.
 	report.print()
 
 	return report, nil
@@ -298,7 +292,6 @@ type Report struct {
 	FinishedAt              time.Time
 
 	Writer *repository.WriterStats
-	Stats  *chstats.Stats
 }
 
 func buildReport(cfg Config, loaded repository.LoadCounts, attempted int, elapsed time.Duration,
@@ -429,15 +422,9 @@ func (r *Report) print() {
 		fmt.Printf("  avg batch:           %d ms\n", avgMs)
 		fmt.Println()
 	}
-	if r.Stats != nil {
-		s := r.Stats
-		fmt.Println("ClickHouse stats:")
-		fmt.Printf("  enqueued:            %d\n", s.Enqueued)
-		fmt.Printf("  written:             %d\n", s.Written)
-		fmt.Printf("  errors:              %d\n", s.Errors)
-		fmt.Printf("  flush time:          %d ms\n", s.FlushMs)
-		fmt.Println()
-	}
+	// ClickHouse stats live on the shared writer main owns; the per-game
+	// pretty printer no longer sees them. Look at "sweep done"
+	// (ch_enqueued) and "all-games done" (total_ch_written) in the log.
 	fmt.Println("Configuration:")
 	fmt.Printf("  concurrency:         %d\n", r.Concurrency)
 	fmt.Printf("  timeout:             %d ms\n", r.TimeoutMs)

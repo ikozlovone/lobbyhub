@@ -151,9 +151,25 @@ func runOneGame(ctx context.Context, repo *repository.Repo, ch *chstats.Client, 
 		fmt.Fprintf(os.Stderr, "load game: %v\n", err)
 		return 1
 	}
-	if _, err := sweepGame(ctx, repo, ch, g, baseCfg, write); err != nil {
+
+	var chWriter *chstats.Writer
+	if write && ch != nil {
+		chWriter = ch.NewSweepWriter()
+	}
+
+	if _, err := sweepGame(ctx, repo, chWriter, g, baseCfg, write); err != nil {
 		fmt.Fprintf(os.Stderr, "run: %v\n", err)
 		return 1
+	}
+
+	// One INSERT per run — the shared writer holds every row we enqueued
+	// for this one game and pushes them in a single batch. Fail-open.
+	if chWriter != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := chWriter.Flush(flushCtx); err != nil {
+			slog.Warn("chstats flush failed", "err", err)
+		}
+		cancel()
 	}
 	return 0
 }
@@ -177,15 +193,21 @@ func runAllGames(ctx context.Context, repo *repository.Repo, ch *chstats.Client,
 	fmt.Printf("Sweeping %d games sequentially...\n\n", len(games))
 	slog.Info("all-games start", "games", len(games))
 
+	// One shared ClickHouse writer for the whole run. Every game's rows
+	// go into the same buffer; one INSERT lands them all after the loop.
+	var chWriter *chstats.Writer
+	if write && ch != nil {
+		chWriter = ch.NewSweepWriter()
+	}
+
 	started := time.Now()
 	var (
-		ok, failed          int
-		totalResponded      int64
-		totalPlayers        int64
-		totalDBWritten      int64
-		totalDBErrors       int64
-		totalCHWritten      int
-		totalCHErrors       int
+		ok, failed       int
+		totalResponded   int64
+		totalPlayers     int64
+		totalDBWritten   int64
+		totalDBErrors    int64
+		totalCHEnqueued  int
 	)
 
 	for _, g := range games {
@@ -195,7 +217,7 @@ func runAllGames(ctx context.Context, repo *repository.Repo, ch *chstats.Client,
 			break
 		}
 		fmt.Printf("========== %s (%s) ==========\n", g.Slug, g.Protocol)
-		res, err := sweepGame(ctx, repo, ch, g, baseCfg, write)
+		res, err := sweepGame(ctx, repo, chWriter, g, baseCfg, write)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", g.Slug, err)
 			slog.Error("sweep failed", "game", g.Slug, "err", err)
@@ -207,8 +229,25 @@ func runAllGames(ctx context.Context, repo *repository.Repo, ch *chstats.Client,
 		totalPlayers += res.PlayersOnline
 		totalDBWritten += res.DBWritten
 		totalDBErrors += res.DBErrors
-		totalCHWritten += res.CHWritten
-		totalCHErrors += res.CHErrors
+		totalCHEnqueued += res.CHEnqueued
+	}
+
+	// One INSERT for the whole run. Snapshot after so the summary reflects
+	// what really made it into ClickHouse — Enqueued from the loop counts
+	// rows fed to the buffer, Written comes from the actual network write.
+	var (
+		totalCHWritten int
+		totalCHErrors  int
+	)
+	if chWriter != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := chWriter.Flush(flushCtx); err != nil {
+			slog.Warn("chstats flush failed", "err", err)
+		}
+		cancel()
+		s := chWriter.Snapshot()
+		totalCHWritten = s.Written
+		totalCHErrors = s.Errors
 	}
 
 	totalWall := time.Since(started)
@@ -230,6 +269,7 @@ func runAllGames(ctx context.Context, repo *repository.Repo, ch *chstats.Client,
 		"total_players", totalPlayers,
 		"total_db_written", totalDBWritten,
 		"total_db_errors", totalDBErrors,
+		"total_ch_enqueued", totalCHEnqueued,
 		"total_ch_written", totalCHWritten,
 		"total_ch_errors", totalCHErrors,
 	)
@@ -243,22 +283,26 @@ func runAllGames(ctx context.Context, repo *repository.Repo, ch *chstats.Client,
 // sweepResult is what runAllGames aggregates for its final "all games done"
 // event — the per-game numbers a monitor cares about, without the noise of
 // per-server outcomes. sweepGame returns one of these plus any hard error.
+//
+// CHEnqueued is the per-game contribution to the shared ClickHouse writer's
+// buffer. The actual `total_ch_written` is only known after the run-wide
+// Flush, so a per-game "how many rows made it to CH" is not a thing —
+// this is the closest analogue: how many rows this game handed off.
 type sweepResult struct {
-	Slug           string
-	ElapsedMs      int64 // full wall clock, including counters + Redis DEL
-	SweepMs        int64 // sweep + writes only, as measured inside benchmark.Run
-	Responded      int64
-	PlayersOnline  int64
-	Timeouts       int64
-	NetworkErrors  int64
-	DBWritten      int64
-	DBErrors       int64
-	DBRetries      int64
-	CHWritten      int
-	CHErrors       int
+	Slug          string
+	ElapsedMs     int64 // full wall clock, including counters + Redis DEL
+	SweepMs       int64 // sweep + writes only, as measured inside benchmark.Run
+	Responded     int64
+	PlayersOnline int64
+	Timeouts      int64
+	NetworkErrors int64
+	DBWritten     int64
+	DBErrors      int64
+	DBRetries     int64
+	CHEnqueued    int
 }
 
-func sweepGame(ctx context.Context, repo *repository.Repo, ch *chstats.Client, g repository.GameInfo, baseCfg benchmark.Config, write bool) (sweepResult, error) {
+func sweepGame(ctx context.Context, repo *repository.Repo, chWriter *chstats.Writer, g repository.GameInfo, baseCfg benchmark.Config, write bool) (sweepResult, error) {
 	res := sweepResult{Slug: g.Slug}
 	started := time.Now()
 
@@ -270,12 +314,19 @@ func sweepGame(ctx context.Context, repo *repository.Repo, ch *chstats.Client, g
 	cfg := baseCfg
 	cfg.GameSlug = g.Slug
 	cfg.GameName = g.Name
+	cfg.GameID = uint32(g.ID)
 
 	if write {
 		cfg.Writer = repo.NewWriter(g.ID)
-		if ch != nil {
-			cfg.Stats = ch.NewGameWriter(uint32(g.ID))
-		}
+		cfg.Stats = chWriter // shared with the whole run, may be nil
+	}
+
+	// Snapshot before so we can report how many rows THIS game added to
+	// the shared CH buffer (rather than the cumulative count for every
+	// game already processed).
+	var chBefore chstats.Stats
+	if chWriter != nil {
+		chBefore = chWriter.Snapshot()
 	}
 
 	slog.Info("sweep start",
@@ -315,9 +366,8 @@ func sweepGame(ctx context.Context, repo *repository.Repo, ch *chstats.Client, g
 		res.DBErrors = report.Writer.Errors
 		res.DBRetries = report.Writer.Retries
 	}
-	if report.Stats != nil {
-		res.CHWritten = report.Stats.Written
-		res.CHErrors = report.Stats.Errors
+	if chWriter != nil {
+		res.CHEnqueued = chWriter.Snapshot().Enqueued - chBefore.Enqueued
 	}
 
 	// One structured "done" line per game — this is what a cron-driven log
@@ -344,11 +394,8 @@ func sweepGame(ctx context.Context, repo *repository.Repo, ch *chstats.Client, g
 			"db_retries", res.DBRetries,
 		)
 	}
-	if report.Stats != nil {
-		done = append(done,
-			"ch_written", res.CHWritten,
-			"ch_errors", res.CHErrors,
-		)
+	if chWriter != nil {
+		done = append(done, "ch_enqueued", res.CHEnqueued)
 	}
 	slog.Info("sweep done", done...)
 
@@ -387,25 +434,25 @@ Examples:
 
   # Whole catalog, production write mode, optimal values
   ulimit -n 65536
-  ./a2s-benchmark --all-games --concurrency=3000 --timeout=500ms --write
+  ./a2s-benchmark.bin --all-games --concurrency=3000 --timeout=500ms --write
 
   # One game, write mode
-  ./a2s-benchmark --game=counter-strike-2 --concurrency=3000 --timeout=500ms --write
+  ./a2s-benchmark.bin --game=counter-strike-2 --concurrency=3000 --timeout=500ms --write
 
   # Minecraft — TCP handshake is heavier, keep concurrency moderate
-  ./a2s-benchmark --game=minecraft --concurrency=500 --timeout=1s --write
+  ./a2s-benchmark.bin --game=minecraft --concurrency=500 --timeout=1s --write
 
   # Read-only benchmark (no DB writes) with reproducible sample
-  ./a2s-benchmark --game=rust --concurrency=3000 --timeout=500ms --limit=20000 --seed=42
+  ./a2s-benchmark.bin --game=rust --concurrency=3000 --timeout=500ms --limit=20000 --seed=42
 
   # One-off full audit — slower cycle, one retry to recover packet loss
-  ./a2s-benchmark --all-games --concurrency=3000 --timeout=1s --retries=1 --write
+  ./a2s-benchmark.bin --all-games --concurrency=3000 --timeout=1s --retries=1 --write
 
   # Point at a non-default .env
-  ./a2s-benchmark --all-games --env=/etc/lobbyhub/.env --write
+  ./a2s-benchmark.bin --all-games --env=/etc/lobbyhub/.env --write
 
   # Cron-driven full sweep with rotating log file
-  ./a2s-benchmark --all-games --write \
+  ./a2s-benchmark.bin --all-games --write \
     --log-file=/var/log/lobbyhub-sweep.log --log-level=info
 
 Notes:

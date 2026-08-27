@@ -298,12 +298,12 @@ CH side is empty. TRUNCATE is destructive, ask before you run it.
 Examples:
 
   # Fresh import (CH is empty)
-  ./chstats-backfill
+  ./chstats-backfill.bin
 
   # Re-run cleanly
-  ./chstats-backfill --truncate
+  ./chstats-backfill.bin --truncate
 
   # Only refresh raw (last 7 days)
-  ./chstats-backfill --only-raw --truncate --raw-days=7
+  ./chstats-backfill.bin --only-raw --truncate --raw-days=7
 `)
 }
