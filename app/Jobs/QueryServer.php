@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Enums\ServerStatus;
 use App\Models\Country;
 use App\Models\Server;
-use App\Models\ServerStat;
 use App\Models\ServerState;
 use App\Services\Geo\GeoResolver;
 use App\Services\Monitoring\Contracts\ProvidesServerDetails;
@@ -282,7 +281,6 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             $this->server->forceFill($cold)->save();
         }
 
-        $this->recordSample($now, true, $result);
         $this->recordClickHouse($now, $result);
     }
 
@@ -363,8 +361,6 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             'next_query_at' => $now->copy()->addSeconds($schedule->backoffFor($failures)),
             'updated_at' => $now,
         ]);
-
-        $this->recordSample($now, false);
     }
 
     /**
@@ -432,20 +428,6 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
         }
 
         return $attributes;
-    }
-
-    private function recordSample(Carbon $at, bool $online, ?QueryResult $result = null): void
-    {
-        // upsert, not insert: two dispatches landing in the same second must not
-        // collide on the (server_id, recorded_at) primary key.
-        ServerStat::upsert([[
-            'server_id' => $this->server->id,
-            'recorded_at' => $at,
-            'is_online' => $online,
-            'players_online' => $result?->playersOnline ?? 0,
-            'players_max' => $result?->playersMax ?? 0,
-            'latency_ms' => $result?->latencyMs,
-        ]], ['server_id', 'recorded_at'], ['is_online', 'players_online', 'players_max', 'latency_ms']);
     }
 
     /**
