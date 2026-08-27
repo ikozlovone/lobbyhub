@@ -92,4 +92,46 @@ class ClickHouseClient
 
         return $response->json('data') ?? [];
     }
+
+    /**
+     * Run an INSERT (or any non-SELECT) and discard the response body. Uses
+     * the same parameter shape as query(): `{name:Type}` placeholders in the
+     * SQL, values passed by name in $params.
+     *
+     * A no-op when the client is not configured — mirrors query(), so a
+     * Laravel install without ClickHouse still boots.
+     *
+     * @param  array<string, scalar>  $params
+     *
+     * @throws RuntimeException on any HTTP failure or CH-side error.
+     */
+    public function execute(string $sql, array $params = []): void
+    {
+        if (! $this->isConfigured()) {
+            return;
+        }
+
+        $queryParams = ['database' => $this->database];
+        foreach ($params as $name => $value) {
+            $queryParams["param_{$name}"] = (string) $value;
+        }
+
+        $url = sprintf(
+            'http://%s:%d/?%s',
+            $this->host,
+            $this->port,
+            http_build_query($queryParams),
+        );
+
+        $response = Http::withBasicAuth($this->username, $this->password)
+            ->timeout(self::TIMEOUT_SECONDS)
+            ->withBody($sql, 'text/plain')
+            ->post($url);
+
+        if ($response->failed()) {
+            throw new RuntimeException(
+                "ClickHouse execute failed [{$response->status()}]: ".trim($response->body()),
+            );
+        }
+    }
 }

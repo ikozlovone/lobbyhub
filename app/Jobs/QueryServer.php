@@ -14,10 +14,13 @@ use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\PollingSchedule;
 use App\Services\Monitoring\QueryResult;
 use App\Services\Monitoring\ServerQueryManager;
+use App\Services\Stats\ClickHouseClient;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * One server, queried and recorded.
@@ -280,6 +283,7 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
         }
 
         $this->recordSample($now, true, $result);
+        $this->recordClickHouse($now, $result);
     }
 
     /**
@@ -442,5 +446,57 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             'players_max' => $result?->playersMax ?? 0,
             'latency_ms' => $result?->latencyMs,
         ]], ['server_id', 'recorded_at'], ['is_online', 'players_online', 'players_max', 'latency_ms']);
+    }
+
+    /**
+     * Mirror a fresh online sample into ClickHouse so the frontend chart
+     * updates without waiting for the next sweep tick.
+     *
+     * Only fires for the two callers that are interactive — the refresh
+     * button (`forceDetails`) and the submission form (`measured`). The
+     * scheduled polling path (both flags false) writes state and stats;
+     * ClickHouse from that side is a2s-benchmark's job, and doing it twice
+     * from PHP would leave two points in the same 10-minute bucket for
+     * every server on every sweep.
+     *
+     * ts is truncated to a ten-minute boundary — same rule the sweeper
+     * uses, so a refresh at 14:07 lands in the same bucket the 14:00 tick
+     * did. Downsampling in ServerHistory averages the two, which is what
+     * we want: a manual refresh nudges the point rather than adding a
+     * stray one next to it.
+     *
+     * Fail-open: a ClickHouse-side error is logged and swallowed so a
+     * broken analytics box does not fail the user's refresh.
+     */
+    private function recordClickHouse(Carbon $at, QueryResult $result): void
+    {
+        if (! $this->measured && ! $this->forceDetails) {
+            return;
+        }
+
+        // Truncate down to the nearest ten-minute mark in UTC — same rule
+        // the Go sweeper uses, so both writers put a 14:07 refresh into
+        // the 14:00 bucket.
+        $bucket = $at->copy()->utc()->second(0)->minute(
+            (int) (floor((int) $at->utc()->format('i') / 10) * 10),
+        );
+
+        try {
+            app(ClickHouseClient::class)->execute(
+                'INSERT INTO server_players_raw (ts, game_id, server_id, players_online)
+                 VALUES ({ts:DateTime}, {game_id:UInt32}, {server_id:UInt64}, {players:UInt16})',
+                [
+                    'ts' => $bucket->format('Y-m-d H:i:s'),
+                    'game_id' => (int) $this->server->game_id,
+                    'server_id' => (int) $this->server->id,
+                    'players' => max(0, (int) $result->playersOnline),
+                ],
+            );
+        } catch (Throwable $e) {
+            Log::warning('QueryServer ClickHouse write failed', [
+                'server_id' => $this->server->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }
