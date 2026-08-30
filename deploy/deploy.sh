@@ -124,13 +124,21 @@ fi
 systemctl restart lobbyhub-scheduler
 note "restarted lobbyhub-scheduler"
 
-# However many workers this machine runs. Asked to restart a glob that matches
-# nothing, systemd fails the whole call — so the instances are counted first.
+# However many workers this machine runs, which is none at the time of writing:
+# every Schedule:: entry in routes/console.php is commented out, so nothing
+# enqueues QueryServer or SyncSteamGame any more and the Go sweeper does that
+# work instead. Not a failure to report, and not something to be told to fix on
+# every deploy — so a machine with no workers says nothing here.
+#
+# The restart itself stays. The jobs, the console commands that dispatch them
+# and the unit template are all still in the tree, and a worker enabled again
+# later must not be left serving the previous release's code.
+#
+# Asked to restart a glob that matches nothing, systemd fails the whole call —
+# so the instances are counted first.
 if systemctl list-units --no-legend 'lobbyhub-worker@*' 2>/dev/null | grep -q .; then
     systemctl restart 'lobbyhub-worker@*'
     note "restarted the workers"
-else
-    note "no workers running — enable one with: systemctl enable --now lobbyhub-worker@1"
 fi
 
 # ---------------------------------------------------------------- check
@@ -177,10 +185,6 @@ for unit in lobbyhub-web lobbyhub-scheduler; do
     printf '    %-22s %s\n' "$unit" "$state"
     [ "$state" = "active" ] || failed=true
 done
-
-workers="$(systemctl list-units --no-legend 'lobbyhub-worker@*' 2>/dev/null | grep -c ' active ' || true)"
-printf '    %-22s %s\n' "workers active" "${workers:-0}"
-[ "${workers:-0}" -ge 1 ] || failed=true
 
 if [ "$failed" = true ]; then
     printf '\n\033[1;31m==>\033[0m Deployed, but something is not answering. Start here:\n'
