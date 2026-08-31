@@ -9,6 +9,7 @@ import { ConsentGate, ConsentProvider, ConsentSettingsButton } from '@/component
 import { FavoritesProvider } from '@/components/favorites-provider'
 import { Icon } from '@/components/icons'
 import { MobileNav } from '@/components/mobile-nav'
+import { NavigationProgress } from '@/components/navigation-progress'
 import { SearchBox } from '@/components/search-box'
 import { Sidebar } from '@/components/sidebar'
 import { ToastProvider } from '@/components/toast'
@@ -50,6 +51,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en" className={`${orbitron.variable} ${inter.variable} ${mono.variable} h-full`}>
       <body className="flex min-h-full flex-col">
+        {/* Outside every provider: it answers the click itself and reads
+            nothing from the router or from context, so there is nothing in any
+            of them it needs to be inside of. */}
+        <NavigationProgress />
+
         {/* Outermost: the sign-in dialog inside AuthProvider raises toasts too. */}
         <ToastProvider>
           {/* Above everything that could ever want permission. Nothing needing

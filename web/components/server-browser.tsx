@@ -65,21 +65,21 @@ const TABS: { sort: ServerSort; label: string }[] = [
   { sort: 'newest', label: 'New' },
 ]
 
-const PER_PAGE = 25
-
-/**
- * How many pages scrolling may fetch before the page asks for a click.
+/*
+ * The first screenful, and the only one that arrives without being asked for.
  *
- * Endless is the wrong shape here. A busy game has thousands of servers, none
- * of these rows are virtualised, and — below 2xl — the Recent votes column sits
- * *after* the listing, along with the footer. A list that regrows every time you
- * approach its end puts all of that permanently out of reach.
+ * Everything past it waits for the button below the list. Scrolling used to
+ * fetch the next few pages on its own, and endless is the wrong shape here: a
+ * busy game has thousands of servers, none of these rows are virtualised, and —
+ * below 2xl — the Recent votes column sits *after* the listing, along with the
+ * footer. A list that regrows every time you approach its end puts all of that
+ * permanently out of reach, and on a phone it also means an unbounded amount of
+ * data fetched by somebody who only wanted to get to the bottom of the page.
  *
- * Five pages is a long browse; after that "Keep loading" says the rest is still
- * there, and clicking it starts the count over. Nothing is capped, only made
- * deliberate.
+ * So growth is deliberate now. Nothing is capped — the button keeps going for
+ * as long as there are pages — but every page after the first is a click.
  */
-const AUTO_PAGES = 5
+const PER_PAGE = 25
 
 /** Long enough that typing a name is one request, short enough to feel live. */
 const TYPING_MS = 350
@@ -110,10 +110,6 @@ export function ServerBrowser({
   const [servers, setServers] = useState(initial.data)
   const [meta, setMeta] = useState(initial.meta)
   const [busy, setBusy] = useState(false)
-  // Pages that arrived by scrolling since the last deliberate act. Reset by a
-  // filter change or a click on Load more — see AUTO_PAGES.
-  const [autoLoaded, setAutoLoaded] = useState(0)
-  const sentinel = useRef<HTMLDivElement>(null)
   const toast = useToast()
 
   const steam = game.monitoring.protocol === 'source'
@@ -177,13 +173,11 @@ export function ServerBrowser({
     const next = { ...query, ...patch }
 
     setQuery(next)
-    setAutoLoaded(0)
     writeUrl(next, view)
     void load(next, 1, false)
   }
 
-  function loadMore(automatic: boolean) {
-    setAutoLoaded((count) => (automatic ? count + 1 : 0))
+  function loadMore() {
     void load(query, meta.current_page + 1, true)
   }
 
@@ -240,36 +234,6 @@ export function ServerBrowser({
 
   const filtered = !isDefault(query)
   const more = meta.current_page < meta.last_page
-  const scrolls = more && autoLoaded < AUTO_PAGES
-
-  /*
-   * Fetch the next page when the end of the list comes into view.
-   *
-   * The observer is watching a marker that sits above the button, with room to
-   * spare, so the rows are usually there before the last visible one is read.
-   * Nothing here replaces the button: it stays for anyone arriving by keyboard,
-   * and it is what a browser without IntersectionObserver falls back to.
-   */
-  useEffect(() => {
-    const element = sentinel.current
-
-    if (!element || !scrolls || busy) return
-
-    const observer = new IntersectionObserver(
-      (entries) => entries[0]?.isIntersecting && loadMore(true),
-      // Roughly a screen early: a list that has already stopped is a list the
-      // reader noticed the end of.
-      { rootMargin: '700px' },
-    )
-
-    observer.observe(element)
-
-    return () => observer.disconnect()
-    // `loadMore` reads the current page and filters off state that is already
-    // in these dependencies; adding the function itself would rebuild the
-    // observer on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrolls, busy, meta.current_page, query])
 
   return (
     <div className="space-y-4">
@@ -446,22 +410,18 @@ export function ServerBrowser({
       )}
 
       {more && (
-        <>
-          <div ref={sentinel} aria-hidden />
-
-          <button
-            type="button"
-            onClick={() => loadMore(false)}
-            disabled={busy}
-            className="w-full cursor-pointer rounded-xl border border-line bg-surface py-3 text-sm font-medium text-muted transition-colors hover:border-line-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? 'Loading…' : scrolls ? 'Load more' : 'Keep loading'}
-          </button>
-        </>
+        <button
+          type="button"
+          onClick={loadMore}
+          disabled={busy}
+          className="w-full cursor-pointer rounded-xl border border-line bg-surface py-3 text-sm font-medium text-muted transition-colors hover:border-line-strong hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {busy ? 'Loading…' : `Load more (${meta.total - servers.length} left)`}
+        </button>
       )}
 
-      {/* Rows appear without anyone asking, so the count is announced — for a
-          screen reader that is the only sign the page grew. */}
+      {/* The button leaves focus where it is, so nothing else would say how far
+          the list got. For a screen reader this is the only sign it grew. */}
       <p aria-live="polite" className="sr-only">
         {`Showing ${servers.length} of ${meta.total} servers`}
       </p>

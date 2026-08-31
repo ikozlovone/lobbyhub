@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { startNavigationProgress } from '../navigation-progress'
 import { RETURN_KEY } from './auth-dialog'
 import { useAuth } from './auth-provider'
 
@@ -33,6 +34,10 @@ export function AuthCallback() {
 
     Promise.resolve(token ? adopt(token) : null).then((user) => {
       if (user) {
+        // No click behind this one, so the bar has to be told. Where the
+        // visitor lands is their own page or wherever they were sent from, and
+        // that read is not instant.
+        startNavigationProgress()
         router.replace(back)
       } else {
         setError(failure ?? 'That sign-in did not complete. Try again.')
