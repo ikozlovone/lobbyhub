@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import type { GameCounters as Counters, SteamCounters } from '@/lib/api'
+import { Icon } from './icons'
 import { Rolling } from './live-stats'
 
 /**
@@ -83,15 +84,25 @@ export function GameCounters({
       {inGame?.synced_at && (
         <div className="flex items-baseline gap-1.5 border-l border-line pl-4">
           <dt className="sr-only">players in game on Steam</dt>
-          <dd className="tabular text-lg font-medium sm:text-xl">
-            <Rolling value={inGame.players_online} />
+          <dd>
+            {/* The number is part of the link, not a figure with a link beside
+                it: it is the thing somebody wants more of, and "more of this
+                number" is exactly what the chart page is. */}
+            <Link
+              href={`/charts/${game}`}
+              className="group/steam flex items-baseline gap-1.5 underline-offset-4 hover:underline"
+            >
+              <span className="tabular text-lg font-medium sm:text-xl">
+                <Rolling value={inGame.players_online} />
+              </span>
+              <span className="text-sm text-muted transition-colors group-hover/steam:text-fg">
+                in game on Steam
+              </span>
+              <span aria-hidden className="text-subtle transition-colors group-hover/steam:text-fg">
+                <Icon.chart />
+              </span>
+            </Link>
           </dd>
-          <Link
-            href={`/charts/${game}`}
-            className="text-sm text-muted underline-offset-4 transition-colors hover:text-fg hover:underline"
-          >
-            in game on Steam
-          </Link>
         </div>
       )}
     </dl>

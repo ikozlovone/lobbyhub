@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { Icon } from '@/components/icons'
 import { Suspense } from 'react'
 import { GameGrid } from '@/components/game-grid'
 import { LiveStats } from '@/components/live-stats'
@@ -45,6 +46,17 @@ export default function GamesPage() {
             Every number here is measured, every few minutes, from the servers themselves — never
             from what an owner typed into a form.
           </p>
+          {/* The other way into the same catalog: by how busy a game is rather
+              than by its name. Under the intro because that is the sentence it
+              answers a follow-up to — "which of these is anyone actually
+              playing". */}
+          <Link
+            href="/charts"
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand transition-colors hover:underline"
+          >
+            <Icon.chart />
+            Player counts by game
+          </Link>
         </div>
 
         <Suspense fallback={<StatsSkeleton />}>

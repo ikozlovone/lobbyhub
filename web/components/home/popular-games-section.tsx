@@ -42,12 +42,23 @@ export function PopularGamesSection({ games }: { games: Game[] }) {
           <p className="mt-1 text-sm text-muted">{HOME_COPY.games.description}</p>
         </div>
 
-        <Link
-          href="/games"
-          className="shrink-0 text-sm font-medium text-brand transition-colors hover:underline"
-        >
-          {HOME_COPY.games.viewAll}
-        </Link>
+        <div className="flex shrink-0 items-center gap-4">
+          {/* Two ways on from here, and they answer different questions: the
+              catalog is "which games are listed", the charts are "which are
+              being played". */}
+          <Link
+            href="/charts"
+            className="text-sm font-medium text-muted transition-colors hover:text-fg hover:underline"
+          >
+            Player counts
+          </Link>
+          <Link
+            href="/games"
+            className="text-sm font-medium text-brand transition-colors hover:underline"
+          >
+            {HOME_COPY.games.viewAll}
+          </Link>
+        </div>
       </div>
 
       <ul className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">

@@ -141,8 +141,8 @@ async function Ranking() {
                   number the page exists for off the side of a phone. */}
               <table className="w-full text-sm">
                 <caption className="sr-only">
-                  Games ranked by concurrent players on Steam, with today&rsquo;s peak and the
-                  servers LobbyHub monitors for each.
+                  Games ranked by concurrent players on Steam, with today&rsquo;s peak and a
+                  link to the servers LobbyHub monitors for each.
                 </caption>
                 <thead>
                   <tr className="border-b border-line text-left text-xs text-subtle">
@@ -155,14 +155,22 @@ async function Ranking() {
                     <th scope="col" className="py-2.5 pr-4 text-right font-normal">
                       Playing now
                     </th>
-                    <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal sm:table-cell">
+                    <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal md:table-cell">
                       Peak today
                     </th>
-                    <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal md:table-cell">
+                    <th
+                      scope="col"
+                      className="hidden py-2.5 pr-4 text-right font-normal whitespace-nowrap lg:table-cell"
+                    >
                       On Steam
                     </th>
-                    <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal lg:table-cell">
-                      Our servers
+                    {/* Ahead of both columns above it, and kept from `sm`
+                        rather than `lg`. Those are numbers; this one is a door
+                        — the only cell in the row that leads to the rest of
+                        the site. On a phone it is under the game's name
+                        instead, where it costs the name nothing. */}
+                    <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal sm:table-cell">
+                      Servers
                     </th>
                   </tr>
                 </thead>
@@ -205,6 +213,14 @@ async function Ranking() {
                           )}
                           <span className="truncate">{row.name}</span>
                         </Link>
+                        {row.servers > 0 && (
+                          <Link
+                            href={`/games/${row.slug}`}
+                            className="mt-0.5 ml-[2.1rem] block text-xs text-subtle underline-offset-4 hover:text-fg hover:underline sm:hidden"
+                          >
+                            {count(row.servers)} servers
+                          </Link>
+                        )}
                       </td>
                       {/* The bar is the ranking made visible: a table of numbers
                           says who is first, a row of lengths says by how much,
@@ -231,10 +247,10 @@ async function Ranking() {
                           </span>
                         </div>
                       </td>
-                      <td className="tabular hidden py-2.5 pr-4 text-right align-middle text-muted sm:table-cell">
+                      <td className="tabular hidden py-2.5 pr-4 text-right align-middle text-muted md:table-cell">
                         {row.peak > 0 ? count(row.peak) : <span className="text-subtle">—</span>}
                       </td>
-                      <td className="hidden py-2.5 pr-4 text-right align-middle md:table-cell">
+                      <td className="hidden py-2.5 pr-4 text-right align-middle lg:table-cell">
                         {row.steam_rank ? (
                           <span className="tabular rounded bg-accent/15 px-1.5 py-0.5 text-xs text-accent">
                             #{row.steam_rank}
@@ -243,15 +259,20 @@ async function Ranking() {
                           <span className="text-xs text-subtle">below top 100</span>
                         )}
                       </td>
-                      <td className="hidden py-2.5 pr-4 text-right align-middle lg:table-cell">
+                      <td className="hidden py-2.5 pr-4 text-right align-middle sm:table-cell">
                         {row.servers > 0 ? (
                           <Link
                             href={`/games/${row.slug}`}
-                            className="tabular text-muted hover:text-fg"
+                            className="tabular whitespace-nowrap text-muted underline-offset-4 hover:text-fg hover:underline"
                           >
                             {count(row.servers)}
                           </Link>
                         ) : (
+                          /* A quiet dash rather than an invitation to add a
+                             server: repeated down forty rows that stops being
+                             a call to action and becomes wallpaper. The game's
+                             own page makes the offer once, where it is about
+                             that game. */
                           <span className="text-subtle">—</span>
                         )}
                       </td>
