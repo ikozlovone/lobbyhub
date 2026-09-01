@@ -29,6 +29,7 @@ class GameMonitoringClient
         private readonly int $pageSize,
         private readonly int $timeout,
         private readonly int $pauseMs,
+        private readonly int $attempts = 4,
     ) {}
 
     /**
@@ -72,10 +73,16 @@ class GameMonitoringClient
     {
         $response = Http::acceptJson()
             ->timeout($this->timeout)
-            // Twice, half a second apart: a list this long is read over a
-            // couple of minutes and one refused connection in the middle of it
-            // should not throw away the pages already walked.
-            ->retry(2, 500, throw: false)
+            // Named separately from the read timeout because it is a different
+            // failure: a box whose resolver is slow spends this whole budget
+            // before a byte is asked for, and `cURL error 28: Resolving timed
+            // out` is what a walk of twenty pages dies of.
+            ->connectTimeout(min($this->timeout, 15))
+            // Backing off rather than hammering — a second, then two, then
+            // three. A list this long is read over minutes, and whatever was
+            // briefly wrong with the network in the middle of it is usually
+            // over by the third ask.
+            ->retry($this->attempts, fn (int $attempt) => $attempt * 1000, throw: false)
             ->get($this->url.'/servers', [
                 'game' => $appId,
                 'limit' => $this->pageSize,

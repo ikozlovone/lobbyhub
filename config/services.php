@@ -202,6 +202,7 @@ return [
         'page_size' => (int) env('GAMEMONITORING_PAGE_SIZE', 1000),
         'timeout' => (int) env('GAMEMONITORING_TIMEOUT', 30),
         'pause_ms' => (int) env('GAMEMONITORING_PAUSE_MS', 250),
+        'attempts' => (int) env('GAMEMONITORING_ATTEMPTS', 4),
     ],
 
     'nginx' => [

@@ -60,8 +60,9 @@ class SyncGameMonitoring extends Command
             try {
                 $report = $sync->run($game, $write, $pages);
             } catch (Throwable $e) {
-                // One game's list being unreadable is not a reason to abandon
-                // the forty-five after it; the exit code still says so.
+                // Nothing was read at all — a game with no app id, or the map
+                // of the catalog failing to load. A list that dies partway
+                // comes back as a report instead; see below.
                 $this->error("  {$game->slug}: {$e->getMessage()}");
                 $failed = true;
 
@@ -79,6 +80,15 @@ class SyncGameMonitoring extends Command
                 $report->skipped,
                 $report->pages,
             ));
+
+            // A walk that stopped partway still marked and wrote whatever it
+            // reached, and those writes are committed. So its numbers count
+            // towards the totals and the reason is printed under them — the
+            // run is repeatable, and re-running is how the rest gets read.
+            if (! $report->complete()) {
+                $this->error("    stopped after {$report->pages} page(s): {$report->error}");
+                $failed = true;
+            }
 
             $totals['found'] += $report->found;
             $totals['matched'] += $report->matched;
@@ -100,6 +110,10 @@ class SyncGameMonitoring extends Command
         // What the pass is actually for, said out loud: the servers with no
         // mark are the ones no competitor has, which is the set a cleanup
         // judges. Counting them here rather than leaving it to be worked out.
+        if ($failed) {
+            $this->warn('At least one list was not read to the end — the count below is not a verdict yet.');
+        }
+
         if ($write) {
             $unmarked = Game::query()
                 ->whereNotNull('steam_appid')

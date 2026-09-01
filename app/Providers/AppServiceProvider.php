@@ -58,6 +58,7 @@ class AppServiceProvider extends ServiceProvider
             pageSize: (int) config('services.gamemonitoring.page_size', 1000),
             timeout: (int) config('services.gamemonitoring.timeout', 30),
             pauseMs: (int) config('services.gamemonitoring.pause_ms', 250),
+            attempts: (int) config('services.gamemonitoring.attempts', 4),
         ));
 
         // The nginx cache in front of this app, for the one caller that has to

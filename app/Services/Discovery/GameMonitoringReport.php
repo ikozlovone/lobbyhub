@@ -25,5 +25,21 @@ final readonly class GameMonitoringReport
         public int $skipped = 0,
         public int $pages = 0,
         public float $totalMs = 0.0,
+        /**
+         * Why the walk stopped early, if it did.
+         *
+         * A pass over twenty pages that dies on the fourth has still marked
+         * and written three pages' worth, and those writes are committed. So
+         * the failure travels back with the counts rather than instead of
+         * them: reporting zero for a run that changed the database is the one
+         * answer that cannot be acted on.
+         */
+        public ?string $error = null,
     ) {}
+
+    /** Whether the whole of their list was read. */
+    public function complete(): bool
+    {
+        return $this->error === null;
+    }
 }

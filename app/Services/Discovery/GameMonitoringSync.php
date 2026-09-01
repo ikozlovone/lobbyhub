@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use Throwable;
 
 /**
  * One game's list on gamemonitoring.net, reconciled against the catalog.
@@ -83,64 +84,76 @@ class GameMonitoringSync
         /** @var list<array<string, mixed>> $inserts */
         $inserts = [];
 
-        foreach ($this->client->pages((int) $game->steam_appid, $maxPages) as $items) {
-            $pages++;
+        $error = null;
 
-            foreach ($items as $item) {
-                $found++;
+        try {
+            foreach ($this->client->pages((int) $game->steam_appid, $maxPages) as $items) {
+                $pages++;
 
-                $address = $this->address($item);
+                foreach ($items as $item) {
+                    $found++;
 
-                if ($address === null) {
-                    $skipped++;
+                    $address = $this->address($item);
 
-                    continue;
-                }
-
-                [$ip, $port, $queryPort] = $address;
-                $entry = $this->lookup($existing, $item, $ip, $port);
-
-                if ($entry !== null) {
-                    [$id, $isMarked, $trashed] = $entry;
-
-                    // A server somebody here deleted stays deleted. It is still
-                    // on their list, which is exactly the situation this would
-                    // silently undo.
-                    if ($trashed) {
+                    if ($address === null) {
                         $skipped++;
 
                         continue;
                     }
 
-                    $matched++;
+                    [$ip, $port, $queryPort] = $address;
+                    $entry = $this->lookup($existing, $item, $ip, $port);
 
-                    if (! $isMarked) {
-                        $marked++;
+                    if ($entry !== null) {
+                        [$id, $isMarked, $trashed] = $entry;
 
-                        if ($write) {
-                            $toMark[] = $id;
+                        // A server somebody here deleted stays deleted. It is still
+                        // on their list, which is exactly the situation this would
+                        // silently undo.
+                        if ($trashed) {
+                            $skipped++;
+
+                            continue;
                         }
+
+                        $matched++;
+
+                        if (! $isMarked) {
+                            $marked++;
+
+                            if ($write) {
+                                $toMark[] = $id;
+                            }
+                        }
+
+                        continue;
                     }
 
-                    continue;
-                }
+                    $created++;
 
-                $created++;
+                    if ($write) {
+                        $inserts[] = $this->newRow($game, $ip, $port, $queryPort, $now);
+                    }
+
+                    // Written into the map so a list carrying one machine twice —
+                    // two ports, or a game and query pair that both match — does
+                    // not write it twice.
+                    $existing[$ip.':'.$port] = [0, true, false];
+                }
 
                 if ($write) {
-                    $inserts[] = $this->newRow($game, $ip, $port, $queryPort, $now);
+                    $toMark = $this->flushMarks($toMark, $now, force: false);
+                    $inserts = $this->flushInserts($game, $inserts, $now, force: false);
                 }
-
-                // Written into the map so a list carrying one machine twice —
-                // two ports, or a game and query pair that both match — does
-                // not write it twice.
-                $existing[$ip.':'.$port] = [0, true, false];
             }
-
-            if ($write) {
-                $toMark = $this->flushMarks($toMark, $now, force: false);
-                $inserts = $this->flushInserts($game, $inserts, $now, force: false);
-            }
+        } catch (Throwable $e) {
+            // Their API, read over minutes, from a box whose DNS is not always
+            // there. What has been walked so far is worth keeping — the writes
+            // below still run, and the caller is told where it stopped. A
+            // second run picks up the rest: marks are only written where the
+            // column is null and rows only for addresses nothing answers to,
+            // so the pass is safe to repeat from the beginning.
+            $error = $e->getMessage();
         }
 
         if ($write) {
@@ -165,6 +178,7 @@ class GameMonitoringSync
             skipped: $skipped,
             pages: $pages,
             totalMs: (hrtime(true) - $startedAt) / 1e6,
+            error: $error,
         );
     }
 

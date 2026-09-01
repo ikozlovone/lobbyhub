@@ -214,6 +214,73 @@ class GameMonitoringSyncTest extends TestCase
         $this->assertSame(5, $report->created);
     }
 
+    /**
+     * Their list is read over minutes from a box whose resolver is not always
+     * there, and the first real run died on page four of twenty with
+     * `cURL error 28: Resolving timed out`. The three pages before it had
+     * already been marked and written — and the run reported zeroes, which is
+     * the one answer that cannot be acted on.
+     */
+    public function test_a_list_that_dies_partway_keeps_what_it_did(): void
+    {
+        // One attempt: the backoff between four of them is not what this is
+        // testing, and it is thirty seconds of a test suite.
+        config(['services.gamemonitoring.page_size' => 2, 'services.gamemonitoring.attempts' => 1]);
+        $this->app->forgetInstance(GameMonitoringClient::class);
+
+        $ours = $this->server('45.152.161.10', 28015);
+        $calls = 0;
+
+        Http::fake(function () use (&$calls) {
+            $calls++;
+
+            return $calls === 1
+                ? Http::response($this->payload([
+                    $this->item('45.152.161.10', 28015),
+                    $this->item('5.62.114.92', 7779),
+                ]))
+                : Http::response('upstream is having a day', 502);
+        });
+
+        $report = $this->sync()->run($this->game);
+
+        $this->assertFalse($report->complete());
+        $this->assertStringContainsString('502', (string) $report->error);
+
+        // The page it did read is in the numbers and in the database.
+        $this->assertSame(1, $report->pages);
+        $this->assertSame(1, $report->marked);
+        $this->assertSame(1, $report->created);
+        $this->assertNotNull($ours->refresh()->gamemonitoring_seen_at);
+        $this->assertSame(1, Server::where('host', '5.62.114.92')->count());
+    }
+
+    /**
+     * And running it again finishes the job rather than doubling it: marks are
+     * written where the column is null, rows for addresses nothing answers to.
+     */
+    public function test_running_it_again_after_a_failure_is_safe(): void
+    {
+        $ours = $this->server('45.152.161.10', 28015);
+
+        $this->listing([
+            $this->item('45.152.161.10', 28015),
+            $this->item('5.62.114.92', 7779),
+        ]);
+
+        $first = $this->sync()->run($this->game);
+        $marked = $ours->refresh()->gamemonitoring_seen_at;
+
+        $second = $this->sync()->run($this->game);
+
+        $this->assertSame(1, $first->created);
+        $this->assertSame(0, $second->created);
+        $this->assertSame(0, $second->marked);
+        $this->assertSame(2, $second->matched);
+        $this->assertSame(1, Server::where('host', '5.62.114.92')->count());
+        $this->assertSame($marked->timestamp, $ours->refresh()->gamemonitoring_seen_at->timestamp);
+    }
+
     /** `--dry-run`: the same numbers, none of the writes. */
     public function test_a_dry_run_writes_nothing(): void
     {
