@@ -12,6 +12,7 @@ class SyncGameMonitoring extends Command
     protected $signature = 'gamemonitoring:sync
         {--game= : Slug of a single game; omit to walk every game with an app id}
         {--pages= : Stop after this many pages of their list per game}
+        {--from= : Start at this offset in their list, to continue a walk that stopped}
         {--dry-run : Read the list and report what it would do, writing nothing}';
 
     protected $description = 'Mark the servers gamemonitoring.net also lists, and add the ones it has that we do not';
@@ -42,6 +43,7 @@ class SyncGameMonitoring extends Command
 
         $write = ! $this->option('dry-run');
         $pages = $this->option('pages') === null ? null : max(1, (int) $this->option('pages'));
+        $from = max(0, (int) $this->option('from'));
 
         if (! $write) {
             $this->warn('Dry run: nothing will be written.');
@@ -58,7 +60,7 @@ class SyncGameMonitoring extends Command
             }
 
             try {
-                $report = $sync->run($game, $write, $pages);
+                $report = $sync->run($game, $write, $pages, $from);
             } catch (Throwable $e) {
                 // Nothing was read at all — a game with no app id, or the map
                 // of the catalog failing to load. A list that dies partway
@@ -87,6 +89,7 @@ class SyncGameMonitoring extends Command
             // run is repeatable, and re-running is how the rest gets read.
             if (! $report->complete()) {
                 $this->error("    stopped after {$report->pages} page(s): {$report->error}");
+                $this->line("    continue with --game={$game->slug} --from={$report->nextOffset}, or run it again from the top.");
                 $failed = true;
             }
 

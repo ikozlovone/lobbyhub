@@ -58,8 +58,10 @@ class GameMonitoringSync
     /**
      * @param  bool  $write  false walks the list and counts what it would do
      * @param  int|null  $maxPages  stop after this many pages of their list
+     * @param  int  $startOffset  where in their list to begin, for continuing
+     *                            a walk that stopped
      */
-    public function run(Game $game, bool $write = true, ?int $maxPages = null): GameMonitoringReport
+    public function run(Game $game, bool $write = true, ?int $maxPages = null, int $startOffset = 0): GameMonitoringReport
     {
         if ($game->steam_appid === null) {
             throw new RuntimeException("{$game->slug} has no steam_appid; gamemonitoring is keyed by one.");
@@ -87,7 +89,7 @@ class GameMonitoringSync
         $error = null;
 
         try {
-            foreach ($this->client->pages((int) $game->steam_appid, $maxPages) as $items) {
+            foreach ($this->client->pages((int) $game->steam_appid, $maxPages, $startOffset) as $items) {
                 $pages++;
 
                 foreach ($items as $item) {
@@ -179,6 +181,7 @@ class GameMonitoringSync
             pages: $pages,
             totalMs: (hrtime(true) - $startedAt) / 1e6,
             error: $error,
+            nextOffset: $startOffset + $pages * $this->client->pageSize(),
         );
     }
 

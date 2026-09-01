@@ -281,6 +281,38 @@ class GameMonitoringSyncTest extends TestCase
         $this->assertSame($marked->timestamp, $ours->refresh()->gamemonitoring_seen_at->timestamp);
     }
 
+    /**
+     * Where to pick it up. The walk that died on page sixteen of twenty should
+     * not have to ask their API for the sixteen it already read.
+     */
+    public function test_it_can_continue_from_an_offset(): void
+    {
+        config(['services.gamemonitoring.page_size' => 2]);
+        $this->app->forgetInstance(GameMonitoringClient::class);
+
+        $this->listing([$this->item('1.1.1.5', 28015)]);
+
+        $report = $this->sync()->run($this->game, startOffset: 16000);
+
+        Http::assertSent(function ($request) {
+            // Guarded on the host: a pass that adds a server also pokes the
+            // frontend's revalidate endpoint, and that request has no offset
+            // on it to read.
+            if (! str_starts_with($request->url(), 'https://api.gamemonitoring.net/')) {
+                return false;
+            }
+
+            $query = [];
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return $query['offset'] === '16000';
+        });
+
+        // And it says where the next one would have been, which is what the
+        // command prints when a walk stops early.
+        $this->assertSame(16002, $report->nextOffset);
+    }
+
     /** `--dry-run`: the same numbers, none of the writes. */
     public function test_a_dry_run_writes_nothing(): void
     {

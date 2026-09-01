@@ -35,6 +35,11 @@ final readonly class GameMonitoringReport
          * answer that cannot be acted on.
          */
         public ?string $error = null,
+        /**
+         * The offset the next page would have been. Only interesting when the
+         * walk stopped early, where it is what `--from` takes to continue.
+         */
+        public int $nextOffset = 0,
     ) {}
 
     /** Whether the whole of their list was read. */
