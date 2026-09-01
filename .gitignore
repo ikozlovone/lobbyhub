@@ -38,3 +38,8 @@ Thumbs.db
 
 # Snapshots and logs left behind by browser automation
 .playwright-cli/
+
+# Go binaries, built in place on the machine that runs them — the .bin suffix
+# is what keeps `a2s-benchmark.bin` from clashing with the source directory of
+# the same name.
+*.bin
