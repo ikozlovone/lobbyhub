@@ -20,10 +20,10 @@ class SyncGameMonitoring extends Command
     /**
      * Run by hand, not on the scheduler.
      *
-     * With no `--game` it walks every game that has a `steam_appid`, in the
-     * order the site lists them — their filter is keyed on Steam's appid, so a
-     * game without one (Minecraft, today) cannot be asked for at all and is
-     * named as skipped rather than silently left out.
+     * With no `--game` it walks every game the site is showing that has a
+     * `steam_appid`, in the order it shows them — their filter is keyed on
+     * Steam's appid, so a game without one (Minecraft, today) cannot be asked
+     * for at all and is named as skipped rather than silently left out.
      *
      * It reads somebody else's API for as long as their catalog is, and what it
      * writes — a mark that only ever goes on once, and rows for addresses we
@@ -36,12 +36,23 @@ class SyncGameMonitoring extends Command
      */
     public function handle(GameMonitoringSync $sync): int
     {
+        /*
+         * Switched-on games only, unless one is named.
+         *
+         * `gamemonitoring:games` can put three hundred rows in this table in a
+         * minute, every one of them off and waiting for somebody to give it a
+         * page. Walking those here would pull their server lists in behind
+         * them — ARK alone is sixty-eight thousand — and fill the catalog with
+         * servers for games the site does not show. Naming a game with
+         * `--game` still reaches it either way: an explicit ask is an answer to
+         * this question, not a case of it.
+         */
         $games = $this->option('game')
             ? Game::query()->where('slug', $this->option('game'))->get()
-            : Game::query()->whereNotNull('steam_appid')->orderBy('sort_order')->get();
+            : Game::query()->where('is_active', true)->whereNotNull('steam_appid')->orderBy('sort_order')->get();
 
         if ($games->isEmpty()) {
-            $this->error('No games to read. gamemonitoring is keyed by Steam appid, so a game needs steam_appid set.');
+            $this->error('No games to read. gamemonitoring is keyed by Steam appid, so a game needs steam_appid set and to be switched on.');
 
             return self::FAILURE;
         }
@@ -133,6 +144,7 @@ class SyncGameMonitoring extends Command
 
         if ($write) {
             $unmarked = Game::query()
+                ->where('games.is_active', true)
                 ->whereNotNull('steam_appid')
                 ->join('servers', 'servers.game_id', '=', 'games.id')
                 ->whereNull('servers.deleted_at')

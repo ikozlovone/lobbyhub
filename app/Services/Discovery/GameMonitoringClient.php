@@ -24,6 +24,9 @@ use RuntimeException;
  */
 class GameMonitoringClient
 {
+    /** Their cap on the game list, which is lower than the server list's. */
+    private const GAMES_PAGE_SIZE = 100;
+
     /**
      * The address their host resolved to, looked up once and pinned for the
      * rest of the walk. Null until the first page asks for it, and false when
@@ -163,9 +166,59 @@ class GameMonitoringClient
     }
 
     /**
+     * Every page of their game catalogue, biggest first.
+     *
+     * Their own page cap is a hundred here rather than the thousand the server
+     * list allows, and the envelope carries a `count` — which is not used:
+     * a short page ends the walk, the same rule as everywhere else, and one
+     * rule that holds is worth more than two that mostly agree.
+     *
+     * @return Generator<int, list<array<string, mixed>>>
+     */
+    public function games(?int $maxPages = null): Generator
+    {
+        for ($page = 0; $maxPages === null || $page < $maxPages; $page++) {
+            $items = $this->fetch('/games', [
+                'limit' => self::GAMES_PAGE_SIZE,
+                'sort' => 'servers',
+                'offset' => $page * self::GAMES_PAGE_SIZE,
+            ]);
+
+            if ($items === []) {
+                return;
+            }
+
+            yield $items;
+
+            if (count($items) < self::GAMES_PAGE_SIZE) {
+                return;
+            }
+
+            if ($this->pauseMs > 0) {
+                usleep($this->pauseMs * 1000);
+            }
+        }
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private function page(int $appId, int $offset): array
+    {
+        return $this->fetch('/servers', [
+            'game' => $appId,
+            'limit' => $this->pageSize,
+            'offset' => $offset,
+        ]);
+    }
+
+    /**
+     * One request, and the items out of the envelope they wrap everything in.
+     *
+     * @param  array<string, mixed>  $query
+     * @return list<array<string, mixed>>
+     */
+    private function fetch(string $path, array $query): array
     {
         $response = Http::acceptJson()
             ->withOptions($this->connection())
@@ -180,15 +233,13 @@ class GameMonitoringClient
             // briefly wrong with the network in the middle of it is usually
             // over by the third ask.
             ->retry($this->attempts, fn (int $attempt) => $attempt * 1000, throw: false)
-            ->get($this->url.'/servers', [
-                'game' => $appId,
-                'limit' => $this->pageSize,
-                'offset' => $offset,
-            ]);
+            ->get($this->url.$path, $query);
 
         if ($response->failed()) {
+            $where = http_build_query($query);
+
             throw new RuntimeException(
-                "gamemonitoring returned {$response->status()} for game {$appId} at offset {$offset}",
+                "gamemonitoring returned {$response->status()} for {$path}?{$where}",
             );
         }
 
