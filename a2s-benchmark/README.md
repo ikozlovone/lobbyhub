@@ -26,6 +26,7 @@ See `../a2s-benchmark.txt` for the specification.
 cd a2s-benchmark
 go build -o a2s-benchmark.bin ./cmd/a2s-benchmark
 go build -o chstats-backfill.bin ./cmd/chstats-backfill
+go build -o steamstats.bin ./cmd/steamstats
 ```
 
 The `.bin` suffix keeps the binary distinguishable from the source
@@ -153,6 +154,63 @@ sweep slows down to match the writer.
 The DSN user needs `UPDATE ON server_states, games` in addition to
 `SELECT ON servers, games` — `lobbyhub_user` has both.
 
+## steamstats — players per game
+
+A second binary in this module, and a different question. The sweep asks
+every server how many players are on it; `steamstats` asks Valve how many
+people are in a game *anywhere on Steam*, which is a number no server list
+can produce and which does not come from the master server at all:
+
+- `ISteamChartsService/GetGamesByConcurrentPlayers` — the official top 100
+  in one request: rank, appid, players now, peak today. This is the same
+  ranking every "Steam charts" page republishes.
+- `ISteamUserStats/GetNumberOfCurrentPlayers` — one appid, one request, no
+  rank and no peak. What the games below the top 100 cost.
+
+Neither needs an API key. Neither counts servers: a game can be second on
+Steam by players and have no dedicated servers at all (Dota 2 is).
+
+One run is one tick — read the games with a `steam_appid` from Postgres,
+fetch the chart, look up whatever the chart did not cover, write it all as
+one batch stamped with the tick's own ten-minute mark, the same bucket rule
+the server sweep uses. Charted games this catalog does not carry are
+recorded too, with `game_id = 0`: they cost nothing and they answer "which
+games with a live playerbase are we missing".
+
+```
+./steamstats.bin --env=/var/www/lobbyhub/.env            # a tick
+./steamstats.bin --env=/var/www/lobbyhub/.env --dry-run  # collect, write nothing
+./steamstats.bin --env=/var/www/lobbyhub/.env --rollup   # yesterday into daily
+```
+
+Cron, every ten minutes plus one rollup after midnight UTC:
+
+```
+*/10 * * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env --log-file=/var/log/lobbyhub/steamstats.log
+20 0 * * *   /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env --rollup
+```
+
+Two tables, created on every run with `IF NOT EXISTS`; `schema/game_players.sql`
+is the readable copy:
+
+```
+game_players_raw    ts, app_id, game_id, players, rank, peak_today   180-day TTL
+game_players_daily  date, app_id, game_id, avg/max/min, samples, best_rank
+```
+
+`app_id` is the key rather than our `games.id` — it is the only id both
+sides agree on, and it lets a game be recorded before the catalog carries
+it. `game_id` rides along denormalised so a read for one of our games needs
+no join. The daily table is a `ReplacingMergeTree` keyed on
+`(app_id, date)`, so re-running a rollup supersedes the day rather than
+doubling it.
+
+Unlike the sweep, ClickHouse is not optional here: it is the only thing this
+writes, so a missing `CH_HOST` is an error rather than a quiet no-op. By
+default only games the site is showing are polled; `--all-games` includes
+the ones switched off, which is what a week of history for a catalog import
+under review wants.
+
 ## Output
 
 - **stdout** — live progress line every second (processed / online /
@@ -188,9 +246,11 @@ alerting. Without `--log-file`, everything still shows up on stderr.
 
 ```
 cmd/a2s-benchmark      the CLI
+cmd/steamstats         the per-game player-count collector
 internal/snapshot      transport-agnostic Outcome + Info the writer takes
 internal/a2s           Valve A2S over UDP (Source engine)
 internal/slp           Minecraft Server List Ping over TCP (1.7+)
+internal/steam         Valve's charts and player-count endpoints
 internal/repository    Postgres access — LoadForGame + batching writer
 internal/benchmark     runner, bounded queue, rate limiter, stats
 internal/metrics       latency histogram
