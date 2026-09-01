@@ -6,7 +6,6 @@ use App\Enums\ServerStatus;
 use App\Models\Country;
 use App\Models\Game;
 use App\Models\Server;
-use App\Models\ServerStat;
 use App\Services\Geo\GeoResolver;
 use App\Services\Monitoring\PollingSchedule;
 use App\Services\Monitoring\ServerStatePartitionManager;
@@ -86,9 +85,6 @@ class SteamCatalogSync
      */
     private array $stateInserts = [];
 
-    /** @var list<array<string, mixed>> */
-    private array $samples = [];
-
     /** @var array<string, int> */
     private array $counts = [];
 
@@ -122,7 +118,7 @@ class SteamCatalogSync
 
         $this->game = $game;
         $this->now = now();
-        $this->stateUpdates = $this->inserts = $this->pendingStates = $this->stateInserts = $this->samples = [];
+        $this->stateUpdates = $this->inserts = $this->pendingStates = $this->stateInserts = [];
         $this->touched = [];
         $this->counts = ['updated' => 0, 'created' => 0, 'sampled' => 0, 'skipped' => 0, 'duplicated' => 0];
         $this->spent = ['db' => 0.0, 'existing' => 0.0];
@@ -148,7 +144,6 @@ class SteamCatalogSync
         $this->flushStateUpdates();
         $this->flushInserts();
         $this->flushStateInserts();
-        $this->flushSamples();
 
         $totalMs = (hrtime(true) - $startedAt) / 1e6;
 
@@ -248,7 +243,6 @@ class SteamCatalogSync
             $this->counts['updated']++;
 
             if ($due) {
-                $this->samples[] = $this->sample($id, $found->playersOnline, $found->playersMax);
                 $this->counts['sampled']++;
             }
         }
@@ -259,10 +253,6 @@ class SteamCatalogSync
 
         if (count($this->inserts) >= self::CHUNK) {
             $this->flushInserts();
-        }
-
-        if (count($this->samples) >= self::CHUNK) {
-            $this->flushSamples();
         }
     }
 
@@ -481,23 +471,6 @@ class SteamCatalogSync
     private function interval(DiscoveredServer $found): int
     {
         return $this->schedule->intervalFor($found->playersOnline, false);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function sample(int $serverId, int $players, int $maxPlayers): array
-    {
-        return [
-            'server_id' => $serverId,
-            'recorded_at' => $this->now,
-            'is_online' => true,
-            'players_online' => $players,
-            'players_max' => $maxPlayers,
-            // No packet went out, so there is nothing to time. Null rather than
-            // a zero, which would read as a perfect connection.
-            'latency_ms' => null,
-        ];
     }
 
     /**
@@ -728,7 +701,6 @@ class SteamCatalogSync
             }
 
             $this->stateInserts[] = $this->newState((int) $id, $found);
-            $this->samples[] = $this->sample((int) $id, $found->playersOnline, $found->playersMax);
             $this->counts['sampled']++;
         }
 
@@ -737,7 +709,6 @@ class SteamCatalogSync
         $this->spent['db'] += (hrtime(true) - $started) / 1e6;
 
         $this->flushStateInserts();
-        $this->flushSamples();
     }
 
     /**
@@ -761,28 +732,6 @@ class SteamCatalogSync
         }
 
         $this->stateInserts = [];
-        $this->spent['db'] += (hrtime(true) - $started) / 1e6;
-    }
-
-    private function flushSamples(): void
-    {
-        if ($this->samples === []) {
-            return;
-        }
-
-        $started = hrtime(true);
-
-        foreach (array_chunk($this->samples, self::CHUNK) as $chunk) {
-            // upsert, like the job's own recording: two writes landing in the
-            // same second must not collide on (server_id, recorded_at).
-            ServerStat::query()->upsert(
-                $chunk,
-                ['server_id', 'recorded_at'],
-                ['is_online', 'players_online', 'players_max', 'latency_ms'],
-            );
-        }
-
-        $this->samples = [];
         $this->spent['db'] += (hrtime(true) - $started) / 1e6;
     }
 

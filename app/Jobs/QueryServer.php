@@ -250,6 +250,7 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             'players_queued' => $result->playersQueued,
             'bots' => $result->bots,
             'vac_enabled' => $result->vacEnabled,
+            'latency_ms' => $result->latencyMs,
         ] as $column => $value) {
             if ($value !== null) {
                 $state[$column] = $value;
@@ -353,6 +354,7 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
         $this->writeState([
             'status' => ServerStatus::Offline->value,
             'players_online' => 0,
+            'latency_ms' => null,
             'last_queried_at' => $now,
             // Every failure, not only the first of a run: this answers "when was
             // it last down", and during an outage that is now.
@@ -456,23 +458,30 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        // Truncate down to the nearest ten-minute mark in UTC — same rule
-        // the Go sweeper uses, so both writers put a 14:07 refresh into
-        // the 14:00 bucket.
-        $bucket = $at->copy()->utc()->second(0)->minute(
-            (int) (floor((int) $at->utc()->format('i') / 10) * 10),
-        );
+        // `time.Now().UTC().Truncate(10 * time.Minute)`, in Carbon: floor to
+        // the ten-minute mark in UTC, seconds and below gone. A refresh at
+        // 14:07 lands in the 14:00 bucket the sweep's own row is in.
+        //
+        // On a copy — `$at` is the timestamp the state row was just written
+        // with, and converting it here would move it under the caller.
+        $bucket = $at->copy()->utc()->floorMinutes(10)->startOfMinute();
 
         try {
-            app(ClickHouseClient::class)->execute(
-                'INSERT INTO server_players_raw (ts, game_id, server_id, players_online)
-                 VALUES ({ts:DateTime}, {game_id:UInt32}, {server_id:UInt64}, {players:UInt16})',
-                [
-                    'ts' => $bucket->format('Y-m-d H:i:s'),
-                    'game_id' => (int) $this->server->game_id,
-                    'server_id' => (int) $this->server->id,
-                    'players' => max(0, (int) $result->playersOnline),
-                ],
+            app(ClickHouseClient::class)->insert(
+                'server_players_raw',
+                ['ts', 'game_id', 'server_id', 'players_online'],
+                [[
+                    // The reader parses `ts` as UTC and the sweeper writes UTC;
+                    // a naive local-time string here would put the point hours
+                    // away from the ones around it.
+                    $bucket->format('Y-m-d H:i:s'),
+                    (int) $this->server->game_id,
+                    (int) $this->server->id,
+                    // players_online is a UInt16 in ClickHouse and the Go
+                    // writer casts to one; an out-of-range value is rejected
+                    // by CH, which would cost us the row rather than clamp it.
+                    max(0, min(65535, (int) $result->playersOnline)),
+                ]],
             );
         } catch (Throwable $e) {
             Log::warning('QueryServer ClickHouse write failed', [

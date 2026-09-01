@@ -32,6 +32,7 @@ class ServerFactory extends Factory
         'wiped_at',
         'steam_id',
         'game_port',
+        'latency_ms',
         'last_queried_at',
         'last_online_at',
         'last_offline_at',

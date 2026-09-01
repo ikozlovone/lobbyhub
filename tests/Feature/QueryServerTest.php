@@ -36,7 +36,7 @@ class QueryServerTest extends TestCase
         $this->seed([CountrySeeder::class, GameSeeder::class]);
     }
 
-    public function test_a_successful_query_updates_the_snapshot_and_records_a_sample(): void
+    public function test_a_successful_query_updates_the_snapshot(): void
     {
         $server = $this->minecraftServer(['country_id' => null]);
 
@@ -66,10 +66,10 @@ class QueryServerTest extends TestCase
             $server->next_query_at->timestamp,
         );
 
-        $sample = ServerStat::where('server_id', $server->id)->firstOrFail();
-        $this->assertTrue($sample->is_online);
-        $this->assertSame(128, $sample->players_online);
-        $this->assertSame(44, $sample->latency_ms);
+        // The round trip is a state column now — one latest measurement, not
+        // a row per check. `server_stats` is retired; the history graph comes
+        // from ClickHouse.
+        $this->assertSame(44, $server->latency_ms);
     }
 
     public function test_it_stores_the_fields_the_server_reports_about_itself(): void
@@ -189,9 +189,9 @@ class QueryServerTest extends TestCase
             $server->next_query_at->timestamp,
         );
 
-        $sample = ServerStat::where('server_id', $server->id)->firstOrFail();
-        $this->assertFalse($sample->is_online);
-        $this->assertSame(0, $sample->players_online);
+        // Nothing answered, so there was nothing to time: a ping left over
+        // from the last successful check would read as one taken just now.
+        $this->assertNull($server->latency_ms);
     }
 
     public function test_backoff_doubles_per_failure_and_stops_at_the_ceiling(): void
@@ -460,7 +460,7 @@ class QueryServerTest extends TestCase
     /**
      * The lock is what the queue is protected by; this is what a worker is
      * protected by. A copy that exists anyway — queued before the lock shipped,
-     * or after its expiry — must not cost a socket and a stat row.
+     * or after its expiry — must not cost a socket and a second reading.
      */
     public function test_a_job_overtaken_by_another_query_does_nothing(): void
     {
@@ -478,9 +478,10 @@ class QueryServerTest extends TestCase
         $this->travel(30)->seconds();
         $this->runQueuedJob($stale, new QueryResult(playersOnline: 3, playersMax: 20));
 
-        // Neither the reading nor the history was touched by the copy.
-        $this->assertSame(99, $server->refresh()->players_online);
-        $this->assertSame(0, ServerStat::where('server_id', $server->id)->count());
+        // Neither the reading nor the timestamp was touched by the copy.
+        $server->refresh();
+        $this->assertSame(99, $server->players_online);
+        $this->assertSame(now()->subSeconds(30)->timestamp, $server->last_queried_at->timestamp);
     }
 
     /** The same job, when nothing overtook it, still does its work. */
@@ -493,8 +494,9 @@ class QueryServerTest extends TestCase
         $this->travel(60)->seconds();
         $this->runQueuedJob($job, new QueryResult(playersOnline: 7, playersMax: 20));
 
-        $this->assertSame(7, $server->refresh()->players_online);
-        $this->assertSame(1, ServerStat::where('server_id', $server->id)->count());
+        $server->refresh();
+        $this->assertSame(7, $server->players_online);
+        $this->assertSame(now()->timestamp, $server->last_queried_at->timestamp);
     }
 
     /**

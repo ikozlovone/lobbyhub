@@ -59,7 +59,12 @@ class ServerDetailResource extends ServerResource
              */
             'media' => $info->media($this->resource),
             'details_synced_at' => $this->details_synced_at?->toIso8601String(),
-            'latency_ms' => $this->latestLatency(),
+            // The round trip of the last check that got an answer, written by
+            // whichever PHP query ran last — the monitor's own poll, or the
+            // refresh button. The Go sweeper's UPDATE does not list the column,
+            // so its sweeps leave the measurement in place rather than aging
+            // it out with a value they never took.
+            'latency_ms' => $state?->latency_ms === null ? null : (int) $state->latency_ms,
             'game' => new GameResource($this->whenLoaded('game')),
             'modes' => $this->whenLoaded('modes', fn () => $this->modes->map(fn ($mode) => [
                 'slug' => $mode->slug,

@@ -11,9 +11,11 @@ use App\Services\Monitoring\Contracts\ServerQueryDriver;
 use App\Services\Monitoring\Exceptions\QueryFailed;
 use App\Services\Monitoring\QueryResult;
 use App\Services\Monitoring\ServerQueryManager;
+use App\Services\Stats\ClickHouseClient;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -175,6 +177,81 @@ class ServerRefreshTest extends TestCase
         $this->assertNotNull($server->last_offline_at);
     }
 
+    /**
+     * The other half of a refresh: the graph under the panel.
+     *
+     * The Go sweeper writes one row per online server per sweep into
+     * `server_players_raw`, and between sweeps the graph is ten minutes stale —
+     * which is exactly the window somebody presses this button in. So the
+     * interactive path writes the same row, by the same rules: only a server
+     * that answered, timestamp floored to the ten-minute bucket in UTC, so the
+     * point lands on top of the sweep's rather than beside it.
+     */
+    public function test_a_refresh_writes_the_reading_to_clickhouse(): void
+    {
+        $this->withClickHouse();
+        // 14:07 is mid-bucket: the row has to be stamped 14:00, the same mark
+        // `time.Now().UTC().Truncate(10 * time.Minute)` produces in the sweeper.
+        $this->travelTo(Carbon::parse('2026-09-01 14:07:31', 'UTC'));
+
+        $this->fakeDriver(new QueryResult(playersOnline: 214, playersMax: 250));
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        Http::assertSent(function ($request) {
+            $expected = 'INSERT INTO server_players_raw (ts, game_id, server_id, players_online) '
+                ."FORMAT TabSeparated\n"
+                ."2026-09-01 14:00:00\t{$this->server->game_id}\t{$this->server->id}\t214\n";
+
+            return $request->body() === $expected;
+        });
+    }
+
+    /**
+     * A server that did not answer has no player count to record, and a zero
+     * would be a measurement we did not take. The sweeper only queues rows for
+     * results it got an info block back for; this is the same rule.
+     */
+    public function test_a_refresh_that_finds_the_server_down_records_no_sample(): void
+    {
+        $this->withClickHouse();
+        $this->fakeDriver(null);
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        Http::assertNothingSent();
+    }
+
+    /** Inside the cooldown nothing was measured, so there is nothing to write. */
+    public function test_a_declined_refresh_records_no_sample(): void
+    {
+        $this->withClickHouse();
+        $this->server->state()->update(['last_queried_at' => now()->subSeconds(5)]);
+        $this->fakeDriver(new QueryResult(playersOnline: 999, playersMax: 999));
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        Http::assertNothingSent();
+    }
+
+    /**
+     * A ClickHouse that is down must not cost somebody their refresh: the state
+     * write has already committed by the time the sample is offered, and the
+     * panel is what the visitor is waiting on.
+     */
+    public function test_a_clickhouse_that_is_down_does_not_fail_the_refresh(): void
+    {
+        $this->withClickHouse();
+        Http::fake(['*' => Http::response('Code: 999. DB::Exception', 500)]);
+
+        $this->fakeDriver(new QueryResult(playersOnline: 214, playersMax: 250));
+
+        $response = $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        $this->assertSame(214, $response->json('data.live.players'));
+        $this->assertSame(214, $this->server->refresh()->players_online);
+    }
+
     public function test_an_inactive_server_cannot_be_refreshed(): void
     {
         $this->server->forceFill(['is_active' => false])->save();
@@ -193,6 +270,20 @@ class ServerRefreshTest extends TestCase
         }
 
         $this->postJson('/api/servers/refresh-me/refresh')->assertStatus(429);
+    }
+
+    /**
+     * Point the client at a ClickHouse that exists, and fake the wire.
+     *
+     * The client is a singleton built from config, so it has to be forgotten
+     * before the host takes effect — a test that resolved it first (through a
+     * page render, say) would otherwise hold the unconfigured one.
+     */
+    private function withClickHouse(): void
+    {
+        config(['services.clickhouse.host' => 'clickhouse.test']);
+        $this->app->forgetInstance(ClickHouseClient::class);
+        Http::fake();
     }
 
     /**

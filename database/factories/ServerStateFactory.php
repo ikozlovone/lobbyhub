@@ -24,6 +24,7 @@ class ServerStateFactory extends Factory
             'players_online' => fake()->numberBetween(0, $max),
             'players_max' => $max,
             'players_queued' => 0,
+            'latency_ms' => fake()->numberBetween(8, 240),
             'last_queried_at' => now(),
             'last_online_at' => now(),
             'next_query_at' => now()->addMinutes(5),
@@ -37,6 +38,7 @@ class ServerStateFactory extends Factory
         return $this->state(fn () => [
             'status' => ServerStatus::Offline,
             'players_online' => 0,
+            'latency_ms' => null,
             'last_online_at' => now()->subDays(3),
             'last_offline_at' => now(),
             'failed_queries_count' => fake()->numberBetween(1, 20),
@@ -48,6 +50,7 @@ class ServerStateFactory extends Factory
         return $this->state(fn () => [
             'status' => ServerStatus::Unknown,
             'players_online' => 0,
+            'latency_ms' => null,
             'last_queried_at' => null,
             'last_online_at' => null,
         ]);

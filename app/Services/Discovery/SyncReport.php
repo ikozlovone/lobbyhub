@@ -9,6 +9,13 @@ final readonly class SyncReport
         public int $found,
         public int $updated,
         public int $created,
+        /**
+         * Servers whose reading was due when Steam listed them — the count of
+         * player numbers this run actually took, rather than of rows written
+         * anywhere. It used to be one `server_stats` row each; that table is
+         * retired and the history now comes from the Go sweeper's ClickHouse
+         * writes, so nothing here writes a sample any more.
+         */
         public int $sampled,
         public int $requests,
         /** Buckets Steam would not finish handing over. Anything above zero is a gap. */

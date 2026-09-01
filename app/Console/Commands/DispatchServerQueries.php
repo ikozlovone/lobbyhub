@@ -292,7 +292,8 @@ class DispatchServerQueries extends Command
             return;
         }
 
-        $oldest = $this->due()->min('next_query_at');
+        // Qualified: `due()` joins state, and both tables carry the column.
+        $oldest = $this->due()->min('server_states.next_query_at');
         $lag = $oldest ? (int) now()->diffInSeconds($oldest, absolute: true) : 0;
 
         $message = "Monitoring is behind: {$due} servers due, batch size {$limit}, oldest overdue by {$lag}s. "

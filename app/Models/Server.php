@@ -176,6 +176,7 @@ class Server extends Model
         'wiped_at' => null,
         'steam_id' => null,
         'game_port' => null,
+        'latency_ms' => null,
         'last_queried_at' => null,
         'last_online_at' => null,
         'last_offline_at' => null,
@@ -235,12 +236,6 @@ class Server extends Model
     public function queryPort(): int
     {
         return $this->query_port ?? $this->port;
-    }
-
-    /** Round trip of the most recent successful check, for the server card. */
-    public function latestLatency(): ?int
-    {
-        return $this->stats()->whereNotNull('latency_ms')->latest('recorded_at')->value('latency_ms');
     }
 
     /**

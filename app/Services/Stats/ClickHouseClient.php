@@ -6,9 +6,9 @@ use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
- * Thin HTTP wrapper around ClickHouse — one method, `query()`, that returns
- * the `data` array from a JSON response. Everything the app reads out of CH
- * fits this shape.
+ * Thin HTTP wrapper around ClickHouse: `query()` returns the `data` array of
+ * a JSON response — everything the app reads out of CH fits that shape — and
+ * `insert()` appends rows to a table.
  *
  * Parametrised queries use ClickHouse's own placeholder syntax rather than
  * PDO-style `?`: values sit in the query string as `param_<name>` and the
@@ -94,44 +94,79 @@ class ClickHouseClient
     }
 
     /**
-     * Run an INSERT (or any non-SELECT) and discard the response body. Uses
-     * the same parameter shape as query(): `{name:Type}` placeholders in the
-     * SQL, values passed by name in $params.
+     * Append rows to a table.
      *
-     * A no-op when the client is not configured — mirrors query(), so a
-     * Laravel install without ClickHouse still boots.
+     * Deliberately not an `INSERT ... VALUES` with `{name:Type}` placeholders
+     * like `query()` uses. The VALUES section is read by ClickHouse's own data
+     * parser rather than the SQL one, and what it does with a query parameter
+     * depends on the server version — on the wrong one the statement is
+     * rejected and the row is quietly lost, because this write is fail-open by
+     * design. `FORMAT TabSeparated` puts the values in the request body as
+     * data, which every version reads the same way, and is also how the Go
+     * sweeper gets its rows in (as a native-protocol batch).
      *
-     * @param  array<string, scalar>  $params
+     * Column and table names are code, not input; the values are escaped for
+     * TabSeparated below.
+     *
+     * @param  list<string>  $columns
+     * @param  list<list<scalar|null>>  $rows  one row per insert, values in
+     *                                         the order of $columns
      *
      * @throws RuntimeException on any HTTP failure or CH-side error.
      */
-    public function execute(string $sql, array $params = []): void
+    public function insert(string $table, array $columns, array $rows): void
     {
-        if (! $this->isConfigured()) {
+        if (! $this->isConfigured() || $rows === []) {
             return;
         }
 
-        $queryParams = ['database' => $this->database];
-        foreach ($params as $name => $value) {
-            $queryParams["param_{$name}"] = (string) $value;
-        }
+        $body = sprintf(
+            "INSERT INTO %s (%s) FORMAT TabSeparated\n%s\n",
+            $table,
+            implode(', ', $columns),
+            implode("\n", array_map(
+                fn (array $row) => implode("\t", array_map($this->escape(...), $row)),
+                $rows,
+            )),
+        );
 
         $url = sprintf(
             'http://%s:%d/?%s',
             $this->host,
             $this->port,
-            http_build_query($queryParams),
+            http_build_query(['database' => $this->database]),
         );
 
         $response = Http::withBasicAuth($this->username, $this->password)
             ->timeout(self::TIMEOUT_SECONDS)
-            ->withBody($sql, 'text/plain')
+            ->withBody($body, 'text/plain')
             ->post($url);
 
         if ($response->failed()) {
             throw new RuntimeException(
-                "ClickHouse execute failed [{$response->status()}]: ".trim($response->body()),
+                "ClickHouse insert failed [{$response->status()}]: ".trim($response->body()),
             );
         }
+    }
+
+    /**
+     * One value, in the escaping TabSeparated defines: a real tab or newline
+     * inside a value would otherwise end the column or the row.
+     */
+    private function escape(string|int|float|bool|null $value): string
+    {
+        if ($value === null) {
+            return '\\N';
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return str_replace(
+            ['\\', "\t", "\n", "\r"],
+            ['\\\\', '\\t', '\\n', '\\r'],
+            (string) $value,
+        );
     }
 }

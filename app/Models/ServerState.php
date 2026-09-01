@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\ServerStatus;
+use Database\Factories\ServerStateFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -22,6 +24,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ServerState extends Model
 {
+    /** @use HasFactory<ServerStateFactory> */
+    use HasFactory;
+
     protected $table = 'server_states';
 
     /**
