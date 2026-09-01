@@ -25,7 +25,7 @@ class ServerHistoryController extends Controller
         // Chart data is the heaviest read in the API; even a minute of caching
         // collapses a burst of page views into one query.
         $payload = Cache::remember(
-            "api:servers:{$server->id}:history:{$range}",
+            ServerHistory::cacheKey($server, $range),
             600,
             fn () => $history->for($server, $range),
         );

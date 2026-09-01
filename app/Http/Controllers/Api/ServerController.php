@@ -9,10 +9,14 @@ use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
 use App\Services\Catalog\ListingCache;
+use App\Services\Catalog\ServerHistory;
 use App\Services\Catalog\ServerListing;
+use App\Services\Http\SharedCache;
 use App\Services\Monitoring\ServerQueryManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 
 class ServerController extends Controller
@@ -128,7 +132,7 @@ class ServerController extends Controller
      * snapshot and `refreshed: false`: the panel updates either way, and "we
      * checked forty seconds ago" is a better answer than an error.
      */
-    public function refresh(Server $server, ServerQueryManager $manager): JsonResponse
+    public function refresh(Server $server, ServerQueryManager $manager, SharedCache $shared): JsonResponse
     {
         abort_unless($server->is_active, 404);
 
@@ -151,11 +155,53 @@ class ServerController extends Controller
                 'game', 'country', 'version', 'modes',
                 'state' => fn ($q) => $q->where('game_id', $server->game_id),
             ]);
+
+            /*
+             * And drop what nginx is holding for this server's own read.
+             *
+             * Without it the button is only half true. The panel is replaced
+             * from this response, so the visitor watches the numbers change —
+             * and then a reload inside the minute `cache.public:60` bought is
+             * answered from the copy stored before the query went out, and the
+             * page they are looking at goes back in time. The page is the part
+             * they will still be on tomorrow.
+             *
+             * Only on the branch that actually queried. Inside the cooldown
+             * nothing changed, and dropping the entry would spend a PHP boot
+             * to store the same bytes again.
+             */
+            $this->dropStoredCopies($server, $shared);
         }
 
         return (new ServerDetailResource($server))
             ->additional(['refreshed' => $due])
             ->response();
+    }
+
+    /**
+     * Everything holding an answer this refresh has just made wrong.
+     *
+     * Two layers, because the page is read through both. nginx keeps the two
+     * GETs a server page is built from — its own read for a minute, its chart
+     * for ten — and the chart is kept a second time inside the app, because it
+     * is the heaviest read in the API and a burst of page views should cost one
+     * ClickHouse query rather than fifty.
+     *
+     * Only the ranges a fresh sample can change: 24h and 7d are drawn from the
+     * ten-minute rows the refresh just added to, while 30d and 1y come from a
+     * daily rollup no query of ours writes.
+     */
+    private function dropStoredCopies(Server $server, SharedCache $shared): void
+    {
+        $shared->forget(parse_url(route('api.servers.show', $server), PHP_URL_PATH));
+
+        foreach (ServerHistory::liveRanges() as $range) {
+            Cache::forget(ServerHistory::cacheKey($server, $range));
+
+            $shared->forget(
+                parse_url(route('api.servers.history', $server), PHP_URL_PATH)."?range={$range}",
+            );
+        }
     }
 
     /**
@@ -204,7 +250,7 @@ class ServerController extends Controller
                 'max_players' => (int) $row->players_max,
                 'queued' => (int) $row->players_queued,
                 'checked_at' => $row->last_queried_at
-                    ? \Illuminate\Support\Carbon::parse($row->last_queried_at)->toIso8601String()
+                    ? Carbon::parse($row->last_queried_at)->toIso8601String()
                     : null,
             ])->all(),
         ]);

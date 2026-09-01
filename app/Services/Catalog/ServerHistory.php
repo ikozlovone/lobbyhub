@@ -168,4 +168,29 @@ class ServerHistory
     {
         return array_keys(self::RANGES);
     }
+
+    /**
+     * The ranges a fresh sample can change.
+     *
+     * A manual refresh writes one point into the current ten-minute bucket, so
+     * the two raw-backed ranges are a point out of date the moment it lands.
+     * The long ones are built from the daily rollup, which a cron writes once a
+     * day and this cannot touch — dropping their cached copies would re-run the
+     * heaviest read in the API for an identical answer.
+     *
+     * @return list<string>
+     */
+    public static function liveRanges(): array
+    {
+        return array_keys(array_filter(
+            self::RANGES,
+            fn (array $config) => $config['source'] === 'raw',
+        ));
+    }
+
+    /** Where one range's answer is kept; used to store it and to drop it. */
+    public static function cacheKey(Server $server, string $range): string
+    {
+        return "api:servers:{$server->id}:history:{$range}";
+    }
 }

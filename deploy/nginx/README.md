@@ -58,6 +58,26 @@ term, or one of the paths in the `$api_uncacheable` map. Emptying it by hand is
 `sudo rm -rf /var/cache/nginx/api/*` followed by a reload; nothing needs it in
 normal operation, because the windows are a minute.
 
+One entry does get dropped on purpose. Pressing Refresh on a server page
+queries the machine there and then, which makes the stored copy of that
+server's read wrong the moment it is written — and a minute is a long time to
+show somebody the numbers they just replaced. So the application deletes that
+one entry itself, the way the Go sweeper deletes Laravel's `api:games` key
+after a sweep. It needs two things from this side:
+
+- `NGINX_CACHE_PATH` in the API's `.env`, pointing at the `fastcgi_cache_path`
+  root (`/var/cache/nginx/api`), plus `NGINX_CACHE_LEVELS` if `levels=` is ever
+  something other than `1:2`. Unset, the drop is a no-op and the entry simply
+  ages out.
+- The cache key without `$host` in it, which is how `api.lobbyhub.gg.conf`
+  now declares it. It also stops the same answer being filed twice — once
+  under the public name and once under `127.0.0.1` for the renders that come
+  in on the loopback listener.
+
+PHP-FPM and nginx both run as `www-data`, which is what makes the delete
+possible against a `0700` directory. A permission error is logged and the
+refresh still answers.
+
 Both files in `conf.d/` have to be there, and `nginx -t` names whichever is
 missing rather than saying so:
 

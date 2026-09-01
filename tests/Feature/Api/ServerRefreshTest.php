@@ -6,6 +6,8 @@ use App\Enums\ServerStatus;
 use App\Jobs\QueryServer;
 use App\Models\Game;
 use App\Models\Server;
+use App\Services\Catalog\ServerHistory;
+use App\Services\Http\SharedCache;
 use App\Services\Monitoring\Contracts\ProvidesServerDetails;
 use App\Services\Monitoring\Contracts\ServerQueryDriver;
 use App\Services\Monitoring\Exceptions\QueryFailed;
@@ -16,6 +18,7 @@ use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -252,6 +255,67 @@ class ServerRefreshTest extends TestCase
         $this->assertSame(214, $this->server->refresh()->players_online);
     }
 
+    /**
+     * The half of the button that only shows up on reload.
+     *
+     * A server's own read is cacheable for a minute (`cache.public:60`), which
+     * is right until the moment somebody proves it wrong by pressing Refresh.
+     * The panel is replaced from this response, so without the drop below the
+     * page would go back in time on the very next reload — the failure that
+     * reads as "the refresh did not save".
+     */
+    public function test_a_refresh_drops_the_stored_copy_of_the_page_read(): void
+    {
+        $stored = $this->cachedCopyOf('/api/servers/refresh-me');
+
+        $this->fakeDriver(new QueryResult(playersOnline: 214, playersMax: 250));
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        $this->assertFileDoesNotExist($stored);
+    }
+
+    /**
+     * Nothing was measured inside the cooldown, so the stored copy is still
+     * the right answer — and dropping it would buy a PHP boot to store the
+     * same bytes again.
+     */
+    public function test_a_declined_refresh_leaves_the_stored_copy_alone(): void
+    {
+        $stored = $this->cachedCopyOf('/api/servers/refresh-me');
+
+        $this->server->state()->update(['last_queried_at' => now()->subSeconds(5)]);
+        $this->fakeDriver(new QueryResult(playersOnline: 999, playersMax: 999));
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        $this->assertFileExists($stored);
+    }
+
+    /**
+     * The chart under the panel is cached for ten minutes, being the heaviest
+     * read in the API — so without this the graph keeps its pre-refresh shape
+     * long after the number above it has moved.
+     *
+     * Only the ranges the new sample lands in. 30d and 1y are drawn from the
+     * daily rollup a cron writes; re-running them would be the expensive half
+     * of this endpoint spent on an identical answer.
+     */
+    public function test_a_refresh_drops_the_chart_ranges_the_new_sample_lands_in(): void
+    {
+        Cache::put(ServerHistory::cacheKey($this->server, '24h'), ['stale'], 600);
+        Cache::put(ServerHistory::cacheKey($this->server, '7d'), ['stale'], 600);
+        Cache::put(ServerHistory::cacheKey($this->server, '30d'), ['stale'], 600);
+
+        $this->fakeDriver(new QueryResult(playersOnline: 214, playersMax: 250));
+
+        $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
+
+        $this->assertFalse(Cache::has(ServerHistory::cacheKey($this->server, '24h')));
+        $this->assertFalse(Cache::has(ServerHistory::cacheKey($this->server, '7d')));
+        $this->assertTrue(Cache::has(ServerHistory::cacheKey($this->server, '30d')));
+    }
+
     public function test_an_inactive_server_cannot_be_refreshed(): void
     {
         $this->server->forceFill(['is_active' => false])->save();
@@ -270,6 +334,27 @@ class ServerRefreshTest extends TestCase
         }
 
         $this->postJson('/api/servers/refresh-me/refresh')->assertStatus(429);
+    }
+
+    /**
+     * Stand up a cache directory with an entry for one URI in it, laid out the
+     * way nginx lays one out, and return the file so a test can say whether it
+     * survived.
+     */
+    private function cachedCopyOf(string $uri): string
+    {
+        $root = sys_get_temp_dir().'/lobbyhub-cache-'.bin2hex(random_bytes(6));
+
+        config(['services.nginx.cache_path' => $root]);
+        $this->app->forgetInstance(SharedCache::class);
+
+        $hash = md5('GET'.$uri);
+        $dir = $root.'/'.substr($hash, 31, 1).'/'.substr($hash, 29, 2);
+
+        mkdir($dir, 0755, recursive: true);
+        file_put_contents($file = $dir.'/'.$hash, 'stored answer');
+
+        return $file;
     }
 
     /**

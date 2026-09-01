@@ -7,6 +7,7 @@ use App\Observers\GameObserver;
 use App\Services\Geo\GeoResolver;
 use App\Services\Geo\MaxMindGeoResolver;
 use App\Services\Geo\NullGeoResolver;
+use App\Services\Http\SharedCache;
 use App\Services\Stats\ClickHouseClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -48,6 +49,14 @@ class AppServiceProvider extends ServiceProvider
                 password: (string) ($cfg['password'] ?? ''),
             );
         });
+
+        // The nginx cache in front of this app, for the one caller that has to
+        // tell it to forget something. Stateless — a path and the layout of
+        // the directory tree under it.
+        $this->app->singleton(SharedCache::class, fn () => new SharedCache(
+            path: config('services.nginx.cache_path'),
+            levels: (string) config('services.nginx.cache_levels', '1:2'),
+        ));
     }
 
     /**

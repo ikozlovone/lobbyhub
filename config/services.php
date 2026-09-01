@@ -164,4 +164,27 @@ return [
         'password' => env('CH_PASSWORD', ''),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | The cache in front of PHP
+    |--------------------------------------------------------------------------
+    |
+    | Where nginx keeps the answers this API told it it could keep — the
+    | `fastcgi_cache_path` in conf.d/lobbyhub.conf, and the `levels=` it was
+    | declared with. Both are needed to work out the file one URL is stored
+    | in; see SharedCache for how.
+    |
+    | It is only ever used to drop an entry the application knows is wrong,
+    | which today is one thing: the server somebody just pressed Refresh on.
+    | Nothing reads it, nothing writes it, and an unset path means there is no
+    | shared cache in front of this install — local development, the test
+    | suite — and every drop is a no-op.
+    |
+    */
+
+    'nginx' => [
+        'cache_path' => env('NGINX_CACHE_PATH'),
+        'cache_levels' => env('NGINX_CACHE_LEVELS', '1:2'),
+    ],
+
 ];
