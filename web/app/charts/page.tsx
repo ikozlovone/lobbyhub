@@ -169,7 +169,10 @@ async function Ranking() {
                     <th scope="col" className="py-2.5 pr-4 text-right font-normal">
                       Playing now
                     </th>
-                    <th scope="col" className="hidden py-2.5 pr-4 font-normal lg:table-cell">
+                    <th
+                      scope="col"
+                      className="hidden py-2.5 pr-4 font-normal whitespace-nowrap lg:table-cell"
+                    >
                       Last 48 hours
                     </th>
                     <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal md:table-cell">
@@ -177,12 +180,16 @@ async function Ranking() {
                     </th>
                     {/* Nobody publishes this: Valve's charts carry a rank, a
                         count and a peak, and no playtime. It is our own
-                        samples added up. */}
+                        samples added up — and the window is in the label
+                        because the same column on steamcharts.com is a
+                        30-day total, which is the same arithmetic over
+                        thirty times the span. An unlabelled number invites
+                        that comparison and loses it. */}
                     <th
                       scope="col"
                       className="hidden py-2.5 pr-4 text-right font-normal whitespace-nowrap xl:table-cell"
                     >
-                      Hours played
+                      Hours played <span className="text-subtle">24h</span>
                     </th>
                     <th
                       scope="col"
@@ -401,8 +408,6 @@ function Trending({ rows }: { rows: ChartRow[] }) {
     .sort((a, b) => (b.change_24h ?? 0) - (a.change_24h ?? 0))
     .slice(0, 6)
 
-  if (climbing.length === 0) return null
-
   return (
     <section aria-labelledby="trending">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -412,7 +417,21 @@ function Trending({ rows }: { rows: ChartRow[] }) {
         <p className="text-xs text-subtle">by change in players since this time yesterday</p>
       </div>
 
-      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      {/*
+        Silence was the wrong empty state here. A section that simply is not
+        drawn until a day has been recorded reads, to anybody who knows it
+        should exist, as something broken — and to a first-time visitor on the
+        day it launches, as a page with a heading missing under it. One
+        sentence says which of the two it is.
+      */}
+      {climbing.length === 0 && (
+        <p className="rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
+          Nothing to compare yet: this is each game against itself at the same time yesterday, so
+          it fills in once a full day has been recorded.
+        </p>
+      )}
+
+      <ul className="grid gap-2 empty:hidden sm:grid-cols-2 xl:grid-cols-3">
         {climbing.map((row) => (
           /* `min-w-0`: a grid item's default minimum is its content, so
              without it the card grows past its own column to fit the line and
@@ -528,6 +547,12 @@ function Explainer() {
           no playtime at all. It is our own samples added up: each reading stands for the ten
           minutes until the next one, so a day of them is player-hours. Hours observed, in other
           words, which is what every chart site of this kind is counting.
+        </p>
+        <p>
+          The window is one day here, and that is why the figure is smaller than the one beside the
+          same game on sites that total thirty. Same arithmetic, thirty times the span — a game
+          averaging 840,000 players is twenty million player-hours a day and six hundred million a
+          month.
         </p>
       </div>
 
