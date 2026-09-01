@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Auth\SessionController;
 use App\Http\Controllers\Api\Auth\SocialAuthController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\FavoriteController;
+use App\Http\Controllers\Api\GameChartController;
 use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServerController;
@@ -59,6 +60,21 @@ Route::name('api.')->group(function () {
     Route::get('games/{game}', [GameController::class, 'show'])
         ->middleware('cache.public:60')
         ->name('games.show');
+
+    /*
+     * The player-count chart. A minute, like the games it is assembled from:
+     * `steamstats` rewrites those counters every ten minutes and the page is a
+     * ranking, which is the kind of thing a visitor reloads to watch move.
+     */
+    Route::get('charts', [GameChartController::class, 'index'])
+        ->middleware('cache.public:60')
+        ->name('charts.index');
+
+    // Ten minutes: a game's history grows by one point in that time, and the
+    // read behind it is the heaviest in this API.
+    Route::get('games/{game}/players', [GameChartController::class, 'history'])
+        ->middleware('cache.public:600')
+        ->name('games.players');
 
     Route::get('games/{game}/servers', [ServerController::class, 'index'])
         ->middleware('cache.public:600')

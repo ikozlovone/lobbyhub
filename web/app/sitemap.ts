@@ -26,6 +26,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: SITE, changeFrequency: 'hourly', priority: 1 },
     // The catalog. Second only to the home page: every game page hangs off it.
     { url: `${SITE}/games`, changeFrequency: 'hourly', priority: 0.9 },
+    /*
+     * The player charts. Hourly like the catalog and for the same reason: the
+     * ranking on it moves, and a crawler that finds it unchanged three times
+     * stops coming back on the schedule the numbers actually need.
+     */
+    { url: `${SITE}/charts`, changeFrequency: 'hourly', priority: 0.8 },
     // The bare listing only. ?q= variants are noindex — see the search page.
     { url: `${SITE}/search`, changeFrequency: 'hourly', priority: 0.6 },
     // The submission funnel: this page carries every per-game form under it.
@@ -47,6 +53,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'hourly',
       priority: 0.9,
     })
+
+    /*
+     * The game's player-count page, which is a different search from its
+     * server list: "how many people play X" against "X servers". Only for
+     * games the collector has actually read — the page itself 404s without a
+     * reading, and a sitemap naming it would point a crawler at a URL we
+     * refuse to serve. It is the same gate the page applies, not an
+     * approximation of it.
+     */
+    if (game.steamMeasured) {
+      entries.push({
+        url: `${SITE}/charts/${game.slug}`,
+        changeFrequency: 'hourly',
+        priority: 0.7,
+      })
+    }
 
     /*
      * The per-game form, which was missing.

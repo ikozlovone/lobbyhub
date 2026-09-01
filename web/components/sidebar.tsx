@@ -40,6 +40,23 @@ export async function Sidebar() {
           </Link>
         </li>
         <li>
+          {/* Between the catalog and the actions on purpose: it is a second way
+              *into* the games — by how busy they are rather than by name — and
+              the one page here that answers a question somebody arrives with
+              from a search engine. */}
+          <Link
+            href="/charts"
+            className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"
+          >
+            <span className="flex size-7 shrink-0 items-center justify-center rounded bg-line text-muted">
+              <Icon.chart />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-muted transition-colors group-hover:text-fg">
+              Player charts
+            </span>
+          </Link>
+        </li>
+        <li>
           <Link
             href="/add-server"
             className="group flex cursor-pointer items-center gap-2.5 rounded px-2 py-1.5 transition-colors hover:bg-surface-2"

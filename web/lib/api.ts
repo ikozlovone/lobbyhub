@@ -56,6 +56,14 @@ export type GameCounters = {
   synced_at: string | null
 }
 
+export type SteamCounters = {
+  players_online: number
+  players_peak: number
+  /** Position in Steam's own top 100, or null when the game is below it. */
+  chart_rank: number | null
+  synced_at: string | null
+}
+
 export type Monitoring = {
   protocol: 'minecraft' | 'source' | 'fivem'
   protocol_label: string
@@ -77,6 +85,13 @@ export type Game = {
   hero: string | null
   has_versions: boolean
   counters: GameCounters
+  /**
+   * What Steam says about the game itself — everybody playing it anywhere,
+   * not the players our monitor found on its servers. `synced_at` is null for
+   * a game the collector has not reached, which is not the same as nobody
+   * playing it.
+   */
+  steam: SteamCounters
   monitoring: Monitoring
   seo: { title: string | null; description: string | null }
   description?: string | null
@@ -401,6 +416,57 @@ export type RecentVote = {
 export async function fetchRecentVotes(game: string, init?: RequestInit) {
   const response = await getOrNull<{ data: RecentVote[] }>(`/games/${game}/votes`, init)
   return response?.data ?? []
+}
+
+/** One game's line in the player-count chart. */
+export type ChartRow = {
+  /** Position in this chart, which ranks only the games this site carries. */
+  position: number
+  slug: string
+  name: string
+  icon: string | null
+  accent_color: string | null
+  steam_appid: number
+  players: number
+  peak: number
+  /** Where Steam puts it in its own top 100, or null when it is below it. */
+  steam_rank: number | null
+  servers: number
+  servers_online: number
+  /** Players on the servers we monitor — the other number entirely. */
+  server_players: number
+}
+
+export type Chart = {
+  data: ChartRow[]
+  meta: {
+    games: number
+    players: number
+    charted: number
+    synced_at: string | null
+  }
+}
+
+export async function fetchCharts(init?: RequestInit) {
+  return get<Chart>('/charts', init)
+}
+
+/** A game's player count over time, from the ten-minute samples in ClickHouse. */
+export type GamePlayers = {
+  range: string
+  source: 'raw' | 'daily'
+  /** When this game's history starts — the tables begin when the collector did. */
+  recording_since: string | null
+  points: { at: string; players: number; peak?: number }[]
+}
+
+export async function fetchGamePlayers(slug: string, range: string, init?: RequestInit) {
+  const response = await getOrNull<{ data: GamePlayers }>(
+    `/games/${slug}/players?range=${range}`,
+    init,
+  )
+
+  return response?.data ?? null
 }
 
 export async function fetchServer(slug: string, init?: RequestInit) {

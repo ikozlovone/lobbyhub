@@ -4,6 +4,8 @@ import { CATALOG_CACHE, SITEMAP_CACHE } from './cache'
 import {
   SERVER_API_URL,
   fetchCatalogServers,
+  fetchCharts,
+  fetchGamePlayers,
   fetchGame,
   fetchGames,
   fetchHistory,
@@ -192,6 +194,18 @@ export const searchServers = cache(async (term: string, limit = 24) => {
  */
 export const getServer = cache(async (slug: string) => fetchServer(slug, FRESH))
 
+/**
+ * The player-count chart, and one game's series.
+ *
+ * Fresh, like everything else measured. A ranking that is a minute stale shows
+ * two games in the wrong order, which is the one thing a chart is for.
+ */
+export const getCharts = cache(async () => fetchCharts(FRESH).catch(() => null))
+
+export const getGamePlayers = cache(async (slug: string, range: string) =>
+  fetchGamePlayers(slug, range, FRESH),
+)
+
 export const getHistory = cache(async (slug: string, range: string) =>
   fetchHistory(slug, range, FRESH),
 )
@@ -213,6 +227,8 @@ export const SERVER_SITEMAP_CHUNK = 25_000
 export type SitemapGame = {
   slug: string
   servers: number
+  /** Whether the Steam collector has a reading for it — the charts page's own gate. */
+  steamMeasured: boolean
   modes: { slug: string; count: number }[]
   versions: { slug: string; count: number }[]
   countries: { slug: string; count: number }[]
@@ -249,6 +265,7 @@ export async function getSitemapCatalog(): Promise<SitemapGame[]> {
     catalog.push({
       slug: detail.slug,
       servers: detail.counters.servers,
+      steamMeasured: detail.steam.synced_at !== null,
       modes: trim(detail.facets.modes),
       versions: trim(detail.facets.versions),
       countries: trim(detail.facets.countries),

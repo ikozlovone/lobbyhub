@@ -52,6 +52,20 @@ class GameResource extends JsonResource
                 'players_online' => $this->players_online,
                 'synced_at' => $this->stats_synced_at?->toIso8601String(),
             ],
+            /*
+             * What Steam says about the game itself, which is a different
+             * number from `counters` above and not a superset of it: that one
+             * counts players our monitor found on the game's servers, this one
+             * counts everybody in the game anywhere on Steam. Written by the
+             * `steamstats` collector; null `synced_at` means it has not reached
+             * this game yet, which is not the same as nobody playing.
+             */
+            'steam' => [
+                'players_online' => (int) $this->steam_players_online,
+                'players_peak' => (int) $this->steam_players_peak,
+                'chart_rank' => $this->steam_chart_rank,
+                'synced_at' => $this->steam_stats_synced_at?->toIso8601String(),
+            ],
             'seo' => [
                 'title' => $this->meta_title,
                 'description' => $this->meta_description,

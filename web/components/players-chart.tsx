@@ -12,6 +12,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { History, HistoryPoint } from '@/lib/api'
+import { compact, formatStamp, xTicks, yTicks } from '@/lib/chart'
 import { useLiveReading } from './live-provider'
 
 /**
@@ -100,7 +101,7 @@ export function PlayersChart({
 
   const peak = useMemo(() => Math.max(...rows.map((row) => row.players), 0), [rows])
   const ticks = useMemo(() => yTicks(peak), [peak])
-  const stamps = useMemo(() => xTicks(rows, source), [rows, source])
+  const stamps = useMemo(() => xTicks(rows.map((row) => row.t), source), [rows, source])
   const downtime = useMemo(() => downtimeBands(rows), [rows])
 
   return (
@@ -347,73 +348,3 @@ function downtimeBands(rows: Row[]) {
   return bands
 }
 
-/**
- * Four stamps spread evenly across the span.
- *
- * Left to itself the library labels whichever moments its own tick maths lands
- * on, which on irregularly sampled data comes out lopsided. Even spacing is what
- * a time axis is read as, and on a linear scale it is also true.
- *
- * They sit an eighth of the span in from each end, keeping the step uniform
- * while leaving the first and last labels room to be centred on their tick
- * instead of hanging off the edge of the plot.
- *
- * Stamps that read the same are dropped: a two-day span of daily summaries
- * would otherwise put "Jul 27" under three of the four ticks.
- */
-function xTicks(rows: Row[], source?: 'raw' | 'daily') {
-  if (rows.length < 2) return undefined
-
-  const from = rows[0].t
-  const span = rows[rows.length - 1].t - from
-  const seen = new Set<string>()
-
-  return [1, 3, 5, 7]
-    .map((eighth) => Math.round(from + (span * eighth) / 8))
-    .filter((stamp) => {
-      const label = formatStamp(stamp, source)
-
-      if (seen.has(label)) return false
-
-      seen.add(label)
-
-      return true
-    })
-}
-
-/**
- * Round ticks from zero to just above the peak — the values the tooltip does
- * not give. Three even steps, so a peak of 1,203 tops out at 1,500 rather than
- * at 2,000 with half the panel left empty.
- */
-function yTicks(peak: number) {
-  const step = niceStep(Math.max(peak, 1) / 3)
-
-  return [0, step, step * 2, step * 3]
-}
-
-/** The next 1 / 2 / 2.5 / 5 / 10 of a decade at or above the value. */
-function niceStep(value: number) {
-  const magnitude = 10 ** Math.floor(Math.log10(value))
-  const fraction = [1, 2, 2.5, 5, 10].find((candidate) => value <= candidate * magnitude) ?? 10
-
-  return Math.max(1, fraction * magnitude)
-}
-
-function compact(value: number) {
-  return value >= 1000 ? `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k` : String(value)
-}
-
-function formatStamp(stamp: string | number, source?: 'raw' | 'daily') {
-  const date = new Date(stamp)
-  const daily = source === 'daily' || (typeof stamp === 'string' && !stamp.includes('T'))
-
-  return daily
-    ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : date.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-}
