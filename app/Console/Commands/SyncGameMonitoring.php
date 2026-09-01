@@ -20,6 +20,11 @@ class SyncGameMonitoring extends Command
     /**
      * Run by hand, not on the scheduler.
      *
+     * With no `--game` it walks every game that has a `steam_appid`, in the
+     * order the site lists them — their filter is keyed on Steam's appid, so a
+     * game without one (Minecraft, today) cannot be asked for at all and is
+     * named as skipped rather than silently left out.
+     *
      * It reads somebody else's API for as long as their catalog is, and what it
      * writes — a mark that only ever goes on once, and rows for addresses we
      * have never seen — is not something that needs doing every hour. Put it on
@@ -44,6 +49,15 @@ class SyncGameMonitoring extends Command
         $write = ! $this->option('dry-run');
         $pages = $this->option('pages') === null ? null : max(1, (int) $this->option('pages'));
         $from = max(0, (int) $this->option('from'));
+
+        // An offset belongs to one game's list. Carried across all of them it
+        // would start every game partway through its own, quietly skipping the
+        // beginning of forty-four lists to continue one.
+        if ($from > 0 && ! $this->option('game')) {
+            $this->error('--from continues one game\'s list, so it needs --game with it.');
+
+            return self::FAILURE;
+        }
 
         if (! $write) {
             $this->warn('Dry run: nothing will be written.');
