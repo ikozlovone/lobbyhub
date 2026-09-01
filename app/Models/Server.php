@@ -29,6 +29,10 @@ class Server extends Model
             'details_synced_at' => 'datetime',
             'claimed_at' => 'datetime',
             'promoted_until' => 'datetime',
+            // Competitor coverage — see the migration that adds it. Null is
+            // "never matched there", which is also every row's answer before
+            // the first parse.
+            'gamemonitoring_seen_at' => 'datetime',
         ];
     }
 
