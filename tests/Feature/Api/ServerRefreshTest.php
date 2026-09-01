@@ -197,6 +197,13 @@ class ServerRefreshTest extends TestCase
         // `time.Now().UTC().Truncate(10 * time.Minute)` produces in the sweeper.
         $this->travelTo(Carbon::parse('2026-09-01 14:07:31', 'UTC'));
 
+        // The fixture was stamped by the real clock in setUp, and the clock has
+        // just moved to a fixed point in the past. Left alone, `last_queried_at`
+        // sits in the future for anybody running the suite after 15:07 UTC, the
+        // cooldown declines to re-query, and the test fails by the hour of the
+        // day rather than by anything in the code.
+        $this->server->state()->update(['last_queried_at' => now()->subHour()]);
+
         $this->fakeDriver(new QueryResult(playersOnline: 214, playersMax: 250));
 
         $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
