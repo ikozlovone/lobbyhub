@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * When gamemonitoring.net was last seen listing this server.
+ * When gamemonitoring.net was first seen listing this server.
  *
  * The catalog holds servers nobody else does, and that is not always a good
  * thing: an address discovered once and never listed anywhere else is usually
@@ -20,6 +20,14 @@ use Illuminate\Support\Facades\Schema;
  * — which is also what every row says the day before the first parse runs, so
  * a deletion pass must judge against when the parse itself last completed, not
  * against this column alone.
+ *
+ * First, not last: GameMonitoringSync only writes where the column is null.
+ * `servers` is the cold half of the schema, split from `server_states` so that
+ * periodic sweeps stop rewriting it, and refreshing a date across three hundred
+ * thousand rows on every pass would put it straight back on the hot path for a
+ * fact that only has to be true once. The cost is that a server they later drop
+ * keeps its mark; the pass is run to find the servers nobody else lists, and
+ * those never had one.
  *
  * No index. The column is written by a periodic parser and read by an
  * occasional cleanup pass over the whole table, and neither is a query shape

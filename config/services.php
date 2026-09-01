@@ -182,6 +182,28 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | GameMonitoring
+    |--------------------------------------------------------------------------
+    |
+    | The competitor whose list the catalog is reconciled against — see
+    | GameMonitoringSync. Read-only, unauthenticated, and keyed by Steam appid,
+    | which is why only games with `steam_appid` can be reconciled at all.
+    |
+    | `pause_ms` is politeness rather than throughput: a catalog-wide pass is
+    | hundreds of requests at somebody else's API, and there is no hurry
+    | anywhere in this — it is run by hand.
+    |
+    */
+
+    'gamemonitoring' => [
+        'url' => env('GAMEMONITORING_URL', 'https://api.gamemonitoring.net'),
+        'page_size' => (int) env('GAMEMONITORING_PAGE_SIZE', 1000),
+        'timeout' => (int) env('GAMEMONITORING_TIMEOUT', 30),
+        'pause_ms' => (int) env('GAMEMONITORING_PAUSE_MS', 250),
+    ],
+
     'nginx' => [
         'cache_path' => env('NGINX_CACHE_PATH'),
         'cache_levels' => env('NGINX_CACHE_LEVELS', '1:2'),

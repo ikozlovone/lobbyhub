@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Game;
 use App\Observers\GameObserver;
+use App\Services\Discovery\GameMonitoringClient;
 use App\Services\Geo\GeoResolver;
 use App\Services\Geo\MaxMindGeoResolver;
 use App\Services\Geo\NullGeoResolver;
@@ -49,6 +50,15 @@ class AppServiceProvider extends ServiceProvider
                 password: (string) ($cfg['password'] ?? ''),
             );
         });
+
+        // The competitor's list reader. Stateless; the pass that uses it holds
+        // everything that is per-run.
+        $this->app->singleton(GameMonitoringClient::class, fn () => new GameMonitoringClient(
+            url: rtrim((string) config('services.gamemonitoring.url'), '/'),
+            pageSize: (int) config('services.gamemonitoring.page_size', 1000),
+            timeout: (int) config('services.gamemonitoring.timeout', 30),
+            pauseMs: (int) config('services.gamemonitoring.pause_ms', 250),
+        ));
 
         // The nginx cache in front of this app, for the one caller that has to
         // tell it to forget something. Stateless — a path and the layout of
