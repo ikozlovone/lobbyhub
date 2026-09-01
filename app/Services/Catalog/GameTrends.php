@@ -124,7 +124,7 @@ class GameTrends
     {
         $rows = $this->read(
             'SELECT app_id,
-                    toStartOfInterval(ts, INTERVAL {bucket:UInt16} HOUR) AS at,
+                    toStartOfInterval(toTimeZone(ts, \'UTC\'), INTERVAL {bucket:UInt16} HOUR) AS at,
                     avg(players) AS players
                FROM game_players_raw
               WHERE ts >= now() - INTERVAL {hours:UInt16} HOUR
@@ -208,11 +208,14 @@ class GameTrends
     private function months(int $appId): array
     {
         $fromRaw = $this->read(
-            'SELECT toStartOfMonth(ts)                 AS month,
+            // toTimeZone before the month is cut: a month boundary in the
+            // server's timezone puts the first three hours of every month in
+            // the one before it.
+            'SELECT toStartOfMonth(toTimeZone(ts, \'UTC\'))  AS month,
                     avg(players)                       AS players_avg,
                     max(players)                       AS players_peak,
                     sum(players) * {minutes:UInt16} / 60 AS hours,
-                    uniqExact(toDate(ts))              AS days
+                    uniqExact(toDate(ts, \'UTC\'))       AS days
                FROM game_players_raw
               WHERE app_id = {app:UInt32}
               GROUP BY month',
@@ -254,7 +257,7 @@ class GameTrends
     private function recordingSince(int $appId): ?string
     {
         $rows = $this->read(
-            'SELECT min(ts) AS first FROM game_players_raw WHERE app_id = {app:UInt32}',
+            'SELECT toString(min(ts), \'UTC\') AS first FROM game_players_raw WHERE app_id = {app:UInt32}',
             ['app' => $appId],
         );
 

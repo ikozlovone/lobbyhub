@@ -36,7 +36,7 @@ func (c *Client) EnsureGameTables(ctx context.Context) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS game_players_raw
 		(
-			ts         DateTime,
+			ts         DateTime('UTC'),
 			app_id     UInt32,
 			game_id    UInt32,
 			players    UInt32,
@@ -106,6 +106,11 @@ func (c *Client) InsertGamePoints(ctx context.Context, ts time.Time, points []Ga
 // pass over a day supersedes the first rather than doubling it. Reads that
 // cannot tolerate seeing both before a merge use FINAL.
 //
+// The day is cut in UTC and named as such. A bare `toDate` uses the server's
+// timezone, which on a Moscow box moves every boundary three hours and puts
+// the first three hours of each day into the one before it — the same mistake
+// the readers were making from the other side.
+//
 // `best_rank` is the lowest rank the game held that day, with the zeroes that
 // mean "not charted" mapped out of the way first and back to 0 if that is all
 // there was — a game that spent the day outside the top 100 has no best rank,
@@ -119,7 +124,7 @@ func (c *Client) RollupGameDay(ctx context.Context, day time.Time) error {
 		INSERT INTO game_players_daily
 			(date, app_id, game_id, players_avg, players_max, players_min, samples, best_rank)
 		SELECT
-			toDate(ts)                              AS date,
+			toDate(ts, 'UTC')                       AS date,
 			app_id,
 			max(game_id)                            AS game_id,
 			avg(players)                            AS players_avg,
@@ -128,7 +133,7 @@ func (c *Client) RollupGameDay(ctx context.Context, day time.Time) error {
 			count()                                 AS samples,
 			if(min(if(rank = 0, 65535, rank)) = 65535, 0, min(if(rank = 0, 65535, rank))) AS best_rank
 		FROM game_players_raw
-		WHERE toDate(ts) = toDate('%s')
+		WHERE toDate(ts, 'UTC') = toDate('%s')
 		GROUP BY date, app_id`, date)
 
 	if err := c.conn.Exec(ctx, query); err != nil {

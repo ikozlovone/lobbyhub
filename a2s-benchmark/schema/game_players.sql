@@ -16,7 +16,13 @@ CREATE TABLE IF NOT EXISTS game_players_raw
 (
     -- Truncated to the ten-minute mark in UTC, the same bucket rule the server
     -- sweep uses, so a tick from either writer lines up with the other's.
-    ts          DateTime,
+    --
+    -- `DateTime('UTC')` rather than a bare `DateTime`, and the parenthesis is
+    -- the whole bug it prevents: a column with no timezone of its own is
+    -- rendered in the server's, so on a Moscow box every timestamp comes out
+    -- of a SELECT three hours ahead of the instant it recorded. The stored
+    -- value is the same either way — this decides what a reader is told it is.
+    ts          DateTime('UTC'),
 
     -- Steam's appid is the key, not our `games.id`: it is the only id both
     -- sides of this agree on, it is what the collector asks Steam for, and it
@@ -65,3 +71,10 @@ CREATE TABLE IF NOT EXISTS game_players_daily
 -- night is safe. Reads that must not see both copies use FINAL.
 ENGINE = ReplacingMergeTree
 ORDER BY (app_id, date);
+
+-- Already have the tables? The timezone is metadata, not data: this renames
+-- what the column says it is without moving a single stored second, and the
+-- server table wants the same treatment.
+--
+--   ALTER TABLE game_players_raw   MODIFY COLUMN ts DateTime('UTC');
+--   ALTER TABLE server_players_raw MODIFY COLUMN ts DateTime('UTC');

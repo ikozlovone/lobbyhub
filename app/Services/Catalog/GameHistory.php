@@ -75,10 +75,24 @@ class GameHistory
     private function fromRaw(int $appId, Carbon $since): array
     {
         $rows = $this->read(
-            'SELECT ts, players
+            /*
+             * `toString(ts, 'UTC')` and not `ts`.
+             *
+             * A bare `DateTime` column has no timezone of its own, so
+             * ClickHouse renders it in whatever the server is set to — on a
+             * Moscow box that is three hours ahead of the instant recorded,
+             * and this reader then labelled the string UTC and the browser
+             * added another three. Asking for the timezone by name makes the
+             * answer the same on every machine.
+             *
+             * The bound is wrapped for the same reason: a `{x:DateTime}`
+             * parameter is parsed in the server's timezone too, so a UTC
+             * string went in three hours out.
+             */
+            'SELECT toString(ts, \'UTC\') AS ts, players
                FROM game_players_raw
               WHERE app_id = {app:UInt32}
-                AND ts >= {since:DateTime}
+                AND ts >= toDateTime({since:String}, \'UTC\')
               ORDER BY ts',
             ['app' => $appId, 'since' => $since->utc()->format('Y-m-d H:i:s')],
         );
@@ -123,7 +137,7 @@ class GameHistory
     private function recordingSince(int $appId): ?string
     {
         $rows = $this->read(
-            'SELECT min(ts) AS first FROM game_players_raw WHERE app_id = {app:UInt32}',
+            'SELECT toString(min(ts), \'UTC\') AS first FROM game_players_raw WHERE app_id = {app:UInt32}',
             ['app' => $appId],
         );
 

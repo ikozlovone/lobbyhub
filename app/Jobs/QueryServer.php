@@ -304,9 +304,9 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
      * been public: until this query lands the row is `unknown`, and every
      * listing filters those out (see verified-only reads in ServerListing).
      *
-     * @return array<string, mixed>  fields for the caller to merge into a
-     *                               single cold-side write; empty when nothing
-     *                               is being adopted.
+     * @return array<string, mixed> fields for the caller to merge into a
+     *                              single cold-side write; empty when nothing
+     *                              is being adopted.
      */
     private function adoptReportedName(QueryResult $result, bool $unnamed): array
     {
@@ -471,10 +471,17 @@ class QueryServer implements ShouldBeUnique, ShouldQueue
                 'server_players_raw',
                 ['ts', 'game_id', 'server_id', 'players_online'],
                 [[
-                    // The reader parses `ts` as UTC and the sweeper writes UTC;
-                    // a naive local-time string here would put the point hours
-                    // away from the ones around it.
-                    $bucket->format('Y-m-d H:i:s'),
+                    /*
+                     * Seconds since the epoch, not `Y-m-d H:i:s`.
+                     *
+                     * A DateTime column takes either, and the text form is
+                     * parsed in the *server's* timezone — so a UTC string sent
+                     * to a Moscow ClickHouse landed three hours from the
+                     * instant it meant, next to rows the Go writer had put in
+                     * correctly through the binary protocol. An epoch second
+                     * has no timezone to get wrong.
+                     */
+                    $bucket->getTimestamp(),
                     (int) $this->server->game_id,
                     (int) $this->server->id,
                     // players_online is a UInt16 in ClickHouse and the Go

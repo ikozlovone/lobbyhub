@@ -209,9 +209,14 @@ class ServerRefreshTest extends TestCase
         $this->postJson('/api/servers/refresh-me/refresh')->assertOk();
 
         Http::assertSent(function ($request) {
+            // The timestamp goes as an epoch second: the text form of a
+            // DateTime is parsed in ClickHouse's own timezone, which is not
+            // ours to assume. 14:00 UTC on the first of September.
+            $bucket = Carbon::parse('2026-09-01 14:00:00', 'UTC')->getTimestamp();
+
             $expected = 'INSERT INTO server_players_raw (ts, game_id, server_id, players_online) '
                 ."FORMAT TabSeparated\n"
-                ."2026-09-01 14:00:00\t{$this->server->game_id}\t{$this->server->id}\t214\n";
+                ."{$bucket}\t{$this->server->game_id}\t{$this->server->id}\t214\n";
 
             return $request->body() === $expected;
         });

@@ -77,10 +77,13 @@ class ServerHistory
     {
         try {
             $rows = $this->ch->query(
-                'SELECT ts, players_online
+                // See GameHistory for why the timezone is named rather than
+                // assumed: a bare DateTime renders in the server's, which on
+                // this box is three hours from the instant it recorded.
+                'SELECT toString(ts, \'UTC\') AS ts, players_online
                    FROM server_players_raw
                   WHERE server_id = {sid:UInt64}
-                    AND ts >= {since:DateTime}
+                    AND ts >= toDateTime({since:String}, \'UTC\')
                   ORDER BY ts',
                 [
                     'sid' => (string) $server->id,
