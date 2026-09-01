@@ -23,14 +23,17 @@
 // game_id 0. They cost nothing (the chart came in one request either way) and
 // they are the answer to "which games with a live playerbase are we missing".
 //
-// Meant for cron, every ten minutes:
+// Two ways to run it. As a service, which is how it runs in production —
+// `--interval=10m`, one process, ticks aligned to the clock, and the daily
+// rollup folded into the loop so there is nothing else to schedule:
 //
-//	*/10 * * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env \
-//	                 --log-file=/var/log/lobbyhub/steamstats.log
+//	steamstats --env=/var/www/lobbyhub/.env --interval=10m
 //
-// and once after midnight UTC for the day that just ended:
+// Or one tick and out, for a cron line, a first run by hand, or a look at what
+// it would do:
 //
-//	20 0 * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env --rollup
+//	steamstats --env=/var/www/lobbyhub/.env --dry-run
+//	steamstats --env=/var/www/lobbyhub/.env --rollup --rollup-date=2026-08-31
 package main
 
 import (
@@ -64,6 +67,7 @@ func run() int {
 		allGames    = flag.Bool("all-games", false, "Include games that are switched off, not only the ones the site shows")
 		concurrency = flag.Int("concurrency", 4, "Parallel per-game lookups for the games the chart did not cover")
 		timeoutStr  = flag.String("timeout", "15s", "Deadline for one request to Valve")
+		interval    = flag.Duration("interval", 0, "Run as a service, ticking this often (0 = one tick and exit)")
 		dryRun      = flag.Bool("dry-run", false, "Collect and report, writing nothing at all — not even the tables")
 		rollup      = flag.Bool("rollup", false, "Fold a day of ticks into game_players_daily instead of collecting")
 		rollupDate  = flag.String("rollup-date", "", "Day to roll up as YYYY-MM-DD (default: yesterday, UTC)")
@@ -144,11 +148,73 @@ func run() int {
 	}
 	defer repo.Close()
 
-	return collect(ctx, repo, ch, steam.New(timeout), collectConfig{
+	cfg := collectConfig{
 		AllGames:    *allGames,
 		Concurrency: *concurrency,
 		DryRun:      *dryRun,
-	})
+	}
+
+	if *interval > 0 {
+		return serve(ctx, repo, ch, steam.New(timeout), cfg, *interval)
+	}
+
+	return collect(ctx, repo, ch, steam.New(timeout), cfg)
+}
+
+// serve is the same tick on a loop, for running under systemd rather than
+// cron.
+//
+// A process rather than a timer for the reason the scheduler unit gives about
+// `schedule:work`: one thing to start, one thing to watch, and the timetable
+// stays in the program instead of being split between it and a crontab. It
+// also keeps the HTTP and ClickHouse connections between ticks, which a
+// per-tick process throws away every ten minutes.
+//
+// Ticks are aligned to the wall clock rather than spaced from the last one, so
+// a ten-minute interval lands on :00, :10, :20 — the same boundaries the rows
+// are stamped with. Spacing from the last tick would drift, and a drift of a
+// few minutes eventually puts two ticks in one bucket and none in the next.
+//
+// A tick that fails is logged and the service carries on. The failures worth
+// exiting for — no ClickHouse, no database, a bad flag — all happened before
+// this was reached.
+func serve(
+	ctx context.Context,
+	repo *repository.Repo,
+	ch *chstats.Client,
+	client *steam.Client,
+	cfg collectConfig,
+	interval time.Duration,
+) int {
+	slog.Info("steamstats service started", "interval", interval.String())
+
+	// The last UTC day folded into the daily table. Empty at startup on
+	// purpose: the first tick after a restart rolls yesterday up again, which
+	// is free (the daily table replaces rather than appends) and is what
+	// covers a service that was down when the day turned.
+	rolled := ""
+
+	for {
+		if code := collect(ctx, repo, ch, client, cfg); code != 0 {
+			slog.Warn("tick finished with errors", "exit_code", code)
+		}
+
+		if day, due := rollupDue(time.Now().UTC(), rolled); due {
+			if err := ch.RollupGameDay(ctx, day); err != nil {
+				slog.Warn("daily rollup failed", "date", day.Format(dayFormat), "err", err)
+			} else {
+				slog.Info("daily rollup done", "date", day.Format(dayFormat))
+				rolled = day.Format(dayFormat)
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			slog.Info("steamstats service stopping")
+			return 0
+		case <-time.After(time.Until(nextTick(time.Now(), interval))):
+		}
+	}
 }
 
 type collectConfig struct {
@@ -358,11 +424,49 @@ func lookup(
 	return looked, failed
 }
 
+const dayFormat = "2006-01-02"
+
+// nextTick is when the following tick is due: the next multiple of the
+// interval on the wall clock, not `interval` from now.
+//
+// The difference is the whole reason it is a function. Sleeping for exactly
+// the interval accumulates every tick's own duration as drift, and a service
+// that started at 09:03 would tick at 09:03, 09:13, 09:23 — never on the
+// ten-minute boundaries the rows are stamped with. Two ticks would eventually
+// truncate into one bucket, leaving the next one empty and a chart with a gap
+// nobody caused.
+func nextTick(now time.Time, interval time.Duration) time.Time {
+	return now.Truncate(interval).Add(interval)
+}
+
+// rollupDue answers whether yesterday still wants folding into the daily
+// table, and which day that is.
+//
+// Two conditions. It has not been done since this process started — the daily
+// table replaces rather than appends, so repeating it costs nothing and a
+// service that was down at midnight still catches up on its first tick. And
+// the new day is properly under way: a rollup at 00:00:05 races the last ticks
+// of the day it is summarising. Fifteen minutes is late enough for any
+// interval anybody would set, and the check is "into the day" rather than "in
+// the first hour" so an hourly interval does not skip it entirely.
+func rollupDue(now time.Time, rolled string) (time.Time, bool) {
+	yesterday := now.AddDate(0, 0, -1)
+
+	if yesterday.Format(dayFormat) == rolled {
+		return time.Time{}, false
+	}
+	if now.Hour() == 0 && now.Minute() < 15 {
+		return time.Time{}, false
+	}
+
+	return yesterday, true
+}
+
 func runRollup(ctx context.Context, ch *chstats.Client, date string) int {
 	day := time.Now().UTC().AddDate(0, 0, -1)
 
 	if strings.TrimSpace(date) != "" {
-		parsed, err := time.Parse("2006-01-02", strings.TrimSpace(date))
+		parsed, err := time.Parse(dayFormat, strings.TrimSpace(date))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "bad --rollup-date: %v\n", err)
 			return 2
@@ -375,8 +479,8 @@ func runRollup(ctx context.Context, ch *chstats.Client, date string) int {
 		return 1
 	}
 
-	fmt.Printf("rolled up %s into game_players_daily\n", day.Format("2006-01-02"))
-	slog.Info("game rollup done", "date", day.Format("2006-01-02"))
+	fmt.Printf("rolled up %s into game_players_daily\n", day.Format(dayFormat))
+	slog.Info("game rollup done", "date", day.Format(dayFormat))
 	return 0
 }
 

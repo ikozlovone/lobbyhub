@@ -1,0 +1,51 @@
+# Player counts per game, from Steam's own endpoints into ClickHouse.
+#
+# A service rather than a crontab line, for the reason the scheduler unit
+# gives: one thing to start, one thing to watch, and the timetable stays in the
+# program. The ten-minute tick and the daily rollup are both inside the binary,
+# so there is no timer unit and no second cron entry to forget.
+#
+# It is not the server sweep. a2s-benchmark asks every server in the catalog
+# how many players are on it; this asks Valve how many people are in each game
+# anywhere on Steam. Different question, different source, different table —
+# and about forty HTTPS requests every ten minutes rather than three hundred
+# thousand UDP packets, which is why this one can afford to sit resident.
+#
+# Build and install:
+#
+#   cd /var/www/lobbyhub/a2s-benchmark
+#   go build -o steamstats.bin ./cmd/steamstats
+#   sudo cp deploy/systemd/lobbyhub-steamstats.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now lobbyhub-steamstats
+#
+# Watch it:
+#
+#   systemctl status lobbyhub-steamstats
+#   journalctl -u lobbyhub-steamstats -f
+
+[Unit]
+Description=LobbyHub Steam player-count collector
+# network-online rather than network: the first thing it does is resolve and
+# call api.steampowered.com, and a boot that reaches this before DNS is up
+# would spend its first tick failing.
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=www-data
+# Same reason as the other units: files this leaves behind stay group-writable
+# so the deploy user can replace them.
+UMask=0002
+WorkingDirectory=/var/www/lobbyhub/a2s-benchmark
+ExecStart=/var/www/lobbyhub/a2s-benchmark/steamstats.bin \
+    --env=/var/www/lobbyhub/.env \
+    --interval=10m
+# No --log-file: journald already keeps what this writes to stderr, and a
+# second copy on disk is a second thing to rotate.
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

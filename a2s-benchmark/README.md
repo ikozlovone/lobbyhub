@@ -183,12 +183,25 @@ games with a live playerbase are we missing".
 ./steamstats.bin --env=/var/www/lobbyhub/.env --rollup   # yesterday into daily
 ```
 
-Cron, every ten minutes plus one rollup after midnight UTC:
+In production it runs as a service — `--interval=10m`, one process, ticks
+aligned to the clock, and the daily rollup folded into the loop so there is
+nothing else to schedule. The unit is
+`deploy/systemd/lobbyhub-steamstats.service`:
 
 ```
-*/10 * * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env --log-file=/var/log/lobbyhub/steamstats.log
-20 0 * * *   /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env --rollup
+cd /var/www/lobbyhub/a2s-benchmark
+go build -o steamstats.bin ./cmd/steamstats
+sudo cp ../deploy/systemd/lobbyhub-steamstats.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lobbyhub-steamstats
+journalctl -u lobbyhub-steamstats -f
 ```
+
+Ticks are aligned rather than spaced: sleeping exactly ten minutes would
+accumulate each tick's own duration as drift, and a service started at 09:03
+would tick at 09:03, 09:13, 09:23 — never on the boundaries the rows are
+stamped with, until eventually two ticks truncate into one bucket and leave
+the next empty.
 
 Two tables, created on every run with `IF NOT EXISTS`; `schema/game_players.sql`
 is the readable copy:
