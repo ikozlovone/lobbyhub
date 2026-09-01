@@ -158,6 +158,15 @@ async function Ranking() {
                     <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal md:table-cell">
                       Peak today
                     </th>
+                    {/* Nobody publishes this: Valve's charts carry a rank, a
+                        count and a peak, and no playtime. It is our own
+                        samples added up. */}
+                    <th
+                      scope="col"
+                      className="hidden py-2.5 pr-4 text-right font-normal whitespace-nowrap xl:table-cell"
+                    >
+                      Hours played
+                    </th>
                     <th
                       scope="col"
                       className="hidden py-2.5 pr-4 text-right font-normal whitespace-nowrap lg:table-cell"
@@ -249,6 +258,13 @@ async function Ranking() {
                       </td>
                       <td className="tabular hidden py-2.5 pr-4 text-right align-middle text-muted md:table-cell">
                         {row.peak > 0 ? count(row.peak) : <span className="text-subtle">—</span>}
+                      </td>
+                      <td className="tabular hidden py-2.5 pr-4 text-right align-middle text-muted xl:table-cell">
+                        {row.hours !== null && row.hours > 0 ? (
+                          count(row.hours)
+                        ) : (
+                          <span className="text-subtle">—</span>
+                        )}
                       </td>
                       <td className="hidden py-2.5 pr-4 text-right align-middle lg:table-cell">
                         {row.steam_rank ? (
@@ -403,6 +419,12 @@ function Explainer() {
         <p>
           Peaks are Steam&rsquo;s own 24-hour figures rather than the highest sample we happened to
           catch, which is why a peak can be higher than anything on the graph.
+        </p>
+        <p>
+          Hours played has no source at Valve — their charts publish a rank, a count and a peak and
+          no playtime at all. It is our own samples added up: each reading stands for the ten
+          minutes until the next one, so a day of them is player-hours. Hours observed, in other
+          words, which is what every chart site of this kind is counting.
         </p>
       </div>
 

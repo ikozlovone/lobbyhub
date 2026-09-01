@@ -6,6 +6,7 @@ import {
   fetchCatalogServers,
   fetchCharts,
   fetchGamePlayers,
+  fetchGameTrend,
   fetchGame,
   fetchGames,
   fetchHistory,
@@ -205,6 +206,8 @@ export const getCharts = cache(async () => fetchCharts(FRESH).catch(() => null))
 export const getGamePlayers = cache(async (slug: string, range: string) =>
   fetchGamePlayers(slug, range, FRESH),
 )
+
+export const getGameTrend = cache(async (slug: string) => fetchGameTrend(slug, FRESH))
 
 export const getHistory = cache(async (slug: string, range: string) =>
   fetchHistory(slug, range, FRESH),

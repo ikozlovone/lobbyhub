@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Game;
 use App\Services\Catalog\GameHistory;
+use App\Services\Catalog\GameTrends;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -31,9 +32,14 @@ class GameChartController extends Controller
     /** How long the assembled chart is worth keeping. The collector ticks every ten minutes. */
     private const CACHE_TTL = 120;
 
-    public function index(): JsonResponse
+    public function index(GameTrends $trends): JsonResponse
     {
-        $payload = Cache::remember('api:charts', self::CACHE_TTL, function () {
+        $payload = Cache::remember('api:charts', self::CACHE_TTL, function () use ($trends) {
+            // Player-hours for every game in one query, rather than one per
+            // row. Empty when ClickHouse is away, and the column simply does
+            // not draw — the ranking does not depend on it.
+            $hours = $trends->hoursByApp();
+
             $games = Game::query()
                 ->where('is_active', true)
                 ->whereNotNull('steam_appid')
@@ -56,6 +62,18 @@ class GameChartController extends Controller
                     'steam_appid' => $game->steam_appid,
                     'players' => (int) $game->steam_players_online,
                     'peak' => (int) $game->steam_players_peak,
+                    /*
+                     * Hours played in the last day, which nobody publishes:
+                     * Valve's charts carry a rank, a count and a peak and no
+                     * playtime at all. This is our own samples added up — a
+                     * reading of N players standing for the ten minutes until
+                     * the next one — which is the same arithmetic every Steam
+                     * charts site does, and is hours *observed* rather than
+                     * hours reported. Null when there are none yet.
+                     */
+                    'hours' => isset($hours[$game->steam_appid])
+                        ? (int) round($hours[$game->steam_appid])
+                        : null,
                     // Where Steam itself puts the game in its top 100, which is
                     // not the same as its position here: this chart only ranks
                     // the games we carry.
@@ -76,6 +94,29 @@ class GameChartController extends Controller
         });
 
         return response()->json($payload);
+    }
+
+    /**
+     * One game month against the month before it.
+     *
+     * Its own endpoint rather than part of the history: the chart is samples
+     * and this is a rollup, they are cached for different lengths of time, and
+     * a page that wants one usually wants it at a different moment from the
+     * other.
+     */
+    public function trend(Game $game, GameTrends $trends): JsonResponse
+    {
+        abort_unless($game->is_active && $game->steam_appid !== null, 404);
+
+        // An hour: the newest row in it only changes when the nightly rollup
+        // runs, and the months below it never change again.
+        $payload = Cache::remember(
+            "api:games:{$game->id}:trend",
+            3600,
+            fn () => $trends->monthly($game),
+        );
+
+        return response()->json(['data' => $payload]);
     }
 
     /** One game's series, for the chart on its own page. */

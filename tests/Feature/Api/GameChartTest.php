@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Game;
+use App\Services\Stats\ClickHouseClient;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -127,10 +128,118 @@ class GameChartTest extends TestCase
         $this->assertNull($response->json('data.recording_since'));
     }
 
+    /**
+     * The month-by-month table, and the column that earns it.
+     *
+     * ClickHouse is faked at the wire here rather than mocked away: the reader
+     * speaks HTTP to it, so a fake response exercises the parsing and the
+     * arithmetic that turns four months into three comparisons.
+     */
+    public function test_the_trend_compares_each_month_with_the_one_before(): void
+    {
+        $this->withClickHouse(
+            // Newest first, which is the order the table is read in and the
+            // order the query returns.
+            [
+                ['month' => '2026-09-01', 'players_avg' => '110000', 'players_peak' => '150000', 'hours' => '79200000', 'days' => '12'],
+                ['month' => '2026-08-01', 'players_avg' => '100000', 'players_peak' => '140000', 'hours' => '74400000', 'days' => '31'],
+                ['month' => '2026-07-01', 'players_avg' => '125000', 'players_peak' => '160000', 'hours' => '90000000', 'days' => '31'],
+            ],
+            [['first' => '2026-07-01']],
+        );
+        $this->measure('rust', players: 110_000);
+
+        $months = $this->getJson('/api/games/rust/trend')->assertOk()->json('data.months');
+
+        $this->assertSame(['2026-09', '2026-08', '2026-07'], array_column($months, 'month'));
+
+        // September against August: ten thousand more, a tenth up.
+        //
+        // assertEquals, not assertSame: these are floats on the PHP side and
+        // whole numbers by the time JSON has been through them, and the test
+        // is about the arithmetic rather than about which of the two the
+        // encoder picked.
+        $this->assertEquals(10000, $months[0]['gain']);
+        $this->assertEquals(10, $months[0]['gain_percent']);
+
+        // August against July: down, and the sign is the whole point.
+        $this->assertEquals(-25000, $months[1]['gain']);
+        $this->assertEquals(-20, $months[1]['gain_percent']);
+
+        // July has nothing behind it. Null, not zero — "no change" and
+        // "nothing to compare" are different facts.
+        $this->assertNull($months[2]['gain']);
+        $this->assertNull($months[2]['gain_percent']);
+
+        // The month still running says how much of it was watched, so its
+        // average is not read as a full month's.
+        $this->assertSame(12, $months[0]['days']);
+        $this->assertSame('2026-07-01', $this->getJson('/api/games/rust/trend')->json('data.recording_since'));
+    }
+
+    /**
+     * Hours played is the one number here nobody publishes — Valve's charts
+     * carry a rank, a count and a peak and no playtime at all — so it is our
+     * own samples added up, and it rides along with the ranking.
+     */
+    public function test_hours_played_come_from_our_own_samples(): void
+    {
+        $this->measure('rust', players: 88_915);
+        $this->withClickHouse([['app_id' => '252490', 'hours' => '1904400.5']]);
+
+        $row = $this->getJson('/api/charts')->assertOk()->json('data.0');
+
+        $this->assertSame('rust', $row['slug']);
+        $this->assertSame(1_904_401, $row['hours']);
+    }
+
+    /** Without somewhere to read them from, the column simply has no number. */
+    public function test_hours_are_null_when_clickhouse_is_away(): void
+    {
+        $this->measure('rust', players: 88_915);
+
+        $this->assertNull($this->getJson('/api/charts')->assertOk()->json('data.0.hours'));
+    }
+
+    public function test_the_trend_is_empty_rather_than_broken_without_clickhouse(): void
+    {
+        $this->measure('rust', players: 88_915);
+
+        $response = $this->getJson('/api/games/rust/trend')->assertOk();
+
+        $this->assertSame([], $response->json('data.months'));
+        $this->assertNull($response->json('data.recording_since'));
+    }
+
+    public function test_a_game_without_a_steam_appid_has_no_trend(): void
+    {
+        $this->getJson('/api/games/minecraft/trend')->assertNotFound();
+    }
+
     /** Minecraft has no Steam appid, so there is no such number to serve. */
     public function test_a_game_without_a_steam_appid_has_no_chart(): void
     {
         $this->getJson('/api/games/minecraft/players')->assertNotFound();
+    }
+
+    /**
+     * Point the reader at a ClickHouse that answers, one response per query in
+     * the order the reader makes them.
+     *
+     * @param  array<int, array<string, mixed>>  ...$responses
+     */
+    private function withClickHouse(array ...$responses): void
+    {
+        config(['services.clickhouse.host' => 'clickhouse.test']);
+        $this->app->forgetInstance(ClickHouseClient::class);
+
+        $sequence = Http::sequence();
+
+        foreach ($responses as $rows) {
+            $sequence->push(['data' => $rows]);
+        }
+
+        Http::fake(['clickhouse.test*' => $sequence->whenEmpty(Http::response(['data' => []]))]);
     }
 
     private function measure(string $slug, int $players, int $peak = 0, ?int $rank = null): void

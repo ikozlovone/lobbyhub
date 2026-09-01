@@ -76,6 +76,12 @@ Route::name('api.')->group(function () {
         ->middleware('cache.public:600')
         ->name('games.players');
 
+    // An hour: the newest row moves once a night, when the rollup runs, and
+    // every row under it is a month that has already finished.
+    Route::get('games/{game}/trend', [GameChartController::class, 'trend'])
+        ->middleware('cache.public:3600')
+        ->name('games.trend');
+
     Route::get('games/{game}/servers', [ServerController::class, 'index'])
         ->middleware('cache.public:600')
         ->name('games.servers');

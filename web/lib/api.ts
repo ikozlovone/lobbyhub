@@ -429,6 +429,11 @@ export type ChartRow = {
   steam_appid: number
   players: number
   peak: number
+  /**
+   * Player-hours over the last day, added up from our own samples — Valve
+   * publishes no playtime at all. Null when there are no samples yet.
+   */
+  hours: number | null
   /** Where Steam puts it in its own top 100, or null when it is below it. */
   steam_rank: number | null
   servers: number
@@ -458,6 +463,30 @@ export type GamePlayers = {
   /** When this game's history starts — the tables begin when the collector did. */
   recording_since: string | null
   points: { at: string; players: number; peak?: number }[]
+}
+
+/** One month of a game, against the month before it. */
+export type TrendMonth = {
+  /** `YYYY-MM`. */
+  month: string
+  players_avg: number
+  players_peak: number
+  hours: number
+  days: number
+  /** Null on the oldest row, which has nothing behind it to compare against. */
+  gain: number | null
+  gain_percent: number | null
+}
+
+export type GameTrend = {
+  months: TrendMonth[]
+  recording_since: string | null
+}
+
+export async function fetchGameTrend(slug: string, init?: RequestInit) {
+  const response = await getOrNull<{ data: GameTrend }>(`/games/${slug}/trend`, init)
+
+  return response?.data ?? null
 }
 
 export async function fetchGamePlayers(slug: string, range: string, init?: RequestInit) {

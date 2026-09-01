@@ -2,9 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { GamePlayersChart } from '@/components/game-players-chart'
+import { TrendTable } from '@/components/charts/trend-table'
 import { RelativeTime } from '@/components/relative-time'
 import { count } from '@/lib/chart'
-import { getGame, getGamePlayers } from '@/lib/data'
+import { getGame, getGamePlayers, getGameTrend } from '@/lib/data'
 import { PUBLIC_API_URL } from '@/lib/api'
 import { canonical, notFoundMetadata } from '@/lib/seo'
 
@@ -42,7 +43,7 @@ export default async function GameChartPage({ params }: Props) {
 
   if (!game || game.steam.synced_at === null) notFound()
 
-  const history = await getGamePlayers(slug, '24h')
+  const [history, trend] = await Promise.all([getGamePlayers(slug, '24h'), getGameTrend(slug)])
   const { steam, counters } = game
 
   return (
@@ -123,6 +124,11 @@ export default async function GameChartPage({ params }: Props) {
         />
       </section>
 
+      {/* Only once a month has been rolled up. A table with a single row and
+          nothing to compare it against is the shape of an answer without one
+          in it. */}
+      {trend && trend.months.length > 0 && <TrendTable trend={trend} name={game.name} />}
+
       <section className="grid gap-6 md:grid-cols-2">
         <div className="max-w-[68ch] space-y-3 text-sm text-muted">
           <h2 className="font-display text-base font-black tracking-tight text-fg uppercase">
@@ -137,6 +143,12 @@ export default async function GameChartPage({ params }: Props) {
           <p>
             The peak is Steam&rsquo;s 24-hour high rather than the tallest point we happened to
             sample, so it can sit above everything on the graph.
+          </p>
+          <p>
+            Hours played is ours rather than Valve&rsquo;s — they publish no playtime figure at
+            all. Each reading stands for the ten minutes until the next one, so a month of them
+            adds up to player-hours. It counts hours we observed, which means a month we started
+            recording halfway through says half.
           </p>
         </div>
 
