@@ -15,7 +15,9 @@
 //   2. fetch Valve's official top 100 in a single request,
 //   3. look up, one request each, the catalog games the chart did not cover,
 //   4. write it all to ClickHouse as one batch, stamped with the tick's own
-//      ten-minute mark — the same bucket rule the server sweep uses.
+//      ten-minute mark — the same bucket rule the server sweep uses,
+//   5. and write the current numbers back to `games`, so a page render reads
+//      them without touching ClickHouse.
 //
 // Games in the chart that this catalog does not carry are recorded too, with
 // game_id 0. They cost nothing (the chart came in one request either way) and
@@ -172,16 +174,32 @@ func collect(ctx context.Context, repo *repository.Repo, ch *chstats.Client, cli
 	points := make([]chstats.GamePoint, 0, len(entries)+len(games))
 	charted := make(map[uint32]bool, len(entries))
 
+	// The same readings, for the copy `games` keeps. Only for games we carry:
+	// there is no row to update for the rest.
+	catalog := make([]repository.SteamPlayers, 0, len(games))
+
 	for _, e := range entries {
 		charted[e.AppID] = true
 
+		mine, ok := ours[e.AppID]
+
 		points = append(points, chstats.GamePoint{
 			AppID:     e.AppID,
-			GameID:    uint32(ours[e.AppID].ID), // 0 when the catalog has no such game
+			GameID:    uint32(mine.ID), // 0 when the catalog has no such game
 			Players:   e.Players,
 			Rank:      e.Rank,
 			PeakToday: e.PeakToday,
 		})
+
+		if ok {
+			rank := e.Rank
+			catalog = append(catalog, repository.SteamPlayers{
+				GameID: mine.ID,
+				Online: e.Players,
+				Peak:   e.PeakToday,
+				Rank:   &rank,
+			})
+		}
 	}
 
 	// What the chart did not cover: our games outside the top 100, one request
@@ -194,7 +212,7 @@ func collect(ctx context.Context, repo *repository.Repo, ch *chstats.Client, cli
 	}
 	sort.Slice(missing, func(i, j int) bool { return missing[i].ID < missing[j].ID })
 
-	looked, failed := lookup(ctx, client, missing, cfg.Concurrency, &points)
+	looked, failed := lookup(ctx, client, missing, cfg.Concurrency, &points, &catalog)
 
 	slog.Info("steam tick",
 		"ts", tick.Format(time.RFC3339),
@@ -206,8 +224,8 @@ func collect(ctx context.Context, repo *repository.Repo, ch *chstats.Client, cli
 	)
 
 	if cfg.DryRun {
-		fmt.Printf("dry run: %d rows for %s (%d charted, %d looked up, %d lookup errors)\n",
-			len(points), tick.Format("2006-01-02 15:04"), len(entries), looked, failed)
+		fmt.Printf("dry run: %d rows for %s, %d game(s) would be updated (%d charted, %d looked up, %d lookup errors)\n",
+			len(points), tick.Format("2006-01-02 15:04"), len(catalog), len(entries), looked, failed)
 		return 0
 	}
 
@@ -217,9 +235,19 @@ func collect(ctx context.Context, repo *repository.Repo, ch *chstats.Client, cli
 		return 1
 	}
 
-	fmt.Printf("%s  %d rows written (%d charted, %d looked up, %d lookup errors) in %s\n",
+	// And the current value back into the catalog, where a page render can
+	// read it without touching ClickHouse. Fail-open: the history is written
+	// and safe, and a games table one tick out of date is a cosmetic problem
+	// that the next run fixes by itself.
+	updated, err := repo.UpdateSteamPlayers(ctx, catalog)
+	if err != nil {
+		slog.Warn("games not updated", "err", err)
+	}
+
+	fmt.Printf("%s  %d rows written, %d game(s) updated (%d charted, %d looked up, %d lookup errors) in %s\n",
 		tick.Format("2006-01-02 15:04"),
 		written,
+		updated,
 		len(entries),
 		looked,
 		failed,
@@ -247,6 +275,7 @@ func lookup(
 	games []repository.SteamGame,
 	concurrency int,
 	points *[]chstats.GamePoint,
+	catalog *[]repository.SteamPlayers,
 ) (looked int, failed int) {
 	if len(games) == 0 {
 		return 0, 0
@@ -285,6 +314,13 @@ func lookup(
 						AppID:   g.AppID,
 						GameID:  uint32(g.ID),
 						Players: players,
+					})
+					// No rank and no peak: a per-appid lookup carries neither,
+					// and a nil rank is how the column says "not in the top
+					// 100" rather than claiming a position.
+					*catalog = append(*catalog, repository.SteamPlayers{
+						GameID: g.ID,
+						Online: players,
 					})
 				}
 				mu.Unlock()

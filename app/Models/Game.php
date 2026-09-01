@@ -22,6 +22,9 @@ class Game extends Model
             'has_versions' => 'boolean',
             'stats_synced_at' => 'datetime',
             'facets_synced_at' => 'datetime',
+            // Written by the steamstats collector, not by anything here — see
+            // the migration for how these differ from `players_online`.
+            'steam_stats_synced_at' => 'datetime',
         ];
     }
 
