@@ -223,12 +223,71 @@ class ApiError extends Error {
   }
 }
 
+/**
+ * A read that never got an answer: refused, reset, DNS, or still open when the
+ * clock below ran out.
+ *
+ * Separate from ApiError because it is a different thing to fix — that one is
+ * the API saying no, this one is not reaching it — and because of where it
+ * tends to surface. Inside a `use cache` scope during a build, a fetch that
+ * hangs is reported by Next as "Filling a cache during prerender timed out,
+ * likely because request-specific arguments … were used inside use cache",
+ * which sends you looking for a `cookies()` call that was never there. The
+ * address and the reason belong in the build log instead.
+ */
+class ApiUnreachable extends Error {
+  constructor(
+    public readonly url: string,
+    cause: unknown,
+  ) {
+    super(`Could not reach the API at ${url} — ${describe(cause)}`, { cause })
+  }
+}
+
+/**
+ * Undici says `TypeError: fetch failed` for every network failure there is and
+ * keeps which one it was in a nested cause. That code is the whole diagnosis —
+ * ECONNREFUSED is nothing listening, ECONNRESET is something that hung up
+ * (an origin answering `return 444` to a request that did not come through the
+ * CDN), ENOTFOUND is DNS — so it goes in the message rather than staying one
+ * `.cause` deeper than anything prints.
+ */
+function describe(cause: unknown): string {
+  if (!(cause instanceof Error)) return String(cause)
+
+  const inner = cause.cause
+  const code =
+    inner && typeof inner === 'object' && 'code' in inner ? String(inner.code) : null
+
+  return code ? `${cause.name}: ${cause.message} (${code})` : `${cause.name}: ${cause.message}`
+}
+
+/**
+ * How long one read may take before it is called a failure.
+ *
+ * Above anything the API does when it is well: the slowest read here is a
+ * sitemap page of 25 000 rows, which is a couple of seconds on the loopback
+ * address a production render uses and under ten over the internet. So this is
+ * not a latency budget — it is the line past which "slow" is better described
+ * as "not answering", and it is well under the deadline a prerender gives up
+ * at, so the error that reaches the log is this one and not that one.
+ */
+const REQUEST_TIMEOUT_MS = 15_000
+
 async function get<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${SERVER_API_URL}${path}`
-  const response = await fetch(url, {
-    ...init,
-    headers: { Accept: 'application/json', ...init?.headers },
-  })
+  let response: Response
+
+  try {
+    response = await fetch(url, {
+      // Before the spread, so a caller that has its own signal keeps it.
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      ...init,
+      headers: { Accept: 'application/json', ...init?.headers },
+    })
+  } catch (cause) {
+    throw new ApiUnreachable(url, cause)
+  }
 
   if (!response.ok) {
     throw new ApiError(response.status, url)

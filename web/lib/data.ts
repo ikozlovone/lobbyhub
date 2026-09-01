@@ -270,17 +270,30 @@ export async function getSitemapServers(page: number) {
 /**
  * How many files the servers take.
  *
- * Asks for a single row and reads the total off the pagination, so the count
- * costs one small query rather than a walk. At least one either way: a sitemap
- * index pointing at nothing is harder to diagnose than an empty sitemap, and a
- * catalog with no servers in it is a state this site starts in.
+ * Added up from `games.servers_count` rather than asked of the sitemap
+ * endpoint. Both count the same servers — active, reached at least once, so
+ * status is not `unknown` — but one of them has the answer already: the
+ * counters are recomputed every minute by `counters:refresh` and arrive with
+ * the games list every page already reads. Asking the sitemap endpoint meant a
+ * COUNT over the whole catalog for a single number, and it is the only fetch
+ * standing between a build and a rendered robots.txt: measured against the
+ * deployed API it took five seconds cold, which is five seconds of the build
+ * spent proving something the database already knew.
+ *
+ * A minute of counter lag can only matter within a minute of crossing a
+ * 25 000-server boundary, and `counters:refresh` closes it on its own.
+ *
+ * At least one file either way: a sitemap index pointing at nothing is harder
+ * to diagnose than an empty sitemap, and a catalog with no servers in it is a
+ * state this site starts in.
  */
 export async function countServerSitemaps(): Promise<number> {
   'use cache'
   cacheLife(SITEMAP_CACHE)
-  cacheTag('servers', 'sitemap')
+  cacheTag('games', 'servers', 'sitemap')
 
-  const { meta } = await fetchSitemapServers(1, 1)
+  const games = await fetchGames()
+  const servers = games.reduce((total, game) => total + game.counters.servers, 0)
 
-  return Math.max(1, Math.ceil(meta.total / SERVER_SITEMAP_CHUNK))
+  return Math.max(1, Math.ceil(servers / SERVER_SITEMAP_CHUNK))
 }
