@@ -88,7 +88,7 @@ export function GameHero({
                 {heading}
               </h1>
               <div className="mt-1.5">
-                <GameCounters game={game.slug} initial={game.counters} />
+                <GameCounters game={game.slug} initial={game.counters} steam={game.steam} />
               </div>
             </div>
           </div>
