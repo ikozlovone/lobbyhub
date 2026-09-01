@@ -201,6 +201,43 @@ class GameChartTest extends TestCase
         $this->assertSame(1_904_401, $row['hours']);
     }
 
+    /**
+     * The day's movement and the line that goes with it, both merged into the
+     * ranking so the page is one read rather than one per row.
+     */
+    public function test_the_days_movement_rides_along_with_the_ranking(): void
+    {
+        $this->measure('rust', players: 88_915);
+        $this->withClickHouse(
+            [['app_id' => '252490', 'hours' => '1000']],
+            // Opened the window at 80,000 and closed it at 88,000: ten per
+            // cent up, over a window we have covered for a full day.
+            [['app_id' => '252490', 'opened' => '80000', 'closed' => '88000', 'covers' => '24.2']],
+            [['app_id' => '252490', 'at' => '2026-09-01 00:00:00', 'players' => '80000']],
+        );
+
+        $row = $this->getJson('/api/charts')->assertOk()->json('data.0');
+
+        $this->assertEquals(10, $row['change_24h']);
+        $this->assertSame([80000], $row['spark']);
+    }
+
+    /**
+     * A game first sampled three hours ago has a three-hour change, and the
+     * column it would land in says twenty-four. Better no number than one
+     * measured over a window nobody can see from the outside.
+     */
+    public function test_a_movement_measured_over_less_than_a_day_is_withheld(): void
+    {
+        $this->measure('rust', players: 88_915);
+        $this->withClickHouse(
+            [],
+            [['app_id' => '252490', 'opened' => '40000', 'closed' => '88000', 'covers' => '3.1']],
+        );
+
+        $this->assertNull($this->getJson('/api/charts')->assertOk()->json('data.0.change_24h'));
+    }
+
     /** Without somewhere to read them from, the column simply has no number. */
     public function test_hours_are_null_when_clickhouse_is_away(): void
     {

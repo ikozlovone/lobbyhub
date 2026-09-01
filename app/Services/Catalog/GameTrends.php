@@ -65,6 +65,84 @@ class GameTrends
     }
 
     /**
+     * Which way each game has moved in a day, for every game at once.
+     *
+     * The first and last readings inside the window, which on a ten-minute
+     * cadence are a day apart — `argMin`/`argMax` pick the value *at* those
+     * moments rather than the smallest and largest, which would be a range
+     * rather than a movement.
+     *
+     * `since` is the age of the earliest reading, and it is what stops the
+     * figure lying while the recording is young: a game first sampled two
+     * hours ago has a two-hour change, not a day's, and the caller drops it
+     * rather than publishing a number under the wrong label.
+     *
+     * @return array<int, array{from: int, to: int, percent: float|null, hours: float}>
+     */
+    public function movementByApp(int $hours = 24): array
+    {
+        $rows = $this->read(
+            'SELECT app_id,
+                    argMin(players, ts) AS opened,
+                    argMax(players, ts) AS closed,
+                    dateDiff(\'minute\', min(ts), now()) / 60 AS covers
+               FROM game_players_raw
+              WHERE ts >= now() - INTERVAL {hours:UInt16} HOUR
+              GROUP BY app_id',
+            ['hours' => $hours],
+        );
+
+        $movement = [];
+
+        foreach ($rows as $row) {
+            $from = (int) $row['opened'];
+            $to = (int) $row['closed'];
+
+            $movement[(int) $row['app_id']] = [
+                'from' => $from,
+                'to' => $to,
+                'percent' => $from > 0 ? round((($to - $from) / $from) * 100, 1) : null,
+                'hours' => round((float) $row['covers'], 1),
+            ];
+        }
+
+        return $movement;
+    }
+
+    /**
+     * A short series per game, small enough to put one in every row of a table.
+     *
+     * Bucketed rather than sampled: two-hour averages over two days is
+     * twenty-four points, which is more shape than a 120-pixel line can show
+     * and few enough that forty of them are a rounding error in the payload.
+     * One query for the whole chart — the alternative is one per row, which is
+     * how a table of forty games becomes forty ClickHouse reads.
+     *
+     * @return array<int, array<int, int>> players per bucket, oldest first, by appid
+     */
+    public function sparklinesByApp(int $hours = 48, int $bucketHours = 2): array
+    {
+        $rows = $this->read(
+            'SELECT app_id,
+                    toStartOfInterval(ts, INTERVAL {bucket:UInt16} HOUR) AS at,
+                    avg(players) AS players
+               FROM game_players_raw
+              WHERE ts >= now() - INTERVAL {hours:UInt16} HOUR
+              GROUP BY app_id, at
+              ORDER BY app_id, at',
+            ['hours' => $hours, 'bucket' => $bucketHours],
+        );
+
+        $series = [];
+
+        foreach ($rows as $row) {
+            $series[(int) $row['app_id']][] = (int) round((float) $row['players']);
+        }
+
+        return $series;
+    }
+
+    /**
      * One game, month by month, newest first, with a "last 30 days" row on top.
      *
      * The shape steamcharts.com made the convention for this kind of page, and

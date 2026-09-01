@@ -32,13 +32,25 @@ class GameChartController extends Controller
     /** How long the assembled chart is worth keeping. The collector ticks every ten minutes. */
     private const CACHE_TTL = 120;
 
+    /**
+     * How much of the last day has to be recorded before a "24-hour change" is
+     * allowed to call itself one. Twenty hours: enough that the figure means
+     * what the column says, loose enough that a collector restart of an hour
+     * does not blank the whole page.
+     */
+    private const MOVEMENT_HOURS = 20;
+
     public function index(GameTrends $trends): JsonResponse
     {
         $payload = Cache::remember('api:charts', self::CACHE_TTL, function () use ($trends) {
-            // Player-hours for every game in one query, rather than one per
-            // row. Empty when ClickHouse is away, and the column simply does
-            // not draw — the ranking does not depend on it.
+            // Three reads for the whole chart rather than three per row: the
+            // hours behind one column, the day's movement behind another, and
+            // a short series for the line drawn in each. All empty when
+            // ClickHouse is away, and every one of them is a column that
+            // simply does not draw — the ranking itself is Postgres.
             $hours = $trends->hoursByApp();
+            $movement = $trends->movementByApp();
+            $sparklines = $trends->sparklinesByApp();
 
             $games = Game::query()
                 ->where('is_active', true)
@@ -74,6 +86,18 @@ class GameChartController extends Controller
                     'hours' => isset($hours[$game->steam_appid])
                         ? (int) round($hours[$game->steam_appid])
                         : null,
+                    /*
+                     * How the day went, as a percentage, and null until there
+                     * is a day to compare across. A game first sampled two
+                     * hours ago has a two-hour change; publishing it under a
+                     * 24-hour heading would be the kind of wrong number nobody
+                     * can spot from the outside.
+                     */
+                    'change_24h' => ($movement[$game->steam_appid]['hours'] ?? 0) >= self::MOVEMENT_HOURS
+                        ? $movement[$game->steam_appid]['percent']
+                        : null,
+                    // Two-hour averages over two days, for the line in the row.
+                    'spark' => $sparklines[$game->steam_appid] ?? [],
                     // Where Steam itself puts the game in its top 100, which is
                     // not the same as its position here: this chart only ranks
                     // the games we carry.

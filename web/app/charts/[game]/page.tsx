@@ -18,8 +18,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!game || game.steam.synced_at === null) return notFoundMetadata()
 
   return {
-    title: `${game.name} player count — live Steam players and history`,
-    description: `How many people are playing ${game.name} right now: live Steam player count, today's peak and recorded history, next to the ${game.name} servers LobbyHub monitors.`,
+    // "<game> player count" is the phrase, and Steam charts is what the page
+    // is; both fit before a search result cuts the title off.
+    title: `${game.name} player count — live Steam charts and history`,
+    description: `How many people are playing ${game.name} right now: live player count from Steam, today's peak, month-by-month history and the ${game.name} servers we monitor.`,
     ...canonical(`/charts/${game.slug}`),
   }
 }

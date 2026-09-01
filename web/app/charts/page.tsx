@@ -2,17 +2,28 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { PlayersSpark } from '@/components/charts/players-spark'
+import { RowSpark } from '@/components/charts/row-spark'
 import { RelativeTime } from '@/components/relative-time'
 import { count } from '@/lib/chart'
+import type { ChartRow } from '@/lib/api'
 import { getCharts, getGamePlayers } from '@/lib/data'
 import { canonical } from '@/lib/seo'
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
 
 export const metadata: Metadata = {
-  title: 'Steam player counts — live charts by game',
+  /*
+   * "Steam charts" leads, because that is the phrase this page is looked for
+   * by, and the rest of the title says which of the several pages answering it
+   * this one is. The site name is appended by the layout, so it is not here.
+   */
+  title: 'Steam charts — live player counts and 24-hour trends',
+  // Under 160 characters, because past that a search result stops showing the
+  // end of the sentence and the last clause is wasted. The two things that are
+  // here and not on the other pages answering this query come first: what is
+  // moving, and the servers behind each game.
   description:
-    'How many people are playing each game on Steam right now, sampled every ten minutes: live player counts, daily peaks and history, next to the servers we monitor for each game.',
+    'Live Steam player counts: what is trending in the last 24 hours, current players, daily peaks and hours played — plus the servers we monitor for each game.',
   ...canonical('/charts'),
 }
 
@@ -42,12 +53,13 @@ export default function ChartsPage() {
           <span className="text-muted">Charts</span>
         </nav>
         <h1 className="font-display text-3xl leading-tight font-black tracking-tight uppercase sm:text-4xl">
-          Steam <span className="text-brand">player counts</span>
+          Steam <span className="text-brand">charts</span>
         </h1>
         <p className="mt-3 max-w-[68ch] text-muted">
-          Every game we track, ranked by how many people are in it on Steam right now. Counts come
-          from Valve&rsquo;s own endpoints and are sampled every ten minutes — the same numbers
-          Steam publishes, kept as a history you can look back through.
+          Live player counts for every game we track, ranked by how many people are in each one on
+          Steam right now — who is trending, today&rsquo;s peaks, hours played, and the servers
+          behind each game. Counts come from Valve&rsquo;s own endpoints, sampled every ten
+          minutes and kept as a history you can look back through.
         </p>
       </header>
 
@@ -114,10 +126,12 @@ async function Ranking() {
             </section>
           )}
 
+          <Trending rows={rows} />
+
           <section aria-labelledby="ranking">
             <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
               <h2 id="ranking" className="font-display text-lg font-black tracking-tight uppercase">
-                All {chart?.meta.games ?? rows.length} games
+                Top games by current players
               </h2>
               {chart?.meta.synced_at && (
                 <p className="text-xs text-subtle">
@@ -154,6 +168,9 @@ async function Ranking() {
                     </th>
                     <th scope="col" className="py-2.5 pr-4 text-right font-normal">
                       Playing now
+                    </th>
+                    <th scope="col" className="hidden py-2.5 pr-4 font-normal lg:table-cell">
+                      Last 48 hours
                     </th>
                     <th scope="col" className="hidden py-2.5 pr-4 text-right font-normal md:table-cell">
                       Peak today
@@ -256,6 +273,12 @@ async function Ranking() {
                           </span>
                         </div>
                       </td>
+                      <td className="hidden py-2.5 pr-4 align-middle lg:table-cell">
+                        <RowSpark
+                          points={row.spark}
+                          label={`${row.name} over the last 48 hours`}
+                        />
+                      </td>
                       <td className="tabular hidden py-2.5 pr-4 text-right align-middle text-muted md:table-cell">
                         {row.peak > 0 ? count(row.peak) : <span className="text-subtle">—</span>}
                       </td>
@@ -349,6 +372,81 @@ function Skeleton() {
 }
 
 /**
+ * Who moved, which is a different question from who is biggest.
+ *
+ * A ranking by size barely changes from day to day — Counter-Strike is on top
+ * of it this year and next — so on its own it is a page nobody has a reason to
+ * come back to. The day's movement is the part that is different every time,
+ * and it is what a chart site is read for.
+ *
+ * Risers only, and only where the whole day was recorded: a fall is usually a
+ * weekday, and a game we started watching this morning has no day to compare.
+ * Six of them, because this is the appetiser above the ranking rather than a
+ * second ranking.
+ *
+ * And only above a floor, which is the difference between a trend and an
+ * arithmetic artefact. A game that went from two players to three is up fifty
+ * per cent and is not news; percentages on small numbers are noise wearing the
+ * costume of a signal, and a chart that leads with them teaches a reader to
+ * ignore the section. The floor is on players now rather than on players
+ * before, so a game that genuinely arrived overnight still qualifies.
+ */
+const TRENDING_FLOOR = 1000
+
+function Trending({ rows }: { rows: ChartRow[] }) {
+  const climbing = rows
+    .filter(
+      (row) => row.change_24h !== null && row.change_24h > 0 && row.players >= TRENDING_FLOOR,
+    )
+    .sort((a, b) => (b.change_24h ?? 0) - (a.change_24h ?? 0))
+    .slice(0, 6)
+
+  if (climbing.length === 0) return null
+
+  return (
+    <section aria-labelledby="trending">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="trending" className="font-display text-lg font-black tracking-tight uppercase">
+          Trending in the last 24 hours
+        </h2>
+        <p className="text-xs text-subtle">by change in players since this time yesterday</p>
+      </div>
+
+      <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {climbing.map((row) => (
+          /* `min-w-0`: a grid item's default minimum is its content, so
+             without it the card grows past its own column to fit the line and
+             the name, and takes the page's width with it. */
+          <li key={row.slug} className="min-w-0">
+            <Link
+              href={`/charts/${row.slug}`}
+              className="group flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2.5 transition-colors hover:border-line-strong"
+            >
+              <span className="tabular w-16 shrink-0 text-sm font-semibold text-brand">
+                +{row.change_24h}%
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-fg group-hover:text-brand">
+                  {row.name}
+                </span>
+                <span className="tabular text-xs text-subtle">
+                  {count(row.players)} playing
+                </span>
+              </span>
+              <RowSpark
+                points={row.spark}
+                label={`${row.name} over the last 48 hours`}
+                className="hidden h-6 w-20 shrink-0 min-[420px]:block sm:w-[7.5rem]"
+              />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/**
  * Before the first sample.
  *
  * A ranking with nothing in it is the one state where this page cannot do its
@@ -385,6 +483,11 @@ const FAQ = [
       'A game page counts players our monitor found on the servers it queried. This page counts everybody in the game anywhere on Steam: single-player, matchmaking, official servers and community ones alike. The two answer different questions, and for a game without dedicated servers the first is zero while the second is large.',
   },
   {
+    question: 'What does the 24-hour change mean?',
+    answer:
+      'How much a game\'s player count has moved since the same time yesterday, measured between the first and last readings of the last 24 hours. It is left blank for a game we have not been recording for a full day, rather than shown as a change over a shorter window.',
+  },
+  {
     question: 'How often does it update?',
     answer:
       'Every ten minutes. The peak column is the highest concurrent count Steam published for the game in the last 24 hours.',
@@ -407,8 +510,8 @@ function Explainer() {
   return (
     <section className="grid gap-6 md:grid-cols-2">
       <div className="max-w-[68ch] space-y-3 text-sm text-muted">
-        <h2 className="font-display text-base font-black tracking-tight uppercase text-fg">
-          What these numbers are
+        <h2 className="font-display text-base font-black tracking-tight text-fg uppercase">
+          Where these Steam player counts come from
         </h2>
         <p>
           Concurrent players, as Steam counts them: everybody with the game open, wherever they are
@@ -429,8 +532,8 @@ function Explainer() {
       </div>
 
       <div className="max-w-[68ch] space-y-3 text-sm text-muted">
-        <h2 className="font-display text-base font-black tracking-tight uppercase text-fg">
-          Players in a game, players on a server
+        <h2 className="font-display text-base font-black tracking-tight text-fg uppercase">
+          Players in a game against players on a server
         </h2>
         <p>
           These are not the same measurement and neither is a subset of the other. A game&rsquo;s

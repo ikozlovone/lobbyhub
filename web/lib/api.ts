@@ -434,6 +434,13 @@ export type ChartRow = {
    * publishes no playtime at all. Null when there are no samples yet.
    */
   hours: number | null
+  /**
+   * The last day as a percentage, or null while the recording is too young for
+   * the window to mean what the column says.
+   */
+  change_24h: number | null
+  /** Two-hour averages over the last two days, oldest first. */
+  spark: number[]
   /** Where Steam puts it in its own top 100, or null when it is below it. */
   steam_rank: number | null
   servers: number
