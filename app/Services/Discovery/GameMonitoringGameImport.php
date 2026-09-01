@@ -2,7 +2,6 @@
 
 namespace App\Services\Discovery;
 
-use App\Enums\QueryProtocol;
 use App\Models\Game;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -16,22 +15,10 @@ use Throwable;
  * a game is either in the catalog or it is not, and the interesting question
  * (which of their *servers* we hold) belongs to GameMonitoringSync.
  *
- * Two things a row needs that their list does not carry, and both are the
- * reason an imported game arrives switched off.
- *
- * `query_protocol` is guessed as Valve A2S, which is what a Steam appid all
- * but implies — of the three protocols this monitor speaks, it is the only one
- * that fits a game published on Steam. `default_port` is a submission-form
- * hint with no honest source here at all: theirs is a list of servers, not of
- * conventions, and 27015 is Valve's own default rather than anything measured.
- * ARK's is 7777 and Rust's is 28015, so the hint is wrong more often than not
- * and an admin is expected to correct it.
- *
- * Which is the shape of the whole thing: `is_active` is false, so a new game
- * is not on the rail, not in the sitemap, and not in a listing, and somebody
- * decides it belongs there after giving it artwork, a description and a port.
- * Adding three hundred untouched game pages to a catalog of 46 is not a
- * catalog, it is a doorway for a thin-content penalty.
+ * A row carries what their list carries — an appid, a slug, a name — and
+ * arrives switched off, because the two fields a game cannot do without are
+ * not among them. See ImportedGame, which is where that policy lives and which
+ * the SteamDB import shares.
  */
 class GameMonitoringGameImport
 {
@@ -100,18 +87,16 @@ class GameMonitoringGameImport
                         // creates the `server_states` partition on the way
                         // through, and a game without one takes its first
                         // server insert down with it.
-                        Game::query()->create([
-                            'slug' => $slug,
-                            'name' => mb_substr($name, 0, 255),
-                            'steam_appid' => $appId,
-                            'query_protocol' => QueryProtocol::Source,
-                            'default_port' => 27015,
-                            'is_active' => $active,
-                            // After everything already here, biggest of theirs
-                            // first — the pages arrive sorted by server count,
-                            // so this is their own ordering carried over.
-                            'sort_order' => ++$order,
-                        ]);
+                        //
+                        // What the row says is ImportedGame's business — see
+                        // there for why an imported game arrives switched off.
+                        // `sort_order` puts these after everything already in
+                        // the catalog, biggest of theirs first: their pages
+                        // arrive sorted by server count, so it is their own
+                        // ordering carried over.
+                        Game::query()->create(
+                            (new ImportedGame($appId, $slug, $name))->row(++$order, $active),
+                        );
                     }
 
                     // Into both maps: their catalogue has no duplicate appids
