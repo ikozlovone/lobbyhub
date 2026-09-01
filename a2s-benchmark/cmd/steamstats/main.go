@@ -114,13 +114,23 @@ func run() int {
 	}
 
 	// Connecting even for a dry run, because a ping is exactly the thing worth
-	// finding out before the real one.
+	// finding out before the real one — but not exiting on it, because a dry
+	// run writes nothing and the rest of what it checks is worth having on a
+	// machine that has no ClickHouse at all. Which games would be read, what
+	// Steam answers, how long it takes: none of that needs the destination.
 	ch, err := chstats.Open(ctx, opts)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "open ClickHouse: %v\n", err)
-		return 1
+		if !*dryRun {
+			fmt.Fprintf(os.Stderr, "open ClickHouse: %v\n", err)
+			return 1
+		}
+
+		slog.Warn("ClickHouse unreachable; the dry run continues because it writes nothing", "err", err)
+		ch = nil
 	}
-	defer ch.Close()
+	if ch != nil {
+		defer ch.Close()
+	}
 
 	// The DDL is a write, and `--dry-run` says it will not make any. So the
 	// tables appear on the first real run rather than on the rehearsal for it.
@@ -134,6 +144,9 @@ func run() int {
 	if *rollup {
 		return runRollup(ctx, ch, *rollupDate)
 	}
+
+	// Every other use of `ch` below is behind the same dry-run branch that
+	// allowed it to be nil.
 
 	resolvedDSN := resolveDSN(*dsn)
 	if resolvedDSN == "" {

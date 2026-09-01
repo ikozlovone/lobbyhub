@@ -39,9 +39,22 @@ User=www-data
 # so the deploy user can replace them.
 UMask=0002
 WorkingDirectory=/var/www/lobbyhub/a2s-benchmark
+# --all-games, so the games waiting to be switched on are recorded too.
+#
+# The catalog imports leave a few hundred rows off — SteamDB's chart alone
+# added eighty-seven — and each of those is a decision somebody has to make
+# about whether this site should carry the game. A week of player history is
+# most of that decision, and it can only exist if the recording started before
+# the decision did. It also costs one HTTPS request per game per tick, which at
+# a few hundred games is still a fraction of a request per second.
+#
+# Nothing published widens with it: the chart page and the catalog both show
+# only games that are switched on. This decides what is measured, not what is
+# shown.
 ExecStart=/var/www/lobbyhub/a2s-benchmark/steamstats.bin \
     --env=/var/www/lobbyhub/.env \
-    --interval=10m
+    --interval=10m \
+    --all-games
 # No --log-file: journald already keeps what this writes to stderr, and a
 # second copy on disk is a second thing to rotate.
 Restart=always

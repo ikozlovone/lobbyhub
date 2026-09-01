@@ -239,10 +239,15 @@ no join. The daily table is a `ReplacingMergeTree` keyed on
 doubling it.
 
 Unlike the sweep, ClickHouse is not optional here: it is the only thing this
-writes, so a missing `CH_HOST` is an error rather than a quiet no-op. By
-default only games the site is showing are polled; `--all-games` includes
-the ones switched off, which is what a week of history for a catalog import
-under review wants.
+writes, so a missing `CH_HOST` is an error rather than a quiet no-op.
+
+`--all-games` is on in the unit, and the service runs with it: games that are
+switched off are recorded too. The catalog imports leave a few hundred of those
+waiting for somebody to decide whether this site should carry them, and a week
+of player history is most of that decision — which can only exist if the
+recording started first. Without the flag only games the site is already
+showing are polled. Either way it decides what is *measured*; the chart page
+and the catalog still show only games that are on.
 
 ## Output
 
