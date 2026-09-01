@@ -148,6 +148,35 @@ class GameMonitoringSyncTest extends TestCase
         $this->assertSame(0, Server::where('game_id', $this->game->id)->count());
     }
 
+    /**
+     * The trap a densely hosted box sets.
+     *
+     * Rust's convention is query port = game port + 1, so one machine running
+     * servers on 28015 and 28016 has a query port for the first that is the
+     * connect port of the second. Keying our rows by their query port made the
+     * second one look like a server we already had — and that match is wrong
+     * twice over without saying so: our row for 28015 gets the mark, so a
+     * cleanup spares it, and the real server on 28016 is never added.
+     */
+    public function test_a_neighbours_connect_port_is_not_our_query_port(): void
+    {
+        $ours = $this->server('45.152.161.10', 28015, ['query_port' => 28016]);
+
+        $this->listing([
+            $this->item('45.152.161.10', 28015, query: 28016),
+            $this->item('45.152.161.10', 28016, query: 28017),
+        ]);
+
+        $report = $this->sync()->run($this->game);
+
+        $this->assertSame(1, $report->matched);
+        $this->assertSame(1, $report->created);
+
+        $neighbour = Server::where('host', '45.152.161.10')->where('port', 28016)->first();
+        $this->assertNotNull($neighbour, 'The server on the next port along is its own row.');
+        $this->assertSame($ours->id, Server::where('port', 28015)->firstOrFail()->id);
+    }
+
     /** One machine listed twice is one row, not two. */
     public function test_the_same_address_twice_in_one_list_is_added_once(): void
     {

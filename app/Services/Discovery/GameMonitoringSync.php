@@ -98,7 +98,7 @@ class GameMonitoringSync
                 }
 
                 [$ip, $port, $queryPort] = $address;
-                $entry = $this->lookup($existing, $item, $ip, $port, $queryPort);
+                $entry = $this->lookup($existing, $item, $ip, $port);
 
                 if ($entry !== null) {
                     [$id, $isMarked, $trashed] = $entry;
@@ -187,7 +187,7 @@ class GameMonitoringSync
         // game cost the whole table. Same reasoning as the Steam sweep's.
         DB::table('servers')
             ->where('game_id', $game->id)
-            ->select(['id', 'host', 'port', 'query_port', 'ip_address', 'game_port', 'gamemonitoring_seen_at', 'deleted_at'])
+            ->select(['id', 'host', 'port', 'ip_address', 'game_port', 'gamemonitoring_seen_at', 'deleted_at'])
             ->chunkById(2000, function (Collection $rows) use (&$keyed) {
                 foreach ($rows as $row) {
                     $entry = [
@@ -199,18 +199,23 @@ class GameMonitoringSync
                     $keyed[$row->host.':'.$row->port] ??= $entry;
 
                     if ($row->ip_address !== null) {
-                        // Every port the row is known by. A server submitted by
-                        // domain has an IP the monitor resolved and a connect
-                        // port the owner typed; the game port arrives later
-                        // from a query, and their list may name any of them.
+                        // Connect ports only, ours and theirs. A query port is
+                        // a different namespace that overlaps this one — Rust's
+                        // convention is game port plus one, so keying a row by
+                        // its query port makes it answer to the address of
+                        // whichever server is hosted on the next port along.
+                        // The cost of that match is paid twice and silently:
+                        // the wrong row is marked, so it survives a cleanup,
+                        // and the real server is never added.
+                        //
+                        // A server submitted by domain has an IP the monitor
+                        // resolved and a connect port the owner typed; the game
+                        // port arrives later from a query, and their list may
+                        // name either.
                         $keyed[$row->ip_address.':'.$row->port] ??= $entry;
 
                         if ($row->game_port !== null) {
                             $keyed[$row->ip_address.':'.$row->game_port] ??= $entry;
-                        }
-
-                        if ($row->query_port !== null) {
-                            $keyed[$row->ip_address.':'.$row->query_port] ??= $entry;
                         }
                     }
                 }
@@ -249,23 +254,23 @@ class GameMonitoringSync
     /**
      * The catalog row this list entry is, if it is one of ours.
      *
-     * Four ways in, cheapest first: the address as they give it, the query port
-     * they give beside it, and the hostname on their row — a server we hold by
-     * domain has neither of their two IP keys.
+     * Two ways in: the address as they give it, and the hostname on their row
+     * beside it — a server we hold by a domain somebody typed has neither of
+     * the IP keys.
+     *
+     * Their query port is deliberately not a third. See the note in existing():
+     * on a densely hosted box it is another server's connect port, and a false
+     * match here is silent in both directions.
      *
      * @param  array<string, array{0: int, 1: bool, 2: bool}>  $existing
      * @param  array<string, mixed>  $item
      * @return array{0: int, 1: bool, 2: bool}|null
      */
-    private function lookup(array $existing, array $item, string $ip, int $port, ?int $queryPort): ?array
+    private function lookup(array $existing, array $item, string $ip, int $port): ?array
     {
         $domain = trim((string) ($item['domain'] ?? ''));
 
         $keys = [$ip.':'.$port];
-
-        if ($queryPort !== null && $queryPort !== $port) {
-            $keys[] = $ip.':'.$queryPort;
-        }
 
         if ($domain !== '') {
             $keys[] = $domain.':'.$port;
