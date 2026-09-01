@@ -33,6 +33,26 @@ The `.bin` suffix keeps the binary distinguishable from the source
 directory of the same name — running the binary from the parent directory
 would otherwise clash with the `a2s-benchmark/` folder.
 
+Build as the user that owns the tree. On the server that is `deploy`, and
+building as root instead fails before it compiles anything:
+
+```
+error obtaining VCS status: exit status 128
+        Use -buildvcs=false to disable VCS stamping.
+```
+
+which is git refusing to read a repository owned by somebody else, and Go
+treating that as a failure to stamp the build. So:
+
+```
+cd /var/www/lobbyhub/a2s-benchmark
+sudo -u deploy -H "$(command -v go)" build -o steamstats.bin ./cmd/steamstats
+```
+
+`-buildvcs=false` silences it too, and is the wrong fix twice over: the
+binary loses the commit it was built from, and it is still written by root
+into a tree the deploy user owns.
+
 ## Run
 
 ```
