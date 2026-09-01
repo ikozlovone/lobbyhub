@@ -18,6 +18,7 @@ package steam
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -29,6 +30,13 @@ const (
 	chartURL  = "https://api.steampowered.com/ISteamChartsService/GetGamesByConcurrentPlayers/v1/"
 	playerURL = "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/"
 )
+
+// errNoSuchApp is what a 404 from the player-count endpoint means: Valve has
+// no such app, or none it will answer for. Measured, not assumed — an appid
+// that does not exist comes back 404 rather than with the `result != 1` the
+// endpoint documents, and a catalog row with a wrong appid must not turn every
+// ten-minute run into a failure and a cron mail.
+var errNoSuchApp = errors.New("no such app")
 
 // Client talks to Valve. The zero value is not usable; call New.
 type Client struct {
@@ -86,10 +94,12 @@ func (c *Client) Chart(ctx context.Context) ([]Entry, error) {
 
 // PlayerCount answers for one game, charted or not.
 //
-// `result` is Valve's own status field: 1 is an answer, anything else is an
-// app that does not report a player count — unreleased, delisted, or a tool.
-// That is not an error worth stopping a run for, so it comes back as
-// (0, false, nil) and the caller records nothing.
+// Two ways to be told there is no number, and both are answers rather than
+// failures: a 404, which is what an appid Valve does not know comes back as,
+// and `result != 1`, the documented "this app publishes no count" — a tool, or
+// something unreleased. Both return (0, false, nil) and the caller records
+// nothing. A real failure — a timeout, a 500, a body that will not parse —
+// still comes back as an error.
 func (c *Client) PlayerCount(ctx context.Context, appID uint32) (uint32, bool, error) {
 	var payload struct {
 		Response struct {
@@ -101,6 +111,9 @@ func (c *Client) PlayerCount(ctx context.Context, appID uint32) (uint32, bool, e
 	query := url.Values{"appid": []string{strconv.FormatUint(uint64(appID), 10)}}
 
 	if err := c.get(ctx, playerURL, query, &payload); err != nil {
+		if errors.Is(err, errNoSuchApp) {
+			return 0, false, nil
+		}
 		return 0, false, fmt.Errorf("player count for %d: %w", appID, err)
 	}
 	if payload.Response.Result != 1 {
@@ -129,6 +142,9 @@ func (c *Client) get(ctx context.Context, endpoint string, query url.Values, int
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound {
+		return errNoSuchApp
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("http %d", resp.StatusCode)
 	}

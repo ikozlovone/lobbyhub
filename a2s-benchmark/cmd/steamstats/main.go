@@ -11,13 +11,13 @@
 //
 // A run is one tick:
 //
-//   1. read the games that have a `steam_appid` from Postgres,
-//   2. fetch Valve's official top 100 in a single request,
-//   3. look up, one request each, the catalog games the chart did not cover,
-//   4. write it all to ClickHouse as one batch, stamped with the tick's own
-//      ten-minute mark — the same bucket rule the server sweep uses,
-//   5. and write the current numbers back to `games`, so a page render reads
-//      them without touching ClickHouse.
+//  1. read the games that have a `steam_appid` from Postgres,
+//  2. fetch Valve's official top 100 in a single request,
+//  3. look up, one request each, the catalog games the chart did not cover,
+//  4. write it all to ClickHouse as one batch, stamped with the tick's own
+//     ten-minute mark — the same bucket rule the server sweep uses,
+//  5. and write the current numbers back to `games`, so a page render reads
+//     them without touching ClickHouse.
 //
 // Games in the chart that this catalog does not carry are recorded too, with
 // game_id 0. They cost nothing (the chart came in one request either way) and
@@ -25,12 +25,12 @@
 //
 // Meant for cron, every ten minutes:
 //
-//   */10 * * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env \
-//                    --log-file=/var/log/lobbyhub/steamstats.log
+//	*/10 * * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env \
+//	                 --log-file=/var/log/lobbyhub/steamstats.log
 //
 // and once after midnight UTC for the day that just ended:
 //
-//   20 0 * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env --rollup
+//	20 0 * * * /usr/local/bin/steamstats --env=/var/www/lobbyhub/.env --rollup
 package main
 
 import (
@@ -64,7 +64,7 @@ func run() int {
 		allGames    = flag.Bool("all-games", false, "Include games that are switched off, not only the ones the site shows")
 		concurrency = flag.Int("concurrency", 4, "Parallel per-game lookups for the games the chart did not cover")
 		timeoutStr  = flag.String("timeout", "15s", "Deadline for one request to Valve")
-		dryRun      = flag.Bool("dry-run", false, "Collect and report, writing nothing to ClickHouse")
+		dryRun      = flag.Bool("dry-run", false, "Collect and report, writing nothing at all — not even the tables")
 		rollup      = flag.Bool("rollup", false, "Fold a day of ticks into game_players_daily instead of collecting")
 		rollupDate  = flag.String("rollup-date", "", "Day to roll up as YYYY-MM-DD (default: yesterday, UTC)")
 		logLevel    = flag.String("log-level", "info", "slog level: debug|info|warn|error")
@@ -101,6 +101,16 @@ func run() int {
 		return 2
 	}
 
+	// The rollup is one INSERT ... SELECT that never leaves ClickHouse, so
+	// there is nothing for a dry run to withhold from it. Refusing beats
+	// writing anyway under a flag that promises not to.
+	if *rollup && *dryRun {
+		fmt.Fprintln(os.Stderr, "--dry-run has no meaning with --rollup: the rollup is a single INSERT ... SELECT inside ClickHouse")
+		return 2
+	}
+
+	// Connecting even for a dry run, because a ping is exactly the thing worth
+	// finding out before the real one.
 	ch, err := chstats.Open(ctx, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open ClickHouse: %v\n", err)
@@ -108,9 +118,13 @@ func run() int {
 	}
 	defer ch.Close()
 
-	if err := ch.EnsureGameTables(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return 1
+	// The DDL is a write, and `--dry-run` says it will not make any. So the
+	// tables appear on the first real run rather than on the rehearsal for it.
+	if !*dryRun {
+		if err := ch.EnsureGameTables(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return 1
+		}
 	}
 
 	if *rollup {
