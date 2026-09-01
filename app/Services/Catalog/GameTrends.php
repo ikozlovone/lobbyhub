@@ -72,11 +72,7 @@ class GameTrends
      * what it managed, and the gain between two months is the only one of the
      * three that answers "is this game growing".
      *
-     * Read from the daily rollup rather than the raw samples — a year of months
-     * is twelve rows out of a table with one row per game per day. `FINAL`
-     * because that table is a ReplacingMergeTree and a re-run rollup leaves two
-     * copies of a day until the parts merge; counting both would inflate the
-     * month.
+     * Assembled from both stores — see months() for which answers when.
      *
      * @return array{months: array<int, array<string, mixed>>, recording_since: string|null}
      */
@@ -88,19 +84,7 @@ class GameTrends
             return ['months' => [], 'recording_since' => null];
         }
 
-        $rows = $this->read(
-            'SELECT toStartOfMonth(date)  AS month,
-                    avg(players_avg)      AS players_avg,
-                    max(players_max)      AS players_peak,
-                    sum(players_avg) * 24 AS hours,
-                    count()               AS days
-               FROM game_players_daily FINAL
-              WHERE app_id = {app:UInt32}
-              GROUP BY month
-              ORDER BY month DESC',
-            ['app' => $appId],
-        );
-
+        $rows = $this->months($appId);
         $months = [];
 
         foreach ($rows as $index => $row) {
@@ -130,11 +114,69 @@ class GameTrends
         ];
     }
 
-    /** The first day the rollup has for this game. */
+    /**
+     * Every month there is, newest first, from both places a month can be.
+     *
+     * The daily rollup is the long memory — the raw table keeps 180 days and
+     * then drops them — but it is written once a night, which for the first day
+     * of a game's life means a table that has samples and nothing to show. So
+     * the raw samples answer for every month they still cover and the rollup
+     * answers for the rest, and a month present in both is taken from raw: it
+     * is the finer source, it is current to the last ten minutes, and averaging
+     * daily averages weights a quiet day the same as a busy one.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function months(int $appId): array
+    {
+        $fromRaw = $this->read(
+            'SELECT toStartOfMonth(ts)                 AS month,
+                    avg(players)                       AS players_avg,
+                    max(players)                       AS players_peak,
+                    sum(players) * {minutes:UInt16} / 60 AS hours,
+                    uniqExact(toDate(ts))              AS days
+               FROM game_players_raw
+              WHERE app_id = {app:UInt32}
+              GROUP BY month',
+            ['app' => $appId, 'minutes' => self::SAMPLE_MINUTES],
+        );
+
+        $fromDaily = $this->read(
+            'SELECT toStartOfMonth(date)  AS month,
+                    avg(players_avg)      AS players_avg,
+                    max(players_max)      AS players_peak,
+                    sum(players_avg) * 24 AS hours,
+                    count()               AS days
+               FROM game_players_daily FINAL
+              WHERE app_id = {app:UInt32}
+              GROUP BY month',
+            ['app' => $appId],
+        );
+
+        $byMonth = [];
+
+        // Daily first, raw over the top of it: same key, better source wins.
+        foreach ([$fromDaily, $fromRaw] as $source) {
+            foreach ($source as $row) {
+                $byMonth[(string) $row['month']] = $row;
+            }
+        }
+
+        krsort($byMonth);
+
+        return array_values($byMonth);
+    }
+
+    /**
+     * The first sample there is for this game.
+     *
+     * Read from the raw table rather than the rollup, so it is true from the
+     * first tick rather than from the first night.
+     */
     private function recordingSince(int $appId): ?string
     {
         $rows = $this->read(
-            'SELECT min(date) AS first FROM game_players_daily FINAL WHERE app_id = {app:UInt32}',
+            'SELECT min(ts) AS first FROM game_players_raw WHERE app_id = {app:UInt32}',
             ['app' => $appId],
         );
 
@@ -145,7 +187,8 @@ class GameTrends
             return null;
         }
 
-        return $first;
+        // The page prints a month, and the column is a timestamp.
+        return substr((string) $first, 0, 10);
     }
 
     /**

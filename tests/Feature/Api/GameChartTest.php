@@ -138,14 +138,18 @@ class GameChartTest extends TestCase
     public function test_the_trend_compares_each_month_with_the_one_before(): void
     {
         $this->withClickHouse(
-            // Newest first, which is the order the table is read in and the
-            // order the query returns.
+            // The samples: the two months still inside the raw table's window.
             [
                 ['month' => '2026-09-01', 'players_avg' => '110000', 'players_peak' => '150000', 'hours' => '79200000', 'days' => '12'],
                 ['month' => '2026-08-01', 'players_avg' => '100000', 'players_peak' => '140000', 'hours' => '74400000', 'days' => '31'],
+            ],
+            // The rollup, which still remembers July and holds a staler copy
+            // of August — the same month from both stores, and raw wins it.
+            [
+                ['month' => '2026-08-01', 'players_avg' => '1', 'players_peak' => '1', 'hours' => '1', 'days' => '1'],
                 ['month' => '2026-07-01', 'players_avg' => '125000', 'players_peak' => '160000', 'hours' => '90000000', 'days' => '31'],
             ],
-            [['first' => '2026-07-01']],
+            [['first' => '2026-07-04 08:10:00']],
         );
         $this->measure('rust', players: 110_000);
 
@@ -174,7 +178,11 @@ class GameChartTest extends TestCase
         // The month still running says how much of it was watched, so its
         // average is not read as a full month's.
         $this->assertSame(12, $months[0]['days']);
-        $this->assertSame('2026-07-01', $this->getJson('/api/games/rust/trend')->json('data.recording_since'));
+
+        // August came from the samples, not from the rollup's stale copy of it.
+        $this->assertEquals(100000, $months[1]['players_avg']);
+
+        $this->assertSame('2026-07-04', $this->getJson('/api/games/rust/trend')->json('data.recording_since'));
     }
 
     /**
@@ -225,6 +233,9 @@ class GameChartTest extends TestCase
     /**
      * Point the reader at a ClickHouse that answers, one response per query in
      * the order the reader makes them.
+     *
+     * Anything asked beyond the responses given answers empty, which is what
+     * a reader making more queries than a test cares about should get.
      *
      * @param  array<int, array<string, mixed>>  ...$responses
      */
