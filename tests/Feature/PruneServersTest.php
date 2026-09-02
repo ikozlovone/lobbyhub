@@ -10,6 +10,7 @@ use App\Services\Stats\ClickHouseClient;
 use Database\Seeders\CountrySeeder;
 use Database\Seeders\GameSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -124,6 +125,77 @@ class PruneServersTest extends TestCase
 
         $this->assertSoftDeleted('servers', ['id' => $empty->id]);
         $this->assertNotSoftDeleted('servers', ['id' => $busy->id]);
+    }
+
+    /**
+     * The ceiling the first production run found.
+     *
+     * ClickHouse hands back every id it matched, and on a real catalog that is
+     * tens of thousands — more bound parameters than Postgres accepts in one
+     * statement, which failed the whole command outright. The real ids sit
+     * past the first chunk here, so a version that only queried the first
+     * would delete nothing and pass every other test in this file.
+     */
+    public function test_it_survives_more_ids_than_one_statement_can_carry(): void
+    {
+        $first = $this->server('first', offlineFor: null, online: true);
+        $second = $this->server('second', offlineFor: null, online: true);
+
+        // Twelve thousand ids that match nothing, then the two that do.
+        $ids = array_map(
+            fn (int $id) => ['server_id' => (string) $id],
+            range(900_000, 912_000),
+        );
+        $ids[] = ['server_id' => (string) $first->id];
+        $ids[] = ['server_id' => (string) $second->id];
+
+        config(['services.clickhouse.host' => 'clickhouse.test']);
+        $this->app->forgetInstance(ClickHouseClient::class);
+        Http::fake(['clickhouse.test*' => Http::response(['data' => $ids])]);
+
+        /*
+         * The assertion is on the statements, not on the outcome.
+         *
+         * This suite runs on SQLite, which accepts far more bound parameters
+         * than Postgres does — so a test that only checked the two servers
+         * were deleted would pass against the version that failed in
+         * production. What broke there is the size of one statement, so that
+         * is what is measured.
+         *
+         * The bar is the chunk size and not Postgres's own 65,535: twelve
+         * thousand ids is enough to prove the list is being split and cheap
+         * enough not to spend the suite's memory limit on a fake HTTP body,
+         * which the first version of this test did.
+         */
+        $widest = 0;
+        DB::listen(function ($query) use (&$widest) {
+            $widest = max($widest, count($query->bindings));
+        });
+
+        $this->artisan('servers:prune --offline-days=0 --force')->assertSuccessful();
+
+        $this->assertLessThan(
+            6000,
+            $widest,
+            'The ids went into one statement instead of being chunked.',
+        );
+        $this->assertSoftDeleted('servers', ['id' => $first->id]);
+        $this->assertSoftDeleted('servers', ['id' => $second->id]);
+    }
+
+    /**
+     * The soft-delete scope comes for free with Eloquent and not with the
+     * query builder this reads rows through, so it is written out — and this
+     * is what notices if it stops being.
+     */
+    public function test_it_ignores_servers_somebody_already_deleted(): void
+    {
+        $gone = $this->server('already-gone', offlineFor: 30);
+        $gone->delete();
+
+        $this->artisan('servers:prune --empty-days=0 --force')
+            ->expectsOutputToContain('Nothing to remove')
+            ->assertSuccessful();
     }
 
     /** Without the samples the rule cannot be answered, and says so. */
