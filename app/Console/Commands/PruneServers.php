@@ -9,8 +9,10 @@ use App\Services\Catalog\CatalogCounters;
 use App\Services\Stats\ClickHouseClient;
 use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class PruneServers extends Command
@@ -41,6 +43,18 @@ class PruneServers extends Command
 
     /** How many rows the report prints before it starts counting instead. */
     private const REPORT_ROWS = 15;
+
+    /**
+     * How many server ids go into one `WHERE id IN (…)`.
+     *
+     * Postgres takes 65,535 bound parameters per statement, and the empty rule
+     * hands over however many ids ClickHouse found — which on a real catalog
+     * is tens of thousands. The first production run of this died on exactly
+     * that: `number of parameters must be between 0 and 65535`. Five thousand
+     * leaves room for the other bindings in the same query and is still few
+     * enough statements to be uninteresting.
+     */
+    private const ID_CHUNK = 5000;
 
     /**
      * The catalog's own gardening.
@@ -166,7 +180,7 @@ class PruneServers extends Command
      * having answered yet.
      *
      * @param  Collection<int, Game>  $games
-     * @return Collection<int, Server>
+     * @return Collection<int, object>
      */
     private function offline(Collection $games, int $days): Collection
     {
@@ -191,7 +205,7 @@ class PruneServers extends Command
                 'server_states.last_online_at',
             ])
             ->get()
-            ->each(fn (Server $server) => $server->setAttribute('prune_reason', 'not answering'));
+            ->each(fn (object $row) => $row->prune_reason = 'not answering');
     }
 
     /**
@@ -208,7 +222,7 @@ class PruneServers extends Command
      * eight — and the caller is told so.
      *
      * @param  Collection<int, Game>  $games
-     * @return Collection<int, Server>
+     * @return Collection<int, object>
      */
     private function empty(Collection $games, int $days, ClickHouseClient $ch): Collection
     {
@@ -250,11 +264,36 @@ class PruneServers extends Command
             return collect();
         }
 
-        return $this->candidates($games)
-            ->whereIn('servers.id', $ids)
-            ->select(['servers.id', 'servers.slug', 'servers.game_id', 'servers.created_at'])
-            ->get()
-            ->each(fn (Server $server) => $server->setAttribute('prune_reason', 'nobody playing'));
+        /*
+         * In chunks, because this list is as long as the catalog is dead.
+         *
+         * The whole set went into one `WHERE id IN (…)` the first time this
+         * ran against production, which is a bound parameter per id and a
+         * ceiling of 65,535 of them. Splitting it costs a few more round trips
+         * and removes the ceiling.
+         */
+        $found = collect();
+
+        foreach (array_chunk($ids, self::ID_CHUNK) as $chunk) {
+            $found = $found->merge(
+                $this->candidates($games)
+                    ->join('server_states', function ($join) {
+                        $join->on('server_states.server_id', '=', 'servers.id')
+                            ->on('server_states.game_id', '=', 'servers.game_id');
+                    })
+                    ->whereIn('servers.id', $chunk)
+                    ->select([
+                        'servers.id',
+                        'servers.slug',
+                        'servers.game_id',
+                        'servers.created_at',
+                        'server_states.last_online_at',
+                    ])
+                    ->get()
+            );
+        }
+
+        return $found->each(fn (object $row) => $row->prune_reason = 'nobody playing');
     }
 
     /**
@@ -264,12 +303,30 @@ class PruneServers extends Command
      */
     private function candidates(Collection $games): Builder
     {
-        return Server::query()
+        return DB::table('servers')
+            /*
+             * Rows, not models.
+             *
+             * A first run against a real catalog matches tens of thousands of
+             * servers, and hydrating an Eloquent model for each one to read
+             * five columns off it is memory spent on nothing — the same run
+             * that found the parameter ceiling would have found the memory
+             * limit next. The cost is that the soft-delete scope no longer
+             * comes for free, and without the line below the report would
+             * offer to delete servers somebody has already deleted.
+             */
+            ->whereNull('servers.deleted_at')
             ->whereIn('servers.game_id', $games->pluck('id'))
             // Paid placement is not something a cleanup gets to end.
             ->where(fn ($query) => $query->whereNull('promoted_until')
                 ->orWhere('promoted_until', '<=', now()))
             ->when(! $this->option('include-claimed'), fn ($query) => $query->whereNull('user_id'));
+    }
+
+    /** How long ago a timestamp was, in the unit the flags are written in. */
+    private function age(string $stamp): string
+    {
+        return ((int) Carbon::parse($stamp)->diffInDays()).'d';
     }
 
     /**
@@ -285,7 +342,7 @@ class PruneServers extends Command
      * thousands of rows and nobody reads those either. The per-game tally
      * underneath is what carries the shape at that size.
      *
-     * @param  Collection<int, Server>  $doomed
+     * @param  Collection<int, object>  $doomed
      */
     private function report(Collection $doomed, int $offline, int $empty): void
     {
@@ -299,19 +356,19 @@ class PruneServers extends Command
 
         $this->table(
             ['Game', 'Server', 'Why', 'Last seen'],
-            $doomed->take(self::REPORT_ROWS)->map(fn (Server $server) => [
-                $names[$server->game_id] ?? $server->game_id,
+            $doomed->take(self::REPORT_ROWS)->map(fn (object $row) => [
+                $names[$row->game_id] ?? $row->game_id,
                 // The slug of a server named by its address is long enough to
                 // wrap the table on its own.
-                mb_strimwidth($server->slug, 0, 44, '…'),
-                $server->getAttribute('prune_reason'),
+                mb_strimwidth($row->slug, 0, 44, '…'),
+                $row->prune_reason,
                 // Days, because days are the unit the flags are in: a row
                 // reading "12d ago" against `--offline-days=7` explains its
                 // own presence, where "1 week ago" leaves the reader doing
                 // the arithmetic that put it there.
-                $server->last_online_at
-                    ? ((int) $server->last_online_at->diffInDays()).'d ago'
-                    : 'never · added '.((int) $server->created_at->diffInDays()).'d ago',
+                $row->last_online_at
+                    ? $this->age($row->last_online_at).' ago'
+                    : 'never · added '.$this->age($row->created_at).' ago',
             ])->all(),
         );
 
