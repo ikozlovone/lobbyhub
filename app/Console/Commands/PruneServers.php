@@ -39,6 +39,9 @@ class PruneServers extends Command
      */
     private const SAMPLES_PER_DAY = 24;
 
+    /** How many rows the report prints before it starts counting instead. */
+    private const REPORT_ROWS = 15;
+
     /**
      * The catalog's own gardening.
      *
@@ -180,9 +183,15 @@ class PruneServers extends Command
                     ->orWhere(fn ($q) => $q->whereNull('server_states.last_online_at')
                         ->where('servers.created_at', '<', $cutoff));
             })
-            ->select(['servers.id', 'servers.slug', 'servers.game_id', 'servers.created_at'])
+            ->select([
+                'servers.id',
+                'servers.slug',
+                'servers.game_id',
+                'servers.created_at',
+                'server_states.last_online_at',
+            ])
             ->get()
-            ->each(fn (Server $server) => $server->setAttribute('prune_reason', 'offline'));
+            ->each(fn (Server $server) => $server->setAttribute('prune_reason', 'not answering'));
     }
 
     /**
@@ -245,7 +254,7 @@ class PruneServers extends Command
             ->whereIn('servers.id', $ids)
             ->select(['servers.id', 'servers.slug', 'servers.game_id', 'servers.created_at'])
             ->get()
-            ->each(fn (Server $server) => $server->setAttribute('prune_reason', 'empty'));
+            ->each(fn (Server $server) => $server->setAttribute('prune_reason', 'nobody playing'));
     }
 
     /**
@@ -263,7 +272,21 @@ class PruneServers extends Command
             ->when(! $this->option('include-claimed'), fn ($query) => $query->whereNull('user_id'));
     }
 
-    /** @param  Collection<int, Server>  $doomed */
+    /**
+     * What is about to go, as a table rather than as padded lines.
+     *
+     * This output is the whole point of `--dry`: somebody reads it and decides
+     * whether to run the thing for real, and a list they have to squint at to
+     * line up is one they will skim instead. `table()` also survives the
+     * console's own formatting, which quietly collapses runs of spaces in a
+     * hand-padded `sprintf`.
+     *
+     * Capped, because the honest answer for a first run on a large catalog is
+     * thousands of rows and nobody reads those either. The per-game tally
+     * underneath is what carries the shape at that size.
+     *
+     * @param  Collection<int, Server>  $doomed
+     */
     private function report(Collection $doomed, int $offline, int $empty): void
     {
         if ($doomed->isEmpty()) {
@@ -274,20 +297,32 @@ class PruneServers extends Command
 
         $names = Game::query()->pluck('slug', 'id');
 
+        $this->table(
+            ['Game', 'Server', 'Why', 'Last seen'],
+            $doomed->take(self::REPORT_ROWS)->map(fn (Server $server) => [
+                $names[$server->game_id] ?? $server->game_id,
+                // The slug of a server named by its address is long enough to
+                // wrap the table on its own.
+                mb_strimwidth($server->slug, 0, 44, '…'),
+                $server->getAttribute('prune_reason'),
+                // Days, because days are the unit the flags are in: a row
+                // reading "12d ago" against `--offline-days=7` explains its
+                // own presence, where "1 week ago" leaves the reader doing
+                // the arithmetic that put it there.
+                $server->last_online_at
+                    ? ((int) $server->last_online_at->diffInDays()).'d ago'
+                    : 'never · added '.((int) $server->created_at->diffInDays()).'d ago',
+            ])->all(),
+        );
+
+        if ($doomed->count() > self::REPORT_ROWS) {
+            $this->line(sprintf('  … and %s more', number_format($doomed->count() - self::REPORT_ROWS)));
+        }
+
+        $this->newLine();
+
         foreach ($doomed->groupBy('game_id') as $gameId => $servers) {
-            $this->line(sprintf('  %-28s %5d server(s)', $names[$gameId] ?? $gameId, $servers->count()));
-
-            foreach ($servers->take(5) as $server) {
-                $this->line(sprintf(
-                    '      %-46s %s',
-                    $server->slug,
-                    $server->getAttribute('prune_reason'),
-                ));
-            }
-
-            if ($servers->count() > 5) {
-                $this->line(sprintf('      … and %d more', $servers->count() - 5));
-            }
+            $this->line(sprintf('  %s: %s', $names[$gameId] ?? $gameId, number_format($servers->count())));
         }
 
         $this->newLine();
