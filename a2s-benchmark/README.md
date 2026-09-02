@@ -5,12 +5,17 @@ reports how long it took. Read-only by default; the optional `--write`
 flag turns the sweep into a collector that pushes each result to
 `server_states` as a batched UPDATE.
 
-Two protocols are supported today. The runner picks per game from
+Three protocols are supported today. The runner picks per game from
 `games.query_protocol`:
 
-- **`source`** — Valve A2S over UDP. Rust, ARK, CS2, Garry's Mod,
-  7 Days to Die, TF2, DayZ, Squad, and any other Source-based server.
+- **`source`** — Valve A2S over UDP. Rust, CS2, Garry's Mod, 7 Days to
+  Die, TF2, DayZ, Squad, and any other Source-based server.
 - **`minecraft`** — Server List Ping (Java Edition, 1.7+) over TCP.
+- **`eos`** — Epic Online Services matchmaking (paginated HTTP). ARK:
+  Survival Ascended today — a game whose sessions register with Epic
+  rather than Steam and do not answer A2S on any port. The sweep is
+  one bulk pull matched against the local address map, not a per-server
+  UDP path, so `--concurrency` / `--timeout` / `--retries` do not apply.
 
 FiveM (`fivem`) and any other protocol is loaded but skipped — the
 summary reports it under "unknown protocol" so an operator sees why
@@ -174,6 +179,52 @@ sweep slows down to match the writer.
 The DSN user needs `UPDATE ON server_states, games` in addition to
 `SELECT ON servers, games` — `lobbyhub_user` has both.
 
+## EOS (Epic Online Services)
+
+Games with `query_protocol=eos` are swept through `POST /matchmaking/v1/
+{deployment}/filter` instead of the per-server UDP path. The `--all-games`
+run picks them up automatically; a single-game invocation works too:
+
+```
+./a2s-benchmark.bin --game=ark-survival-ascended --write
+```
+
+The sweep is entirely different from A2S: one paginated HTTP walk of
+Epic's matchmaking list (~30 pages for ARK's ~6k live sessions), an
+address map keyed `ip:port`, then every local row for that game is
+matched against the map. A hit synthesises an online snapshot with the
+map/players/name Epic reported; a miss synthesises a timeout — same
+outcome the writer already knows how to persist. `--concurrency`,
+`--timeout`, `--retries` and `--rate` have no meaning here and are
+ignored.
+
+Credentials are read from env (same names as the PHP side's
+`config/services.php`):
+
+- `EOS_BASE_URL` — default `https://api.epicgames.dev`
+- `EOS_TIMEOUT` seconds — default `30`
+- `EOS_ATTEMPTS` — default `4` (transport-level retries per call)
+- `EOS_PAUSE_MS` — default `250` between pages
+- `EOS_PAGE_SIZE` — default `200` per filter call
+
+Per game (slug → env, dashes to underscores, upper-cased, prefixed
+`EOS_`):
+
+- `EOS_<SLUG>_DEPLOYMENT_ID`
+- `EOS_<SLUG>_CLIENT_ID`
+- `EOS_<SLUG>_CLIENT_SECRET`
+
+For ARK: SA the credentials are the ones the game client itself ships
+with (widely known, used by every community tool). A game without a
+configured triple is refused with a message that names the exact env
+vars to set.
+
+Writes are the same as for A2S: `server_states` UPDATE per row (online
+or offline), `games.online_servers_count` + `games.players_online`
+updated at the end, Redis `api:games` invalidated, and — because the
+matchmaking response carries the count directly — a row per online
+server into ClickHouse `server_players_raw` for the graphs.
+
 ## steamstats — players per game
 
 A second binary in this module, and a different question. The sweep asks
@@ -288,6 +339,7 @@ cmd/steamstats         the per-game player-count collector
 internal/snapshot      transport-agnostic Outcome + Info the writer takes
 internal/a2s           Valve A2S over UDP (Source engine)
 internal/slp           Minecraft Server List Ping over TCP (1.7+)
+internal/eos           Epic Online Services matchmaking (paginated HTTP)
 internal/steam         Valve's charts and player-count endpoints
 internal/repository    Postgres access — LoadForGame + batching writer
 internal/benchmark     runner, bounded queue, rate limiter, stats

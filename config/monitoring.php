@@ -150,6 +150,18 @@ return [
     'steam_create_new_servers' => filter_var(env('MONITORING_STEAM_CREATE_NEW_SERVERS', false), FILTER_VALIDATE_BOOLEAN),
 
     /**
+     * Whether an EOS sweep may add a server the catalog has not seen before.
+     *
+     * The same trade-off Steam's version explains, applied to a smaller
+     * population. Off by default: EOS-only games (ARK: SA) are still
+     * discovered through the gamemonitoring reconciliation and the admin
+     * import, and this sync refreshes what those two brought in. On, it fills
+     * the catalog directly from EOS — useful once, for a title's first
+     * backfill when nothing else has heard of any of its servers.
+     */
+    'eos_create_new_servers' => filter_var(env('MONITORING_EOS_CREATE_NEW_SERVERS', false), FILTER_VALIDATE_BOOLEAN),
+
+    /**
      * How deep the query queue may get before the dispatcher stops adding.
      *
      * A backlog this size is not work waiting to be done, it is a statement

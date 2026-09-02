@@ -22,6 +22,7 @@ const (
 	ProtocolSource    Protocol = "source"    // Valve A2S over UDP
 	ProtocolMinecraft Protocol = "minecraft" // SLP over TCP
 	ProtocolFiveM     Protocol = "fivem"     // HTTP; not implemented
+	ProtocolEos       Protocol = "eos"       // Epic Online Services matchmaking; bulk pull, not per-server
 )
 
 // Server is a candidate for the sweep. Endpoint is "ip:port" ready for
@@ -111,12 +112,18 @@ func (r *Repo) LookupGame(ctx context.Context, slug string) (GameInfo, error) {
 // Protocols the runner does not implement (fivem today) are filtered
 // here rather than in the loop, so the "unknown protocol skipped" line
 // in the summary is what the sweep really saw, not what we asked for.
+//
+// EOS games use the same repo + writer + ClickHouse pipeline as the A2S
+// ones, differing only in where the state comes from — main.sweepGame
+// branches on `Protocol` and calls the EOS path instead of the UDP one.
+// The row lists them for the same reason it lists Minecraft: from here
+// they look like any other game the sweep is responsible for.
 func (r *Repo) ListGames(ctx context.Context) ([]GameInfo, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, slug, name, query_protocol
 		 FROM games
 		 WHERE is_active = true
-		   AND query_protocol IN ('source', 'minecraft')
+		   AND query_protocol IN ('source', 'minecraft', 'eos')
 		 ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list games: %w", err)
@@ -198,7 +205,7 @@ func (r *Repo) LoadForGame(ctx context.Context, game GameInfo) ([]Server, LoadCo
 		return nil, counts, fmt.Errorf("iterate rows: %w", err)
 	}
 
-	if game.Protocol != ProtocolSource && game.Protocol != ProtocolMinecraft {
+	if game.Protocol != ProtocolSource && game.Protocol != ProtocolMinecraft && game.Protocol != ProtocolEos {
 		counts.UnknownProtocol = counts.Valid
 		counts.Valid = 0
 		servers = nil
@@ -238,6 +245,12 @@ func (r *Repo) UpdateGameCounters(ctx context.Context, gameID int64, onlineServe
 // port is usually a different socket that does not speak A2S. Minecraft
 // uses query_port when set (some operators configure a distinct one) and
 // falls back to the game port, which is where SLP normally listens.
+//
+// EOS matches sessions by the game port itself — Epic's `GAMEPORT_l`
+// attribute is what the joining client dials, and ASA rows imported from
+// gamemonitoring carry `port == query_port` because their source only ever
+// gives one port per row. `port` is the honest choice, and it is what the
+// sweep will look up in the EOS session map.
 func pickPort(p Protocol, queryPort, port *int) int {
 	switch p {
 	case ProtocolSource:
@@ -249,6 +262,11 @@ func pickPort(p Protocol, queryPort, port *int) int {
 		if queryPort != nil {
 			return *queryPort
 		}
+		if port != nil {
+			return *port
+		}
+		return 0
+	case ProtocolEos:
 		if port != nil {
 			return *port
 		}

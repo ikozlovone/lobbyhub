@@ -205,6 +205,44 @@ return [
         'attempts' => (int) env('GAMEMONITORING_ATTEMPTS', 4),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Epic Online Services
+    |--------------------------------------------------------------------------
+    |
+    | Where games with no Steam-side server registration are polled — see
+    | EosClient and EosServerSweep. Each game keys a deployment triple; the
+    | slug on the left matches `games.slug` because that is what an operator
+    | types on the command line.
+    |
+    | Values are the ones baked into the game client itself: they are what the
+    | title uses to reach its own matchmaking, and the same triple every
+    | community tool for the game uses. Kept out of a code default so a
+    | deployment that does not need it does not carry them, and so a title's
+    | server browser being replaced (Wildcard's rotation between EOS and their
+    | own list) is one env change and no code.
+    |
+    | `pause_ms` is politeness between filter calls when a game paginates;
+    | `attempts` covers the intermittent 502s Epic's front is known for.
+    |
+    */
+
+    'eos' => [
+        'base_url' => env('EOS_BASE_URL', 'https://api.epicgames.dev'),
+        'timeout' => (int) env('EOS_TIMEOUT', 30),
+        'pause_ms' => (int) env('EOS_PAUSE_MS', 250),
+        'attempts' => (int) env('EOS_ATTEMPTS', 4),
+        'page_size' => (int) env('EOS_PAGE_SIZE', 200),
+
+        'deployments' => [
+            'ark-survival-ascended' => [
+                'deployment_id' => env('EOS_ARK_SURVIVAL_ASCENDED_DEPLOYMENT_ID'),
+                'client_id' => env('EOS_ARK_SURVIVAL_ASCENDED_CLIENT_ID'),
+                'client_secret' => env('EOS_ARK_SURVIVAL_ASCENDED_CLIENT_SECRET'),
+            ],
+        ],
+    ],
+
     'nginx' => [
         'cache_path' => env('NGINX_CACHE_PATH'),
         'cache_levels' => env('NGINX_CACHE_LEVELS', '1:2'),

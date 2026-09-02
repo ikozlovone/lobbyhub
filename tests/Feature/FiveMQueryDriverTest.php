@@ -129,6 +129,17 @@ class FiveMQueryDriverTest extends TestCase
         $manager = app(ServerQueryManager::class);
 
         foreach (QueryProtocol::cases() as $protocol) {
+            // Eos is deliberately not a per-server protocol — the pull is
+            // one-request-per-deployment via `eos:sync`, and asking the
+            // manager for a driver here is what the dispatcher does not do
+            // (it filters EOS games out one level up). "Unsupported" is the
+            // right answer, not a missing test case.
+            if ($protocol === QueryProtocol::Eos) {
+                $this->assertFalse($manager->supports($protocol), 'EOS should have no per-server driver');
+
+                continue;
+            }
+
             $this->assertTrue($manager->supports($protocol), "{$protocol->value} has no driver");
         }
 

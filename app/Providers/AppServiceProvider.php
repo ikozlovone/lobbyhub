@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\Game;
 use App\Observers\GameObserver;
+use App\Services\Discovery\EosClient;
 use App\Services\Discovery\GameMonitoringClient;
 use App\Services\Geo\GeoResolver;
 use App\Services\Geo\MaxMindGeoResolver;
@@ -59,6 +60,18 @@ class AppServiceProvider extends ServiceProvider
             timeout: (int) config('services.gamemonitoring.timeout', 30),
             pauseMs: (int) config('services.gamemonitoring.pause_ms', 250),
             attempts: (int) config('services.gamemonitoring.attempts', 4),
+        ));
+
+        // Epic Online Services matchmaking client — the source of session
+        // lists for games with no Steam server registration (ARK: SA today).
+        // Singleton so a long-running worker keeps its per-deployment token
+        // cache warm across jobs; a one-off CLI just discards it at exit.
+        $this->app->singleton(EosClient::class, fn () => new EosClient(
+            baseUrl: rtrim((string) config('services.eos.base_url'), '/'),
+            timeout: (int) config('services.eos.timeout', 30),
+            pauseMs: (int) config('services.eos.pause_ms', 250),
+            attempts: (int) config('services.eos.attempts', 4),
+            pageSize: (int) config('services.eos.page_size', 200),
         ));
 
         // The nginx cache in front of this app, for the one caller that has to

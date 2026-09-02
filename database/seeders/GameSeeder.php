@@ -228,7 +228,11 @@ class GameSeeder extends Seeder
 
             // --- The ARK engine family and its neighbours ---
 
-            $this->source('ark-survival-ascended', 'ARK: Survival Ascended', 2399830, 7777, 27015, 280, '#2B8BA8', [
+            // ARK: Survival Ascended is UE5 with EOS/EAC networking — Steam
+            // Master lists nothing for it and no A2S port answers. Its state
+            // is pulled from EOS matchmaking by `eos:sync`; the enum case
+            // makes the dispatcher and the Go A2S sweeper skip it cleanly.
+            $this->eos('ark-survival-ascended', 'ARK: Survival Ascended', 2399830, 7777, 27015, 280, '#2B8BA8', [
                 ['pve', 'PvE'], ['pvp', 'PvP'], ['modded', 'Modded'], ['roleplay', 'Roleplay'],
             ], ['asa', 'ark sa', 'арк асцендед']),
 
@@ -547,6 +551,42 @@ class GameSeeder extends Seeder
             'aliases' => $aliases === [] ? null : $aliases,
             'steam_appid' => $appId,
             'query_protocol' => QueryProtocol::Source,
+            'default_port' => $port,
+            'default_query_port' => $queryPort,
+            'sort_order' => $order,
+            'has_versions' => false,
+            'accent_color' => $colour,
+            'meta_title' => "{$name} servers — monitoring and top list",
+            'meta_description' => "{$name} server list with live player counts, uptime history and votes.",
+            'modes' => $modes,
+            'versions' => [],
+        ];
+    }
+
+    /**
+     * Same shape as source(), for games polled through Epic Online Services
+     * matchmaking instead of Steam A2S. `steam_appid` is kept because the
+     * gamemonitoring reconciliation is still keyed by it and because the game
+     * page's Steam charts widget reads it independently of how servers are
+     * polled.
+     */
+    private function eos(
+        string $slug,
+        string $name,
+        int $appId,
+        int $port,
+        ?int $queryPort,
+        int $order,
+        string $colour,
+        array $modes,
+        array $aliases = [],
+    ): array {
+        return [
+            'slug' => $slug,
+            'name' => $name,
+            'aliases' => $aliases === [] ? null : $aliases,
+            'steam_appid' => $appId,
+            'query_protocol' => QueryProtocol::Eos,
             'default_port' => $port,
             'default_query_port' => $queryPort,
             'sort_order' => $order,

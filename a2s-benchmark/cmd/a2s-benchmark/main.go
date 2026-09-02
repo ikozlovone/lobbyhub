@@ -303,6 +303,16 @@ type sweepResult struct {
 }
 
 func sweepGame(ctx context.Context, repo *repository.Repo, chWriter *chstats.Writer, g repository.GameInfo, baseCfg benchmark.Config, write bool) (sweepResult, error) {
+	// EOS games do not use the per-server UDP path at all — they are one
+	// paginated HTTP pull matched against the address map. The dispatch
+	// lives here rather than inside benchmark.Run because everything that
+	// class is about (concurrency, rate limiting, latency histogram) has no
+	// EOS analogue, and folding two entirely different loops into one
+	// function would make both harder to follow.
+	if g.Protocol == repository.ProtocolEos {
+		return sweepEosGame(ctx, repo, chWriter, eosClientFromEnv(), g, write)
+	}
+
 	res := sweepResult{Slug: g.Slug}
 	started := time.Now()
 
